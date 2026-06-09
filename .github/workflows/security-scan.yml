@@ -1,0 +1,256 @@
+name: Security Scan
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: Candidate metadata artifact name from the same workflow run.
+        required: true
+        type: string
+      bake_target:
+        description: Generated Bake target for diagnostics.
+        required: true
+        type: string
+      pg_major:
+        description: PostgreSQL major for summaries.
+        required: true
+        type: string
+      debian_variant:
+        description: Debian variant for summaries.
+        required: true
+        type: string
+    outputs:
+      scan_result:
+        description: passed or failed vulnerability gate result.
+        value: ${{ jobs.scan.outputs.scan_result }}
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Vulnerability scan ${{ inputs.pg_major }} ${{ inputs.debian_variant }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    outputs:
+      scan_result: ${{ steps.evaluate.outputs.scan_result }}
+      sarif_path: ${{ steps.paths.outputs.sarif_path }}
+      failed: ${{ steps.evaluate.outputs.failed }}
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: security-scan/input
+      - id: paths
+        name: Prepare scan paths
+        run: |
+          set -Eeuo pipefail
+          mkdir -p security-scan/output
+          printf 'candidate_metadata=%s\n' "security-scan/input/release-candidate.json" >> "${GITHUB_OUTPUT}"
+          printf 'json_dir=%s\n' "security-scan/output/json" >> "${GITHUB_OUTPUT}"
+          printf 'sarif_path=%s\n' "security-scan/output/sarif/vulnerability-scan.sarif" >> "${GITHUB_OUTPUT}"
+          printf 'summary_path=%s\n' "security-scan/output/summary/vulnerability-scan-summary.json" >> "${GITHUB_OUTPUT}"
+      - name: Validate candidate metadata
+        run: |
+          set -Eeuo pipefail
+          cloudnative-pg-timescaledb/scripts/validate-candidate-metadata.py --file '${{ steps.paths.outputs.candidate_metadata }}'
+      - id: scan
+        name: Run vulnerability scanner
+        env:
+          TRIVY_IMAGE: docker.io/aquasec/trivy:0.65.0
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ github.token }}
+          POLICY_FILE: cloudnative-pg-timescaledb/config/vulnerability-policy.yaml
+          IGNORE_FILE: cloudnative-pg-timescaledb/config/vulnerability-ignore.yaml
+          CANDIDATE_METADATA: ${{ steps.paths.outputs.candidate_metadata }}
+          JSON_DIR: ${{ steps.paths.outputs.json_dir }}
+          SARIF_PATH: ${{ steps.paths.outputs.sarif_path }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${JSON_DIR}" "$(dirname "${SARIF_PATH}")"
+          scan_failed=0
+          python3 - "${CANDIDATE_METADATA}" "${JSON_DIR}" "${SARIF_PATH}" "${TRIVY_IMAGE}" "${IGNORE_FILE}" <<'PY' > /tmp/security-scan-commands.sh
+          import json
+          import shlex
+          import sys
+          from pathlib import Path
+
+          records = json.loads(Path(sys.argv[1]).read_text())
+          json_dir = Path(sys.argv[2])
+          sarif_path = Path(sys.argv[3])
+          trivy_image = sys.argv[4]
+          ignore_file = sys.argv[5]
+          print("set -Eeuo pipefail")
+          print("scan_failed=0")
+          for record in records:
+              platform = record["platform"]
+              platform_slug = platform.replace("/", "-")
+              json_path = json_dir / f"{record['bake_target']}-{platform_slug}.json"
+              scan_ref = f"{record['candidate_ref']}@{record['platform_digest']}"
+              command = [
+                  "docker", "run", "--rm",
+                  "-e", "TRIVY_USERNAME", "-e", "TRIVY_PASSWORD",
+                  "-v", f"{Path.cwd()}:/work", "-w", "/work",
+                  trivy_image,
+                  "image", "--format", "json", "--output", str(json_path),
+                  "--scanners", "vuln", "--severity", "HIGH,CRITICAL",
+                  "--ignorefile", ignore_file, "--platform", platform,
+                  "--exit-code", "0", scan_ref,
+              ]
+              print(" ".join(shlex.quote(part) for part in command) + " || scan_failed=1")
+          sarif_ref = f"{records[0]['candidate_ref']}@{records[0]['platform_digest']}"
+          sarif_command = [
+              "docker", "run", "--rm",
+              "-e", "TRIVY_USERNAME", "-e", "TRIVY_PASSWORD",
+              "-v", f"{Path.cwd()}:/work", "-w", "/work",
+              trivy_image,
+              "image", "--format", "sarif", "--output", str(sarif_path),
+              "--scanners", "vuln", "--severity", "HIGH,CRITICAL",
+              "--ignorefile", ignore_file, "--platform", records[0]["platform"],
+              "--exit-code", "0", sarif_ref,
+          ]
+          print(" ".join(shlex.quote(part) for part in sarif_command) + " || scan_failed=1")
+          print("exit ${scan_failed}")
+          PY
+          set +e
+          bash /tmp/security-scan-commands.sh
+          scanner_status="$?"
+          set -e
+          if [[ "${scanner_status}" != "0" ]]; then
+            python3 - "${CANDIDATE_METADATA}" "${JSON_DIR}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          records = json.loads(Path(sys.argv[1]).read_text())
+          json_dir = Path(sys.argv[2])
+          for record in records:
+              platform_slug = record["platform"].replace("/", "-")
+              path = json_dir / f"{record['bake_target']}-{platform_slug}.json"
+              payload = {
+                  "ArtifactName": f"{record['candidate_ref']}@{record['platform_digest']}",
+                  "scanner_metadata_status": "unavailable",
+                  "db_update_status": "unavailable",
+                  "Results": [],
+              }
+              path.write_text(json.dumps(payload, sort_keys=True) + "\n")
+          PY
+          fi
+      - id: evaluate
+        name: Evaluate vulnerability policy
+        env:
+          CANDIDATE_METADATA: ${{ steps.paths.outputs.candidate_metadata }}
+          JSON_DIR: ${{ steps.paths.outputs.json_dir }}
+          SUMMARY_PATH: ${{ steps.paths.outputs.summary_path }}
+        run: |
+          set -Eeuo pipefail
+          failed=0
+          mkdir -p "$(dirname "${SUMMARY_PATH}")"
+          cloudnative-pg-timescaledb/scripts/validate-vulnerability-scan-files.py \
+            --candidate-metadata "${CANDIDATE_METADATA}" \
+            --scan-dir "${JSON_DIR}"
+          summary_tmp="$(mktemp)"
+          printf '[]\n' > "${summary_tmp}"
+          while IFS= read -r scan_json; do
+            output="${scan_json%.json}.summary.json"
+            if ! cloudnative-pg-timescaledb/scripts/evaluate-vulnerability-scan.py \
+              --policy cloudnative-pg-timescaledb/config/vulnerability-policy.yaml \
+              --ignore cloudnative-pg-timescaledb/config/vulnerability-ignore.yaml \
+              --candidate-metadata "${CANDIDATE_METADATA}" \
+              --scan-json "${scan_json}" \
+              --output "${output}"; then
+              failed=1
+            fi
+            python3 - "${summary_tmp}" "${output}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          summary = json.loads(Path(sys.argv[1]).read_text())
+          summary.append(json.loads(Path(sys.argv[2]).read_text()))
+          Path(sys.argv[1]).write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+          PY
+          done < <(find "${JSON_DIR}" -type f -name '*.json' ! -name '*.summary.json' | sort)
+          mv "${summary_tmp}" "${SUMMARY_PATH}"
+          if [[ "${failed}" == "0" ]]; then
+            printf 'scan_result=passed\nfailed=false\n' >> "${GITHUB_OUTPUT}"
+          else
+            printf 'scan_result=failed\nfailed=true\n' >> "${GITHUB_OUTPUT}"
+          fi
+      - name: Write scan summary
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          summary='${{ steps.paths.outputs.summary_path }}'
+          {
+            printf '## Vulnerability scan\n\n'
+            printf -- '- PostgreSQL: `%s`\n' '${{ inputs.pg_major }}'
+            printf -- '- Debian: `%s`\n' '${{ inputs.debian_variant }}'
+            printf -- '- Bake target: `%s`\n' '${{ inputs.bake_target }}'
+            if [[ -f "${summary}" ]]; then
+              python3 - "${summary}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          for row in json.loads(Path(sys.argv[1]).read_text()):
+              print(f"- Result: `{row.get('scan_result')}` candidate `{row.get('candidate_ref')}` digest `{row.get('digest')}` intended tag `{row.get('intended_tag')}` reason `{row.get('failure_reason') or 'none'}`")
+          PY
+            else
+              printf -- '- Result: `failed` reason `missing scan summary`\n'
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+      # actions/upload-artifact v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: vulnerability-scan-json-${{ inputs.bake_target }}
+          path: security-scan/output/json
+          if-no-files-found: error
+          retention-days: 30
+      # actions/upload-artifact v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: vulnerability-scan-summary-${{ inputs.bake_target }}
+          path: security-scan/output/summary/vulnerability-scan-summary.json
+          if-no-files-found: error
+          retention-days: 30
+      # actions/upload-artifact v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: vulnerability-scan-sarif-${{ inputs.bake_target }}
+          path: security-scan/output/sarif/vulnerability-scan.sarif
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce vulnerability gate
+        run: |
+          set -Eeuo pipefail
+          if [[ '${{ steps.evaluate.outputs.failed }}' == 'true' ]]; then
+            printf 'Vulnerability scan failed for PG=%s DEBIAN=%s bake_target=%s\n' '${{ inputs.pg_major }}' '${{ inputs.debian_variant }}' '${{ inputs.bake_target }}' >&2
+            exit 1
+          fi
+
+  upload_sarif:
+    name: Upload vulnerability SARIF ${{ inputs.pg_major }} ${{ inputs.debian_variant }}
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: vulnerability-scan-sarif-${{ inputs.bake_target }}
+          path: sarif
+      # github/codeql-action/upload-sarif v3.36.2
+      - uses: github/codeql-action/upload-sarif@8272c299f21ca24af15dfe9ac0971ba969e5e0d5
+        with:
+          sarif_file: sarif/vulnerability-scan.sarif

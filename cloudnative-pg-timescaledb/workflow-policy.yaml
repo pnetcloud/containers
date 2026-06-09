@@ -11,3 +11,13 @@ permission_allowlist:
     permission: "packages: write"
     reason: Push GHCR release candidate tags after per-platform smoke gates
     owner_story: 4.2
+  - workflow: .github/workflows/build.yml
+    job: security_scan
+    permission: "security-events: write"
+    reason: Delegate SARIF upload permission to required reusable security scan gate
+    owner_story: 4.3
+  - workflow: .github/workflows/security-scan.yml
+    job: upload_sarif
+    permission: "security-events: write"
+    reason: Upload vulnerability scan SARIF after candidate scan evaluation
+    owner_story: 4.3

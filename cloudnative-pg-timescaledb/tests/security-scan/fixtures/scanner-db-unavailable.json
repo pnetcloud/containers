@@ -1,0 +1,6 @@
+{
+  "ArtifactName": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-100-1-pg18-trixie-amd64@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "scanner_metadata_status": "unavailable",
+  "db_update_status": "unavailable",
+  "Results": []
+}

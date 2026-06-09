@@ -102,26 +102,26 @@ jobs:
             docker buildx imagetools inspect "${candidate_ref}" --raw > "${inspect_raw}"
             candidate_digest="$(docker buildx imagetools inspect "${candidate_ref}" | awk '/Digest:/ {print $2; exit}')"
             platform_digest="$(python3 - "${inspect_raw}" "${platform}" "${candidate_digest}" <<'PY'
-import json
-import sys
-from pathlib import Path
+          import json
+          import sys
+          from pathlib import Path
 
-payload = json.loads(Path(sys.argv[1]).read_text())
-expected_platform = sys.argv[2]
-fallback_digest = sys.argv[3]
-for manifest in payload.get("manifests", []):
-    platform = manifest.get("platform") or {}
-    candidate = f"{platform.get('os')}/{platform.get('architecture')}"
-    if platform.get("variant"):
-        candidate = f"{candidate}/{platform['variant']}"
-    if candidate == expected_platform:
-        print(manifest.get("digest", ""))
-        raise SystemExit(0)
-if payload.get("manifests"):
-    raise SystemExit(f"no manifest digest for platform {expected_platform}")
-print(fallback_digest)
-PY
-)"
+          payload = json.loads(Path(sys.argv[1]).read_text())
+          expected_platform = sys.argv[2]
+          fallback_digest = sys.argv[3]
+          for manifest in payload.get("manifests", []):
+              platform = manifest.get("platform") or {}
+              candidate = f"{platform.get('os')}/{platform.get('architecture')}"
+              if platform.get("variant"):
+                  candidate = f"{candidate}/{platform['variant']}"
+              if candidate == expected_platform:
+                  print(manifest.get("digest", ""))
+                  raise SystemExit(0)
+          if payload.get("manifests"):
+              raise SystemExit(f"no manifest digest for platform {expected_platform}")
+          print(fallback_digest)
+          PY
+            )"
             if [[ ! "${candidate_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               printf 'Invalid candidate ref digest PG=%s DEBIAN=%s platform=%s digest=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${platform}" "${candidate_digest}" >&2
               exit 1
@@ -136,46 +136,46 @@ PY
             runtime_architecture="$(docker run --rm --platform "${platform}" --entrypoint /bin/sh "${candidate_ref}" -c 'dpkg --print-architecture')"
             printf '%s@%s\n' "${candidate_ref}" "${platform_digest}" >> "${refs_file}"
             python3 - "${digests_file}" "${platform}" "${platform_digest}" <<'PY'
-import json
-import sys
-from pathlib import Path
-path = Path(sys.argv[1])
-payload = json.loads(path.read_text())
-payload[sys.argv[2]] = sys.argv[3]
-path.write_text(json.dumps(payload, sort_keys=True) + "\n")
-PY
+          import json
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          payload = json.loads(path.read_text())
+          payload[sys.argv[2]] = sys.argv[3]
+          path.write_text(json.dumps(payload, sort_keys=True) + "\n")
+          PY
             python3 - "${records_file}" "${IMAGE}" "${candidate_ref}" "${candidate_digest}" "${platform_digest}" "${platform}" "${runtime_architecture}" "${BAKE_TARGET}" "${DOCKERFILE}" "${PG_MAJOR}" "${PG_VERSION}" "${DEBIAN_VARIANT}" "${PUBLISH}" "${EXPERIMENTAL}" "${LATEST_ELIGIBLE}" "${PLATFORMS_JSON}" "${INTENDED_TAGS_JSON}" <<'PY'
-import json
-import sys
-from pathlib import Path
-path = Path(sys.argv[1])
-records = json.loads(path.read_text())
-records.append({
-    "image": sys.argv[2],
-    "candidate_ref": sys.argv[3],
-    "candidate_digest": sys.argv[4],
-    "platform_digest": sys.argv[5],
-    "index_digest": "",
-    "platform_digests": {},
-    "platform": sys.argv[6],
-    "platforms": json.loads(sys.argv[16]),
-    "expected_platform": sys.argv[6],
-    "runtime_architecture": sys.argv[7],
-    "smoke_architecture_status": "passed",
-    "bake_target": sys.argv[8],
-    "dockerfile": sys.argv[9],
-    "pg_major": sys.argv[10],
-    "pg_version": sys.argv[11],
-    "debian_variant": sys.argv[12],
-    "intended_tags": json.loads(sys.argv[17]),
-    "publish": sys.argv[13] == "true",
-    "experimental": sys.argv[14] == "true",
-    "latest_eligible": sys.argv[15] == "true",
-    "smoke_container_status": "passed",
-    "smoke_sql_status": "passed",
-})
-path.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n")
-PY
+          import json
+          import sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          records = json.loads(path.read_text())
+          records.append({
+              "image": sys.argv[2],
+              "candidate_ref": sys.argv[3],
+              "candidate_digest": sys.argv[4],
+              "platform_digest": sys.argv[5],
+              "index_digest": "",
+              "platform_digests": {},
+              "platform": sys.argv[6],
+              "platforms": json.loads(sys.argv[16]),
+              "expected_platform": sys.argv[6],
+              "runtime_architecture": sys.argv[7],
+              "smoke_architecture_status": "passed",
+              "bake_target": sys.argv[8],
+              "dockerfile": sys.argv[9],
+              "pg_major": sys.argv[10],
+              "pg_version": sys.argv[11],
+              "debian_variant": sys.argv[12],
+              "intended_tags": json.loads(sys.argv[17]),
+              "publish": sys.argv[13] == "true",
+              "experimental": sys.argv[14] == "true",
+              "latest_eligible": sys.argv[15] == "true",
+              "smoke_container_status": "passed",
+              "smoke_sql_status": "passed",
+          })
+          path.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n")
+          PY
           done < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["PLATFORMS_JSON"])))')
 
           mapfile -t platform_refs < "${refs_file}"
@@ -183,20 +183,20 @@ PY
           docker buildx imagetools create -t "${index_ref}" "${platform_refs[@]}"
           index_digest="$(docker buildx imagetools inspect "${index_ref}" | awk '/Digest:/ {print $2; exit}')"
           python3 - "${records_file}" "${digests_file}" "${index_digest}" "candidate-metadata/${BAKE_TARGET}/release-candidate.json" <<'PY'
-import json
-import sys
-from pathlib import Path
-records_path = Path(sys.argv[1])
-digests_path = Path(sys.argv[2])
-index_digest = sys.argv[3]
-output_path = Path(sys.argv[4])
-records = json.loads(records_path.read_text())
-platform_digests = json.loads(digests_path.read_text())
-for record in records:
-    record["index_digest"] = index_digest
-    record["platform_digests"] = platform_digests
-output_path.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n")
-PY
+          import json
+          import sys
+          from pathlib import Path
+          records_path = Path(sys.argv[1])
+          digests_path = Path(sys.argv[2])
+          index_digest = sys.argv[3]
+          output_path = Path(sys.argv[4])
+          records = json.loads(records_path.read_text())
+          platform_digests = json.loads(digests_path.read_text())
+          for record in records:
+              record["index_digest"] = index_digest
+              record["platform_digests"] = platform_digests
+          output_path.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n")
+          PY
           cloudnative-pg-timescaledb/scripts/validate-candidate-metadata.py --file "candidate-metadata/${BAKE_TARGET}/release-candidate.json"
       # actions/upload-artifact v4.6.2
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -205,3 +205,24 @@ PY
           path: candidate-metadata/${{ matrix.bake_target }}/release-candidate.json
           if-no-files-found: error
           retention-days: 30
+
+  security_scan:
+    name: Security scan ${{ matrix.pg_major }} ${{ matrix.debian_variant }}
+    needs:
+      - matrix
+      - candidate
+    if: ${{ needs.matrix.outputs.has_include == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.build_matrix) }}
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+    uses: ./.github/workflows/security-scan.yml
+    with:
+      artifact_name: release-candidate-${{ matrix.bake_target }}
+      bake_target: ${{ matrix.bake_target }}
+      pg_major: ${{ matrix.pg_major }}
+      debian_variant: ${{ matrix.debian_variant }}

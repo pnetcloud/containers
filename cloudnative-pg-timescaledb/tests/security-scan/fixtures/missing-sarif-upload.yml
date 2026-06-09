@@ -1,0 +1,23 @@
+name: Missing SARIF Upload
+on:
+  workflow_call:
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -Eeuo pipefail
+          policy=cloudnative-pg-timescaledb/config/vulnerability-policy.yaml
+          ignore=cloudnative-pg-timescaledb/config/vulnerability-ignore.yaml
+          docker run --rm docker.io/aquasec/trivy:0.65.0 image --format json --output scan.json --severity HIGH,CRITICAL --ignorefile "${ignore}" example:candidate
+          printf '{"scanner_metadata_status":"unavailable","db_update_status":"unavailable","Results":[]}\n' > scanner-db-unavailable.json
+          cloudnative-pg-timescaledb/scripts/validate-vulnerability-scan-files.py --candidate-metadata candidate.json --scan-dir scan-output
+          cloudnative-pg-timescaledb/scripts/evaluate-vulnerability-scan.py --policy "${policy}" --ignore "${ignore}" --scan-json scan.json --candidate-metadata candidate.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vulnerability-scan-json
+          path: scan.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vulnerability-scan-summary
+          path: summary.json

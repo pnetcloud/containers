@@ -1,0 +1,13 @@
+name: Build Without Required Scan
+on:
+  push:
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo candidate
+  publish:
+    runs-on: ubuntu-latest
+    needs: candidate
+    steps:
+      - run: echo publish
