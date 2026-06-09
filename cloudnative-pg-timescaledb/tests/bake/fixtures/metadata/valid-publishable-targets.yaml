@@ -1,0 +1,71 @@
+schema_version: "1"
+image:
+  registry: "ghcr.io"
+  repository: "pnetcloud/cloudnative-pg-timescaledb"
+  current_major: "18"
+  primary_debian_variant: trixie
+allowed:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: ["trixie", "bookworm"]
+  platforms: ["linux/amd64", "linux/arm64"]
+entries:
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: trixie
+    cnpg_tag: "18.4-standard-trixie"
+    cnpg_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    timescaledb_version: "2.27.2"
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
+    timescaledb_package_version: "2.27.2~debian13-1804"
+    toolkit_version: "1.23.0"
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+    toolkit_package_version: "1:1.23.0~debian13"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: true
+    experimental: false
+    latest_eligible: true
+    skip_reason: ""
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: bookworm
+    cnpg_tag: "18.4-standard-bookworm"
+    cnpg_digest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    timescaledb_version: "2.27.2"
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
+    timescaledb_package_version: "2.27.2~debian12-1804"
+    toolkit_version: "1.23.0"
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+    toolkit_package_version: "1:1.23.0~debian12"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: true
+    experimental: false
+    latest_eligible: false
+    skip_reason: ""
+  - pg_major: "19beta1"
+    pg_version: "19beta1"
+    debian_variant: trixie
+    cnpg_tag: "19beta1-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-19beta1"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-19beta1"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: true
+    latest_eligible: false
+    skip_reason: "Experimental PostgreSQL 19beta1 pending upstream support"

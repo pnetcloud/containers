@@ -35,7 +35,7 @@ entries:
     publish: false
     experimental: false
     latest_eligible: false
-    skip_reason: "Pending Story 2 resolver population"
+    skip_reason: "Publish disabled until release gate enables image builds"
   - pg_major: "18"
     pg_version: "18.4"
     debian_variant: trixie
@@ -55,7 +55,7 @@ entries:
     publish: false
     experimental: false
     latest_eligible: true
-    skip_reason: "Pending Story 2 resolver population"
+    skip_reason: "Publish disabled until release gate enables image builds"
   - pg_major: "19beta1"
     pg_version: "19beta1"
     debian_variant: trixie
@@ -95,7 +95,7 @@ entries:
     publish: false
     experimental: false
     latest_eligible: false
-    skip_reason: "Pending Story 2 resolver population"
+    skip_reason: "Publish disabled until release gate enables image builds"
   - pg_major: "18"
     pg_version: "18.4"
     debian_variant: bookworm
@@ -115,7 +115,7 @@ entries:
     publish: false
     experimental: false
     latest_eligible: false
-    skip_reason: "Pending Story 2 resolver population"
+    skip_reason: "Publish disabled until release gate enables image builds"
   - pg_major: "19beta1"
     pg_version: "19beta1"
     debian_variant: bookworm

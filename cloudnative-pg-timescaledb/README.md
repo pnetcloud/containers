@@ -6,7 +6,7 @@ This directory contains the source for CloudNativePG-compatible PostgreSQL image
 
 Initial metadata covers PostgreSQL `17`, PostgreSQL `18`, and experimental PostgreSQL `19beta1` across Debian `trixie` and `bookworm`. Debian `trixie` is the primary variant, and Debian `bookworm` is the secondary variant.
 
-The scaffold intentionally keeps resolver-owned values empty while every entry has `publish: false` and a non-empty `skip_reason`. Later resolver stories populate CNPG digests and package versions before any image becomes publishable.
+The current metadata keeps every entry at `publish: false` until the release gates explicitly enable buildable image lines. Skipped entries keep a non-empty `skip_reason`; generated Dockerfiles and Bake targets are emitted only for publishable entries.
 
 The `vendor/` tree is reference-only. Production image definitions and workflows must use generated project files and upstream package sources instead of copying from the vendored examples.
 
@@ -14,4 +14,6 @@ The `vendor/` tree is reference-only. Production image definitions and workflows
 
 Use the root `Makefile` for local development and CI entry points. The stable targets are `help`, `update`, `generate`, `validate`, `matrix`, `bake-print`, `catalog`, `build`, and `smoke`.
 
-`make build` and `make smoke` require `PG=<17|18|19beta1>` and `DEBIAN=<trixie|bookworm>`. Story 1.2 validates this command surface and returns documented non-zero exit codes for behavior owned by later stories.
+`make bake-print` prints the generated Docker Buildx Bake plan from `cloudnative-pg-timescaledb/docker-bake.hcl`. The plan uses checkout/path context and contains no registry push output.
+
+`make build` and `make smoke` require `PG=<17|18|19beta1>` and `DEBIAN=<trixie|bookworm>`. `make build PG=<major> DEBIAN=<variant>` invokes the selected local Bake target with `output=type=docker` and a single local `PLATFORM` override, defaulting to `linux/amd64`. If the selected row is still `publish: false`, the command exits non-zero with the target name, Dockerfile path, context, platform, and `skip_reason`.

@@ -54,14 +54,27 @@ run_make_error() {
 }
 
 run_expect_exit 69 "matrix delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/matrix.sh"
-run_expect_exit 69 "bake-print delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/bake-print.sh"
 run_expect_exit 69 "catalog delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/catalog.sh"
 
 run_make_error 69 "matrix Make target" matrix
-run_make_error 69 "bake-print Make target" bake-print
 run_make_error 69 "catalog Make target" catalog
 
-for target in build smoke; do
+build_script="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/build.sh"
+run_expect_exit 64 "build script missing parameters" "${build_script}"
+run_expect_exit 65 "build script unsupported PostgreSQL" "${build_script}" 16 trixie
+run_expect_exit 65 "build script unsupported Alpine" "${build_script}" 18 alpine
+run_expect_exit 65 "build script unsupported bullseye" "${build_script}" 18 bullseye
+run_expect_exit 65 "build script valid skipped until publishable" "${build_script}" 18 trixie
+run_expect_exit 65 "build script experimental skipped until publishable" "${build_script}" 19beta1 bookworm
+
+run_make_error 64 "build Make target missing parameters" build
+run_make_error 65 "build Make target unsupported PostgreSQL" build PG=16 DEBIAN=trixie
+run_make_error 65 "build Make target unsupported Alpine" build PG=18 DEBIAN=alpine
+run_make_error 65 "build Make target unsupported bullseye" build PG=18 DEBIAN=bullseye
+run_make_error 65 "build Make target valid skipped until publishable" build PG=18 DEBIAN=trixie
+run_make_error 65 "build Make target experimental skipped until publishable" build PG=19beta1 DEBIAN=bookworm
+
+for target in smoke; do
   script="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/${target}.sh"
   run_expect_exit 64 "${target} script missing parameters" "${script}"
   run_expect_exit 65 "${target} script unsupported PostgreSQL" "${script}" 16 trixie

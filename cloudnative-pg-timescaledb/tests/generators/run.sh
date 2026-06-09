@@ -78,16 +78,27 @@ if kind == "dockerfiles":
         rows.append((row["pg_major"], row["debian_variant"]))
     require_exact_rows(rows, "dockerfiles")
 elif kind == "bake":
-    require_keys(payload, {"bake_file", "targets"}, "bake payload")
+    require_keys(payload, {"bake_file", "targets", "skipped"}, "bake payload")
     rows = []
     for row in payload["targets"]:
         require_keys(row, {"name", "context", "dockerfile", "platforms", "publish", "experimental"}, "bake target")
         match = __import__("re").fullmatch(r"pg(.+)-(trixie|bookworm)", row["name"])
         if not match:
             fail("bake target names encode pg/debian row", repr(row["name"]), "Use pg<major>-<debian> target names from metadata.")
+        if row["context"] != ".":
+            fail("bake target context is checkout/path context", repr(row["context"]), "Use local checkout context instead of Docker Buildx default Git context.")
+        if row["publish"] is not True:
+            fail("bake target rows are publishable", repr(row), "Only publishable metadata rows should become buildable Bake targets.")
         rows.append((match.group(1), match.group(2)))
-    if rows:
-        require_exact_rows(rows, "bake target")
+    skipped_rows = []
+    for row in payload["skipped"]:
+        require_keys(row, {"pg_major", "debian_variant", "name", "dockerfile", "publish", "experimental", "skip_reason"}, "bake skipped row")
+        if row["publish"] is not False:
+            fail("bake skipped rows are non-publishable", repr(row), "Do not let skipped combinations become publishable Bake targets.")
+        if not row["skip_reason"]:
+            fail("bake skipped rows carry skip_reason", repr(row), "Preserve clear diagnostics for skipped combinations.")
+        skipped_rows.append((row["pg_major"], row["debian_variant"]))
+    require_exact_rows(rows + skipped_rows, "bake target plus skipped")
 elif kind == "matrix":
     require_keys(payload, {"include"}, "matrix payload")
     rows = []
