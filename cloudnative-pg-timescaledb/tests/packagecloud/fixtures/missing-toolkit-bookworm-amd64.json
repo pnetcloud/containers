@@ -1,0 +1,1 @@
+{"packages":[{"name":"timescaledb-2-postgresql-18","version":"2.27.2~debian12-1804","distribution":"bookworm","architecture":"amd64","pg_major":"18","package_type":"timescaledb","source_url":"fixture://missing-toolkit-bookworm-amd64"}]}

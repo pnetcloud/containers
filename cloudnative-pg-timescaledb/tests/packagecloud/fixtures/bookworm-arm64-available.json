@@ -1,0 +1,10 @@
+{
+  "packages": [
+    {"name": "timescaledb-2-postgresql-17", "version": "2.27.2~debian12-1700", "distribution": "bookworm", "architecture": "arm64", "pg_major": "17", "package_type": "timescaledb", "source_url": "fixture://bookworm/arm64/timescaledb/17"},
+    {"name": "timescaledb-toolkit-postgresql-17", "version": "1:1.23.0~debian12", "distribution": "bookworm", "architecture": "arm64", "pg_major": "17", "package_type": "toolkit", "source_url": "fixture://bookworm/arm64/toolkit/17"},
+    {"name": "timescaledb-2-postgresql-18", "version": "2.27.2~debian12-1804", "distribution": "bookworm", "architecture": "arm64", "pg_major": "18", "package_type": "timescaledb", "source_url": "fixture://bookworm/arm64/timescaledb/18"},
+    {"name": "timescaledb-toolkit-postgresql-18", "version": "1:1.23.0~debian12", "distribution": "bookworm", "architecture": "arm64", "pg_major": "18", "package_type": "toolkit", "source_url": "fixture://bookworm/arm64/toolkit/18"},
+    {"name": "timescaledb-2-postgresql-19beta1", "version": "2.27.2~debian12-19beta1", "distribution": "bookworm", "architecture": "arm64", "pg_major": "19beta1", "package_type": "timescaledb", "source_url": "fixture://bookworm/arm64/timescaledb/19beta1"},
+    {"name": "timescaledb-toolkit-postgresql-19beta1", "version": "1:1.23.0~debian12", "distribution": "bookworm", "architecture": "arm64", "pg_major": "19beta1", "package_type": "toolkit", "source_url": "fixture://bookworm/arm64/toolkit/19beta1"}
+  ]
+}

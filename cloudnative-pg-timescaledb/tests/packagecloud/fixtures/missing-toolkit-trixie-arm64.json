@@ -1,0 +1,1 @@
+{"packages":[{"name":"timescaledb-2-postgresql-18","version":"2.27.2~debian13-1804","distribution":"trixie","architecture":"arm64","pg_major":"18","package_type":"timescaledb","source_url":"fixture://missing-toolkit-trixie-arm64"}]}
