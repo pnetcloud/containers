@@ -145,8 +145,10 @@ if not isinstance(entries, list) or not entries:
 
 required_entry = {
     "pg_major", "pg_version", "debian_variant", "cnpg_tag", "cnpg_digest",
-    "timescaledb_version", "timescaledb_package_version", "toolkit_version",
-    "toolkit_package_version", "platforms", "publish", "experimental",
+    "timescaledb_version", "timescaledb_package_name", "timescaledb_package_version",
+    "toolkit_version", "toolkit_package_name", "toolkit_package_version",
+    "pgvector_source", "pgvector_package_version", "pgaudit_source",
+    "pgaudit_package_version", "platforms", "publish", "experimental",
     "latest_eligible", "skip_reason",
 }
 optional_entry = {"tags"}

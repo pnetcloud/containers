@@ -33,6 +33,7 @@ expect_fail() {
 }
 
 "${VALIDATOR}" "${FIXTURE_DIR}/valid.yaml" >/tmp/story-1-3-valid.out
+"${VALIDATOR}" "${FIXTURE_DIR}/valid-extension-sources.yaml" >/tmp/story-3-2-valid-extension-sources.out
 
 expect_fail "missing top-level key" "top-level keys exactly" "${FIXTURE_DIR}/missing-top-level-key.yaml"
 expect_fail "wrong current major" "image.current_major" "${FIXTURE_DIR}/wrong-current-major.yaml"
@@ -62,6 +63,8 @@ expect_fail "publish empty resolver-owned" "publishable entries have resolver-ow
 expect_fail "publish whitespace resolver-owned" "publishable entries have resolver-owned values" "${FIXTURE_DIR}/publish-true-whitespace-resolver-owned.yaml"
 expect_fail "publish empty CNPG tag" "cnpg_tag matches pg_version and debian_variant|publishable entries have resolver-owned values" "${FIXTURE_DIR}/publish-true-empty-cnpg-tag.yaml"
 expect_fail "publish false without skip" "non-published entries have non-empty skip_reason" "${FIXTURE_DIR}/publish-false-without-skip-reason.yaml"
+expect_fail "invalid extension source" "pgvector_source is base or package|pgaudit_source is base or package" "${FIXTURE_DIR}/invalid-extension-source.yaml"
+expect_fail "package extension source missing package version" "package_version.*non-empty when .*_source=package" "${FIXTURE_DIR}/package-source-missing-package-version.yaml"
 
 if ! grep -Fq 'validate-metadata.sh' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate.sh"; then
   diag "scan validate.sh" "cloudnative-pg-timescaledb/scripts/validate.sh" "make validate calls validate-metadata.sh" "missing" "Wire metadata validation into make validate."

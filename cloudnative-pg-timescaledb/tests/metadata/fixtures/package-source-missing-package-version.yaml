@@ -20,7 +20,7 @@ entries:
     toolkit_version: ""
     toolkit_package_name: ""
     toolkit_package_version: ""
-    pgvector_source: base
+    pgvector_source: package
     pgvector_package_version: ""
     pgaudit_source: base
     pgaudit_package_version: ""

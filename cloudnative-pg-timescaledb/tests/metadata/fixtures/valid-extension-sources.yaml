@@ -20,10 +20,10 @@ entries:
     toolkit_version: ""
     toolkit_package_name: ""
     toolkit_package_version: ""
-    pgvector_source: base
-    pgvector_package_version: ""
-    pgaudit_source: base
-    pgaudit_package_version: ""
+    pgvector_source: package
+    pgvector_package_version: "0.8.1-1.pgdg13+1"
+    pgaudit_source: package
+    pgaudit_package_version: "1.8.0-1.pgdg13+1"
     platforms: ["linux/amd64", "linux/arm64"]
     publish: false
     experimental: false

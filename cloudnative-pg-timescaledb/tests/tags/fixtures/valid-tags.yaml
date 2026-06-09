@@ -15,9 +15,15 @@ entries:
     cnpg_tag: "17.9-standard-trixie"
     cnpg_digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111"
     timescaledb_version: "2.27.2"
+    timescaledb_package_name: ""
     timescaledb_package_version: "2.27.2"
     toolkit_version: "1.22.0"
+    toolkit_package_name: ""
     toolkit_package_version: "1.22.0"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
     publish: true
     experimental: false
@@ -30,9 +36,15 @@ entries:
     cnpg_tag: "18.4-standard-trixie"
     cnpg_digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     timescaledb_version: "2.27.2"
+    timescaledb_package_name: ""
     timescaledb_package_version: "2.27.2"
     toolkit_version: "1.22.0"
+    toolkit_package_name: ""
     toolkit_package_version: "1.22.0"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
     publish: true
     experimental: false
@@ -45,9 +57,15 @@ entries:
     cnpg_tag: "18.4-standard-bookworm"
     cnpg_digest: "sha256:3333333333333333333333333333333333333333333333333333333333333333"
     timescaledb_version: "2.27.2"
+    timescaledb_package_name: ""
     timescaledb_package_version: "2.27.2"
     toolkit_version: "1.22.0"
+    toolkit_package_name: ""
     toolkit_package_version: "1.22.0"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
     publish: true
     experimental: false
@@ -60,9 +78,15 @@ entries:
     cnpg_tag: "19beta1-standard-trixie"
     cnpg_digest: "sha256:4444444444444444444444444444444444444444444444444444444444444444"
     timescaledb_version: "2.27.2"
+    timescaledb_package_name: ""
     timescaledb_package_version: "2.27.2"
     toolkit_version: "1.22.0"
+    toolkit_package_name: ""
     toolkit_package_version: "1.22.0"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
     publish: true
     experimental: true
@@ -75,9 +99,15 @@ entries:
     cnpg_tag: "19beta1-standard-bookworm"
     cnpg_digest: "sha256:5555555555555555555555555555555555555555555555555555555555555555"
     timescaledb_version: "2.27.2"
+    timescaledb_package_name: ""
     timescaledb_package_version: "2.27.2"
     toolkit_version: "1.22.0"
+    toolkit_package_name: ""
     toolkit_package_version: "1.22.0"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
     publish: true
     experimental: true

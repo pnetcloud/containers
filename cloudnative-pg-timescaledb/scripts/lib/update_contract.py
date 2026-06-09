@@ -19,8 +19,10 @@ RESOLVER_FIELDS = [
     "cnpg_tag",
     "cnpg_digest",
     "timescaledb_version",
+    "timescaledb_package_name",
     "timescaledb_package_version",
     "toolkit_version",
+    "toolkit_package_name",
     "toolkit_package_version",
 ]
 POLICY_FIELDS = ["publish", "experimental", "latest_eligible"]
@@ -153,8 +155,10 @@ def render_metadata(data):
     lines.append("entries:")
     field_order = [
         "pg_major", "pg_version", "debian_variant", "cnpg_tag", "cnpg_digest",
-        "timescaledb_version", "timescaledb_package_version", "toolkit_version",
-        "toolkit_package_version", "platforms", "publish", "experimental",
+        "timescaledb_version", "timescaledb_package_name", "timescaledb_package_version",
+        "toolkit_version", "toolkit_package_name", "toolkit_package_version",
+        "pgvector_source", "pgvector_package_version", "pgaudit_source",
+        "pgaudit_package_version", "platforms", "publish", "experimental",
         "latest_eligible", "skip_reason",
     ]
     for entry in data["entries"]:
@@ -236,8 +240,10 @@ def update_entries(data, cnpg, packages):
         entry["cnpg_tag"] = cnpg_tag
         entry["cnpg_digest"] = cnpg_row["cnpg_digest"]
         entry["timescaledb_version"] = pkg_row["timescaledb_version"]
+        entry["timescaledb_package_name"] = pkg_row["timescaledb_package_name"]
         entry["timescaledb_package_version"] = pkg_row["timescaledb_package_version"]
         entry["toolkit_version"] = pkg_row["toolkit_version"]
+        entry["toolkit_package_name"] = pkg_row["toolkit_package_name"]
         entry["toolkit_package_version"] = pkg_row["toolkit_package_version"]
         missing = []
         if not entry["cnpg_digest"]:

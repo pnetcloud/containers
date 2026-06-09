@@ -271,7 +271,15 @@ def render_dockerfile(entry):
         "cnpg_tag": entry["cnpg_tag"],
         "cnpg_digest": entry["cnpg_digest"],
         "timescaledb_version": entry["timescaledb_version"],
+        "timescaledb_package_name": entry["timescaledb_package_name"],
+        "timescaledb_package_version": entry["timescaledb_package_version"],
         "toolkit_version": entry["toolkit_version"],
+        "toolkit_package_name": entry["toolkit_package_name"],
+        "toolkit_package_version": entry["toolkit_package_version"],
+        "pgvector_source": entry["pgvector_source"],
+        "pgvector_package_version": entry["pgvector_package_version"],
+        "pgaudit_source": entry["pgaudit_source"],
+        "pgaudit_package_version": entry["pgaudit_package_version"],
     }
     rendered = template
     for key, value in values.items():
@@ -344,10 +352,28 @@ def manifest_platforms_live(reference, command, artifact):
 
 
 def validate_publishable_dockerfile_entry(entry, command, artifact):
+    if entry["debian_variant"] not in {"trixie", "bookworm"}:
+        diag(command, artifact, "publishable debian_variant is trixie or bookworm", entry["debian_variant"], "Use only supported Debian variants before generating install logic.")
+    platform_set = set(entry["platforms"])
+    if platform_set != {"linux/amd64", "linux/arm64"} or len(entry["platforms"]) != 2:
+        diag(command, artifact, "publishable platforms exactly linux/amd64 and linux/arm64", entry["platforms"], "Validate apt architecture mappings before publishing.")
     if "-standard-" not in entry["cnpg_tag"] or "-system-" in entry["cnpg_tag"]:
         diag(command, artifact, "publishable cnpg_tag uses standard-* and never system-*", entry["cnpg_tag"], "Use CloudNativePG standard image tags only.")
     if not DIGEST_RE.fullmatch(entry["cnpg_digest"]):
         diag(command, artifact, "publishable cnpg_digest matches sha256:<64 lowercase hex>", entry["cnpg_digest"], "Resolve and store a digest-pinned CNPG base image before publishing.")
+    required_package_fields = ["timescaledb_package_name", "timescaledb_package_version", "toolkit_package_name", "toolkit_package_version"]
+    missing_package_fields = [field for field in required_package_fields if not str(entry.get(field, "")).strip()]
+    if missing_package_fields:
+        diag(command, artifact, "publishable TimescaleDB and Toolkit package names/versions are resolved in metadata", missing_package_fields, "Run package resolution before setting publish: true.")
+    for extension in ["pgvector", "pgaudit"]:
+        source = entry.get(f"{extension}_source", "")
+        version = entry.get(f"{extension}_package_version", "")
+        if source not in {"base", "package"}:
+            diag(command, artifact, f"publishable {extension}_source is base or package", repr(source), "Set explicit extension source metadata before publishing.")
+        if source == "package" and not str(version).strip():
+            diag(command, artifact, f"publishable {extension} package source has exact package version", repr(version), "Resolve package version metadata for package-sourced extensions.")
+        if source == "base" and str(version).strip():
+            diag(command, artifact, f"publishable {extension} base source has empty package version", repr(version), "Base-sourced extensions are verified from the CNPG standard image, not package-installed.")
     reference = cnpg_reference(entry)
     fixture = os.environ.get("CNPG_MANIFEST_FIXTURE", "")
     platforms = manifest_platforms_from_fixture(entry, reference, fixture) if fixture else manifest_platforms_live(reference, command, artifact)

@@ -3,6 +3,48 @@
 # Do not edit by hand; update cloudnative-pg-timescaledb/versions.yaml and run make generate.
 FROM ghcr.io/cloudnative-pg/postgresql:{{cnpg_tag}}@{{cnpg_digest}}
 
+USER root
+
+COPY scripts/verify-package-install.sh /usr/local/bin/verify-package-install
+
+ARG TARGETARCH=amd64
+RUN set -eux; \
+    case "{{debian_variant}}:${TARGETARCH}" in \
+      trixie:amd64|trixie:arm64|bookworm:amd64|bookworm:arm64) ;; \
+      *) echo "unsupported Debian variant or target architecture: {{debian_variant}}:${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    . /etc/os-release; \
+    test "${VERSION_CODENAME}" = "{{debian_variant}}"; \
+    test "$(dpkg --print-architecture)" = "${TARGETARCH}"; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+    install -d -m 0755 /usr/share/keyrings; \
+    curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /usr/share/keyrings/timescale-timescaledb.gpg; \
+    echo "deb [signed-by=/usr/share/keyrings/timescale-timescaledb.gpg] https://packagecloud.io/timescale/timescaledb/debian/ {{debian_variant}} main" > /etc/apt/sources.list.d/timescale-timescaledb.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      "{{timescaledb_package_name}}={{timescaledb_package_version}}" \
+      "{{toolkit_package_name}}={{toolkit_package_version}}"; \
+    /usr/local/bin/verify-package-install \
+      "{{timescaledb_package_name}}" "{{timescaledb_package_version}}" \
+      "{{toolkit_package_name}}" "{{toolkit_package_version}}"; \
+    if [ "{{pgvector_source}}" = "package" ]; then \
+      apt-get install -y --no-install-recommends "postgresql-{{pg_major}}-pgvector={{pgvector_package_version}}"; \
+      dpkg-query -W -f='${Version}' "postgresql-{{pg_major}}-pgvector" | grep -Fx "{{pgvector_package_version}}"; \
+    else \
+      test -f "/usr/share/postgresql/{{pg_major}}/extension/vector.control"; \
+      dpkg-query -S "/usr/share/postgresql/{{pg_major}}/extension/vector.control"; \
+    fi; \
+    if [ "{{pgaudit_source}}" = "package" ]; then \
+      apt-get install -y --no-install-recommends "postgresql-{{pg_major}}-pgaudit={{pgaudit_package_version}}"; \
+      dpkg-query -W -f='${Version}' "postgresql-{{pg_major}}-pgaudit" | grep -Fx "{{pgaudit_package_version}}"; \
+    else \
+      test -f "/usr/share/postgresql/{{pg_major}}/extension/pgaudit.control"; \
+      dpkg-query -S "/usr/share/postgresql/{{pg_major}}/extension/pgaudit.control"; \
+    fi; \
+    rm -rf /var/lib/apt/lists/* /tmp/*
+
 LABEL org.opencontainers.image.source="{{source_repository}}" \
       org.opencontainers.image.created="{{generated_date}}" \
       org.pnet.postgresql.major="{{pg_major}}" \

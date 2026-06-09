@@ -22,8 +22,8 @@ entries:
     toolkit_package_version: "1:1.23.0~debian13"
     pgvector_source: base
     pgvector_package_version: ""
-    pgaudit_source: base
-    pgaudit_package_version: ""
+    pgaudit_source: package
+    pgaudit_package_version: "1.8.0-1.pgdg13+1"
     platforms: ["linux/amd64", "linux/arm64"]
     publish: true
     experimental: false

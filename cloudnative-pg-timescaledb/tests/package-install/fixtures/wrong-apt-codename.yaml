@@ -3,12 +3,32 @@ image:
   registry: "ghcr.io"
   repository: "pnetcloud/cloudnative-pg-timescaledb"
   current_major: "18"
-  primary_debian_variant: trixie
+  primary_debian_variant: bullseye
 allowed:
   postgres_majors: ["17", "18", "19beta1"]
   debian_variants: ["trixie", "bookworm"]
   platforms: ["linux/amd64", "linux/arm64"]
 entries:
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: bullseye
+    cnpg_tag: "18.4-standard-bullseye"
+    cnpg_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    timescaledb_version: "2.27.2"
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
+    timescaledb_package_version: "2.27.2~debian13-1804"
+    toolkit_version: "1.23.0"
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+    toolkit_package_version: "1:1.23.0~debian13"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: true
+    experimental: false
+    latest_eligible: false
+    skip_reason: ""
   - pg_major: "18"
     pg_version: "18.4"
     debian_variant: trixie
@@ -25,7 +45,7 @@ entries:
     pgaudit_source: base
     pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
-    publish: true
+    publish: false
     experimental: false
     latest_eligible: true
-    skip_reason: ""
+    skip_reason: "package-install fixture latest policy row"

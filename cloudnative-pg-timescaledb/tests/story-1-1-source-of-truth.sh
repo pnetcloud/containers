@@ -184,9 +184,15 @@ required_entry = {
     "cnpg_tag",
     "cnpg_digest",
     "timescaledb_version",
+    "timescaledb_package_name",
     "timescaledb_package_version",
     "toolkit_version",
+    "toolkit_package_name",
     "toolkit_package_version",
+    "pgvector_source",
+    "pgvector_package_version",
+    "pgaudit_source",
+    "pgaudit_package_version",
     "platforms",
     "publish",
     "experimental",
@@ -205,10 +211,13 @@ seen = set()
 resolver_owned = {
     "cnpg_digest",
     "timescaledb_version",
+    "timescaledb_package_name",
     "timescaledb_package_version",
     "toolkit_version",
+    "toolkit_package_name",
     "toolkit_package_version",
 }
+extension_sources = {"base", "package"}
 string_fields = {
     "pg_major",
     "pg_version",
@@ -216,23 +225,33 @@ string_fields = {
     "cnpg_tag",
     "cnpg_digest",
     "timescaledb_version",
+    "timescaledb_package_name",
     "timescaledb_package_version",
     "toolkit_version",
+    "toolkit_package_name",
     "toolkit_package_version",
+    "pgvector_source",
+    "pgvector_package_version",
+    "pgaudit_source",
+    "pgaudit_package_version",
     "skip_reason",
 }
 bool_fields = {"publish", "experimental", "latest_eligible"}
+story_3_2_fields = {"timescaledb_package_name", "toolkit_package_name", "pgvector_source", "pgvector_package_version", "pgaudit_source", "pgaudit_package_version"}
 
 for idx, entry in enumerate(entries):
     if not isinstance(entry, dict):
         diag(command, str(path), f"entries[{idx}] is mapping", type(entry).__name__, "Set every entry to a YAML mapping.")
-    missing = sorted(required_entry - set(entry))
+    entry_required = set(required_entry)
+    if path.name != "versions.yaml" and not story_3_2_fields.intersection(entry):
+        entry_required -= story_3_2_fields
+    missing = sorted(entry_required - set(entry))
     if missing:
         diag(command, str(path), f"entries[{idx}] contains all required fields", f"missing {missing}", "Add the missing required entry fields.")
-    extra_entry = sorted(set(entry) - required_entry)
+    extra_entry = sorted(set(entry) - entry_required)
     if extra_entry:
         diag(command, str(path), f"entries[{idx}] keys exactly {sorted(required_entry)}", f"extra {extra_entry}", "Remove unknown entry metadata keys.")
-    for field in string_fields:
+    for field in sorted(string_fields & set(entry)):
         if not isinstance(entry[field], str):
             diag(command, str(path), f"entries[{idx}].{field} is string", type(entry[field]).__name__, f"Set {field} to a YAML string.")
     for field in bool_fields:
@@ -262,6 +281,18 @@ for idx, entry in enumerate(entries):
         expected_cnpg_tag = f"{entry['pg_major']}-standard-{entry['debian_variant']}"
         if entry["cnpg_tag"] != expected_cnpg_tag:
             diag(command, str(path), f"cnpg_tag == {expected_cnpg_tag!r}", repr(entry["cnpg_tag"]), "Use the scaffold CNPG tag format {pg_major}-standard-{debian_variant}.")
+    if story_3_2_fields.issubset(entry):
+        for extension in ["pgvector", "pgaudit"]:
+            source_field = f"{extension}_source"
+            version_field = f"{extension}_package_version"
+            source = entry[source_field]
+            version = entry[version_field]
+            if source not in extension_sources:
+                diag(command, str(path), f"entries[{idx}].{source_field} is base or package", repr(source), "Set explicit extension source metadata to base or package.")
+            if source == "package" and version.strip() == "":
+                diag(command, str(path), f"entries[{idx}].{version_field} is non-empty when {source_field}=package", repr(version), "Package-sourced pgvector/PGAudit entries require exact package version metadata.")
+            if source == "base" and version.strip() != "":
+                diag(command, str(path), f"entries[{idx}].{version_field} is empty when {source_field}=base", repr(version), "Base-sourced pgvector/PGAudit entries are verified from the CNPG base image.")
     if entry["pg_major"] == "19beta1" and entry["experimental"] is not True:
         diag(command, str(path), "19beta1 entries set experimental true", repr(entry["experimental"]), "Set experimental: true for PostgreSQL 19beta1.")
     if entry["pg_major"] != "19beta1" and entry["experimental"] is not False:
@@ -271,10 +302,10 @@ for idx, entry in enumerate(entries):
     expected_latest = key == ("18", "trixie")
     if entry["latest_eligible"] is not expected_latest:
         diag(command, str(path), "latest_eligible true only for 18-trixie", f"key={key!r}, latest_eligible={entry['latest_eligible']!r}", "Set only the 18-trixie row latest_eligible true.")
-    non_empty_resolver = {field: entry[field] for field in resolver_owned if entry[field] != ""}
+    non_empty_resolver = {field: entry.get(field, "") for field in resolver_owned if entry.get(field, "") != ""}
     if non_empty_resolver and path.name != "versions.yaml":
         diag(command, str(path), "resolver-owned fields empty in Story 1.1 scaffold", repr(non_empty_resolver), "Leave resolver-owned values empty until Story 2 resolvers populate them.")
-    if any(entry[field] == "" for field in resolver_owned):
+    if any(entry.get(field, "") == "" for field in resolver_owned):
         if entry["publish"] is not False or entry["skip_reason"].strip() == "":
             diag(command, str(path), "empty resolver-owned values require publish=false and non-empty skip_reason", f"publish={entry['publish']!r}, skip_reason={entry['skip_reason']!r}", "Set publish false and explain skip_reason until resolvers populate values.")
     if entry["cnpg_tag"] == "":

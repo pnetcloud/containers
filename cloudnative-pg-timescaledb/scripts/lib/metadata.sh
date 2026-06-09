@@ -154,13 +154,16 @@ if not isinstance(entries, list) or not entries:
 
 required_entry = {
     "pg_major", "pg_version", "debian_variant", "cnpg_tag", "cnpg_digest",
-    "timescaledb_version", "timescaledb_package_version", "toolkit_version",
-    "toolkit_package_version", "platforms", "publish", "experimental",
+    "timescaledb_version", "timescaledb_package_name", "timescaledb_package_version",
+    "toolkit_version", "toolkit_package_name", "toolkit_package_version",
+    "pgvector_source", "pgvector_package_version", "pgaudit_source",
+    "pgaudit_package_version", "platforms", "publish", "experimental",
     "latest_eligible", "skip_reason",
 }
 string_fields = required_entry - {"platforms", "publish", "experimental", "latest_eligible"}
 bool_fields = {"publish", "experimental", "latest_eligible"}
-resolver_owned = {"cnpg_digest", "timescaledb_version", "timescaledb_package_version", "toolkit_version", "toolkit_package_version"}
+resolver_owned = {"cnpg_digest", "timescaledb_version", "timescaledb_package_name", "timescaledb_package_version", "toolkit_version", "toolkit_package_name", "toolkit_package_version"}
+extension_sources = {"base", "package"}
 expected_rows = {("17", "trixie"), ("18", "trixie"), ("19beta1", "trixie"), ("17", "bookworm"), ("18", "bookworm"), ("19beta1", "bookworm")}
 seen = set()
 latest_rows = []
@@ -202,6 +205,17 @@ for idx, entry in enumerate(entries):
     expected_cnpg_tag = f"{pg_version}-standard-{entry['debian_variant']}"
     if entry["cnpg_tag"] != expected_cnpg_tag:
         fail(f"entries[{idx}].cnpg_tag matches pg_version and debian_variant", repr(entry["cnpg_tag"]), f"Set cnpg_tag to {expected_cnpg_tag} so unsupported base variants cannot be hidden in tags.")
+    for extension in ["pgvector", "pgaudit"]:
+        source_field = f"{extension}_source"
+        version_field = f"{extension}_package_version"
+        source = entry[source_field]
+        version = entry[version_field]
+        if source not in extension_sources:
+            fail(f"entries[{idx}].{source_field} is base or package", repr(source), "Set explicit extension source metadata to base or package.")
+        if source == "package" and not version.strip():
+            fail(f"entries[{idx}].{version_field} is non-empty when {source_field}=package", repr(version), "Package-sourced pgvector/PGAudit entries require exact package version metadata.")
+        if source == "base" and version.strip():
+            fail(f"entries[{idx}].{version_field} is empty when {source_field}=base", repr(version), "Base-sourced pgvector/PGAudit entries are verified from the CNPG base image, not package-installed.")
     if entry["pg_major"] == "19beta1" and entry["experimental"] is not True:
         fail("19beta1 entries are experimental", repr(entry["experimental"]), "Set experimental: true for 19beta1.")
     if entry["pg_major"] != "19beta1" and entry["experimental"] is not False:

@@ -23,6 +23,9 @@ fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/dockerfile/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/dockerfile/run.sh"
 fi
+if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/package-install/run.sh" ]]; then
+  "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/package-install/run.sh"
+fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/generated-drift/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/generated-drift/run.sh"
 fi

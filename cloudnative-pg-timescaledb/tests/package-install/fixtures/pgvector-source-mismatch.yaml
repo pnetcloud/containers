@@ -1,7 +1,7 @@
 schema_version: "1"
 image:
-  registry: ghcr.io
-  repository: pnetcloud/cloudnative-pg-timescaledb
+  registry: "ghcr.io"
+  repository: "pnetcloud/cloudnative-pg-timescaledb"
   current_major: "18"
   primary_debian_variant: trixie
 allowed:
@@ -12,16 +12,16 @@ entries:
   - pg_major: "18"
     pg_version: "18.4"
     debian_variant: trixie
-    cnpg_tag: "18.4-standard-bookworm"
-    cnpg_digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    cnpg_tag: "18.4-standard-trixie"
+    cnpg_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     timescaledb_version: "2.27.2"
-    timescaledb_package_name: ""
-    timescaledb_package_version: "2.27.2"
-    toolkit_version: "1.22.0"
-    toolkit_package_name: ""
-    toolkit_package_version: "1.22.0"
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
+    timescaledb_package_version: "2.27.2~debian13-1804"
+    toolkit_version: "1.23.0"
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+    toolkit_package_version: "1:1.23.0~debian13"
     pgvector_source: base
-    pgvector_package_version: ""
+    pgvector_package_version: "0.8.1-1.pgdg13+1"
     pgaudit_source: base
     pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
@@ -29,4 +29,3 @@ entries:
     experimental: false
     latest_eligible: true
     skip_reason: ""
-    tags: ["18", "18-pg18.4-ts2.27.2-20260609", "latest"]

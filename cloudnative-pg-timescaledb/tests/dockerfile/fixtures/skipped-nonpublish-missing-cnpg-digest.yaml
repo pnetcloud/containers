@@ -15,9 +15,15 @@ entries:
     cnpg_tag: "18.4-standard-trixie"
     cnpg_digest: ""
     timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
     timescaledb_package_version: ""
     toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
     toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
     publish: false
     experimental: false

@@ -15,9 +15,15 @@ entries:
     cnpg_tag: "18-standard-trixie"
     cnpg_digest: ""
     timescaledb_version: ""
+    timescaledb_package_name: ""
     timescaledb_package_version: ""
     toolkit_version: ""
+    toolkit_package_name: ""
     toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
     publish: false
     experimental: false

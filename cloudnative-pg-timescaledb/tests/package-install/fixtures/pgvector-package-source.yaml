@@ -20,8 +20,8 @@ entries:
     toolkit_version: "1.23.0"
     toolkit_package_name: "timescaledb-toolkit-postgresql-18"
     toolkit_package_version: "1:1.23.0~debian13"
-    pgvector_source: base
-    pgvector_package_version: ""
+    pgvector_source: package
+    pgvector_package_version: "0.8.1-1.pgdg13+1"
     pgaudit_source: base
     pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
