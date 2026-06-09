@@ -34,6 +34,8 @@ docker_forbidden = [
     re.compile(r"(?:COPY|ADD)\s+[^\n]*(?:plugin-barman-cloud|(?<!plugin-)barman-cloud)\b", re.I),
 ]
 doc_forbidden = [
+    re.compile(r"(?:apt-get\s+install|pip\s+install)[^\n]*(?:barman|barman-cloud)", re.I),
+    re.compile(r"\bbarman-cloud-(?:wal-archive|backup)\b", re.I),
     re.compile(r"(?:use|uses|using|run|runs|requires|required|includes|ships|install|installs)[^\n.]{0,120}barman-cloud", re.I),
     re.compile(r"in-image[^\n.]{0,80}barman", re.I),
     re.compile(r"legacy[^\n.]{0,80}barman-cloud", re.I),
@@ -74,8 +76,19 @@ def normalize_dockerfile(text):
 
 
 def is_negated(text, start):
-    window = text[max(0, start - 120):start + 160].lower()
-    return any(phrase in window for phrase in ["must not", "do not", "does not", "must never", "not appear", "reserved for the cloudnativepg barman cloud plugin"])
+    window = text[max(0, start - 200):start + 240].lower()
+    return required_phrase.lower() in window and any(
+        phrase in window
+        for phrase in [
+            "must not",
+            "do not",
+            "does not",
+            "must never",
+            "not appear",
+            "not supported",
+            "reserved for the cloudnativepg barman cloud plugin",
+        ]
+    )
 
 
 for raw in paths:
