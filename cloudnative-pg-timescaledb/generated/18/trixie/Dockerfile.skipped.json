@@ -1,0 +1,8 @@
+{
+  "buildable": false,
+  "debian_variant": "trixie",
+  "pg_major": "18",
+  "publish": false,
+  "skip_reason": "Pending Story 2 resolver population",
+  "source_entry": "18-trixie"
+}

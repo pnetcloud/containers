@@ -68,7 +68,13 @@ if kind == "dockerfiles":
     require_keys(payload, {"dockerfiles"}, "dockerfiles payload")
     rows = []
     for row in payload["dockerfiles"]:
-        require_keys(row, {"pg_major", "debian_variant", "dockerfile", "source_entry", "publish", "experimental", "skip_reason"}, "dockerfiles row")
+        require_keys(row, {"pg_major", "debian_variant", "dockerfile", "skipped_marker", "base_image", "source_entry", "publish", "experimental", "skip_reason"}, "dockerfiles row")
+        if row["publish"]:
+            if not row["dockerfile"] or row["skipped_marker"] or not row["base_image"]:
+                fail("publishable dockerfile rows have dockerfile/base_image and no skipped marker", repr(row), "Buildable Dockerfiles must be explicit only for publishable entries.")
+        else:
+            if row["dockerfile"] or not row["skipped_marker"] or row["base_image"]:
+                fail("skipped dockerfile rows have skipped_marker and no dockerfile/base_image", repr(row), "Skipped entries must not expose buildable Dockerfiles.")
         rows.append((row["pg_major"], row["debian_variant"]))
     require_exact_rows(rows, "dockerfiles")
 elif kind == "bake":
@@ -80,12 +86,19 @@ elif kind == "bake":
         if not match:
             fail("bake target names encode pg/debian row", repr(row["name"]), "Use pg<major>-<debian> target names from metadata.")
         rows.append((match.group(1), match.group(2)))
-    require_exact_rows(rows, "bake target")
+    if rows:
+        require_exact_rows(rows, "bake target")
 elif kind == "matrix":
     require_keys(payload, {"include"}, "matrix payload")
     rows = []
     for row in payload["include"]:
-        require_keys(row, {"pg_major", "pg_version", "debian_variant", "platforms", "dockerfile", "bake_target", "publish", "experimental", "latest_eligible", "skip_reason"}, "matrix include row")
+        require_keys(row, {"pg_major", "pg_version", "debian_variant", "platforms", "dockerfile", "skipped_marker", "bake_target", "publish", "experimental", "latest_eligible", "skip_reason"}, "matrix include row")
+        if row["publish"]:
+            if not row["dockerfile"] or not row["bake_target"] or row["skipped_marker"]:
+                fail("publishable matrix rows have dockerfile/bake_target and no skipped marker", repr(row), "Build matrix rows must expose build inputs only when publishable.")
+        else:
+            if row["dockerfile"] or row["bake_target"] or not row["skipped_marker"]:
+                fail("non-publish matrix rows have skipped_marker and no dockerfile/bake_target", repr(row), "Skipped entries must not become buildable matrix rows.")
         rows.append((row["pg_major"], row["debian_variant"]))
     latest = latest_rows_from_matrix(payload["include"])
     if latest != [("18", "trixie")]:

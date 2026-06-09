@@ -118,10 +118,10 @@ Default output root: `cloudnative-pg-timescaledb/generated/`
 Required JSON keys:
 
 ```json
-{"dockerfiles":[{"pg_major":"18","debian_variant":"trixie","dockerfile":"cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile","source_entry":"18-trixie","publish":false,"experimental":false,"skip_reason":"Pending Story 2 resolver population"}]}
+{"dockerfiles":[{"pg_major":"18","debian_variant":"trixie","dockerfile":"","skipped_marker":"cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile.skipped.json","base_image":"","source_entry":"18-trixie","publish":false,"experimental":false,"skip_reason":"Pending Story 2 resolver population"}]}
 ```
 
-Consumers must require `pg_major`, `debian_variant`, `dockerfile`, `source_entry`, `publish`, `experimental`, and `skip_reason` for every row.
+Consumers must require `pg_major`, `debian_variant`, `dockerfile`, `skipped_marker`, `base_image`, `source_entry`, `publish`, `experimental`, and `skip_reason` for every row. Publishable rows expose `dockerfile` and `base_image` and leave `skipped_marker` empty. Skipped rows expose `skipped_marker` and leave `dockerfile` and `base_image` empty.
 
 ## Bake
 
@@ -132,10 +132,10 @@ Default output: `cloudnative-pg-timescaledb/docker-bake.hcl`
 Required JSON keys:
 
 ```json
-{"bake_file":"cloudnative-pg-timescaledb/docker-bake.hcl","targets":[{"name":"pg18-trixie","context":".","dockerfile":"cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile","platforms":["linux/amd64","linux/arm64"],"publish":false,"experimental":false}]}
+{"bake_file":"cloudnative-pg-timescaledb/docker-bake.hcl","targets":[]}
 ```
 
-Consumers must require `bake_file` plus target `name`, `context`, `dockerfile`, `platforms`, `publish`, and `experimental`.
+Consumers must require `bake_file` plus target `name`, `context`, `dockerfile`, `platforms`, `publish`, and `experimental` for every target. The target list contains only publishable entries; it may be empty when all metadata rows are skipped.
 
 ## Matrix
 
@@ -146,10 +146,10 @@ Default output: `cloudnative-pg-timescaledb/matrix.json`
 Required JSON keys:
 
 ```json
-{"include":[{"pg_major":"18","pg_version":"18","debian_variant":"trixie","platforms":["linux/amd64","linux/arm64"],"dockerfile":"cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile","bake_target":"pg18-trixie","publish":false,"experimental":false,"latest_eligible":true,"skip_reason":"Pending Story 2 resolver population"}]}
+{"include":[{"pg_major":"18","pg_version":"18.4","debian_variant":"trixie","platforms":["linux/amd64","linux/arm64"],"dockerfile":"","skipped_marker":"cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile.skipped.json","bake_target":"","publish":false,"experimental":false,"latest_eligible":true,"skip_reason":"Pending Story 2 resolver population"}]}
 ```
 
-Consumers must require `include` rows with `pg_major`, `pg_version`, `debian_variant`, `platforms`, `dockerfile`, `bake_target`, `publish`, `experimental`, `latest_eligible`, and `skip_reason`. They must reject rows where `18-trixie` is not the sole `latest_eligible: true` row.
+Consumers must require `include` rows with `pg_major`, `pg_version`, `debian_variant`, `platforms`, `dockerfile`, `skipped_marker`, `bake_target`, `publish`, `experimental`, `latest_eligible`, and `skip_reason`. Publishable rows expose `dockerfile` and `bake_target`; skipped rows expose `skipped_marker` only. Consumers must reject rows where `18-trixie` is not the sole `latest_eligible: true` row.
 
 ## Catalog
 
@@ -243,7 +243,10 @@ docs_file = Path(sys.argv[2])
 for payload in sys.argv[3:]:
     data = json.loads(payload)
     for row in data.get("dockerfiles", []):
-        print(row["dockerfile"])
+        if row.get("dockerfile"):
+            print(row["dockerfile"])
+        if row.get("skipped_marker"):
+            print(row["skipped_marker"])
     for row in data.get("catalogs", []):
         print(row["catalog_path"])
     for row in data.get("docs", []):
@@ -258,7 +261,7 @@ collect_actual_files() {
   if [[ -d "${generated_root}" ]]; then
     while IFS= read -r -d '' path; do
       rel_path "${path}"
-    done < <(find "${generated_root}" -type f -name Dockerfile -print0)
+    done < <(find "${generated_root}" -type f \( -name Dockerfile -o -name Dockerfile.skipped.json \) -print0)
   fi
   if [[ -d "${catalog_root}" ]]; then
     while IFS= read -r -d '' path; do

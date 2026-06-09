@@ -1,0 +1,8 @@
+{
+  "buildable": false,
+  "debian_variant": "trixie",
+  "pg_major": "19beta1",
+  "publish": false,
+  "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream support",
+  "source_entry": "19beta1-trixie"
+}

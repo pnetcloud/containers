@@ -1,0 +1,25 @@
+schema_version: "1"
+image:
+  registry: "ghcr.io"
+  repository: "pnetcloud/cloudnative-pg-timescaledb"
+  current_major: "18"
+  primary_debian_variant: trixie
+allowed:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: ["trixie", "bookworm"]
+  platforms: ["linux/amd64", "linux/arm64"]
+entries:
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: trixie
+    cnpg_tag: "18.4-standard-trixie"
+    cnpg_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    timescaledb_version: "vendor/runtime"
+    timescaledb_package_version: "2.27.2~debian13-1804"
+    toolkit_version: "1.23.0"
+    toolkit_package_version: "1:1.23.0~debian13"
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: true
+    experimental: false
+    latest_eligible: true
+    skip_reason: ""
