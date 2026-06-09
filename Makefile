@@ -30,4 +30,4 @@ build:
 	@$(SCRIPT_DIR)/build.sh "$(PG)" "$(DEBIAN)" $(BUILD_ARGS)
 
 smoke:
-	@$(SCRIPT_DIR)/smoke.sh "$(PG)" "$(DEBIAN)" $(SMOKE_ARGS)
+	@CHECKS="$(CHECKS)" $(SCRIPT_DIR)/smoke.sh "$(PG)" "$(DEBIAN)" $(SMOKE_ARGS)

@@ -80,15 +80,17 @@ for target in smoke; do
   run_expect_exit 65 "${target} script unsupported PostgreSQL" "${script}" 16 trixie
   run_expect_exit 65 "${target} script unsupported Alpine" "${script}" 18 alpine
   run_expect_exit 65 "${target} script unsupported bullseye" "${script}" 18 bullseye
-  run_expect_exit 69 "${target} script valid controlled unavailable" "${script}" 18 trixie
-  run_expect_exit 69 "${target} script experimental controlled unavailable" "${script}" 19beta1 bookworm
+  run_expect_exit 65 "${target} script valid skipped until publishable" "${script}" 18 trixie
+  run_expect_exit 65 "${target} script experimental skipped until publishable" "${script}" 19beta1 bookworm
+  run_expect_exit 69 "${target} script SQL controlled unavailable" env CHECKS=sql "${script}" 18 trixie
 
   run_make_error 64 "${target} Make target missing parameters" "${target}"
   run_make_error 65 "${target} Make target unsupported PostgreSQL" "${target}" PG=16 DEBIAN=trixie
   run_make_error 65 "${target} Make target unsupported Alpine" "${target}" PG=18 DEBIAN=alpine
   run_make_error 65 "${target} Make target unsupported bullseye" "${target}" PG=18 DEBIAN=bullseye
-  run_make_error 69 "${target} Make target valid controlled unavailable" "${target}" PG=18 DEBIAN=trixie
-  run_make_error 69 "${target} Make target experimental controlled unavailable" "${target}" PG=19beta1 DEBIAN=bookworm
+  run_make_error 65 "${target} Make target valid skipped until publishable" "${target}" PG=18 DEBIAN=trixie CHECKS=container
+  run_make_error 65 "${target} Make target experimental skipped until publishable" "${target}" PG=19beta1 DEBIAN=bookworm CHECKS=container
+  run_make_error 69 "${target} Make target SQL controlled unavailable" "${target}" PG=18 DEBIAN=trixie CHECKS=sql
 done
 
 run_expect_exit 2 "unrecognized target" make -C "${ROOT_DIR}" does-not-exist

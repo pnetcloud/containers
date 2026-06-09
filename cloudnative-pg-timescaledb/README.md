@@ -17,3 +17,5 @@ Use the root `Makefile` for local development and CI entry points. The stable ta
 `make bake-print` prints the generated Docker Buildx Bake plan from `cloudnative-pg-timescaledb/docker-bake.hcl`. The plan uses checkout/path context and contains no registry push output.
 
 `make build` and `make smoke` require `PG=<17|18|19beta1>` and `DEBIAN=<trixie|bookworm>`. `make build PG=<major> DEBIAN=<variant>` invokes the selected local Bake target with `output=type=docker` and a single local `PLATFORM` override, defaulting to `linux/amd64`. If the selected row is still `publish: false`, the command exits non-zero with the target name, Dockerfile path, context, platform, and `skip_reason`.
+
+`make smoke PG=<major> DEBIAN=<variant> CHECKS=container` runs container-level smoke checks for a locally built image line. It verifies Debian release, PostgreSQL version, required extension control files, image labels, CNPG runtime binaries, the `postgres` user, data directory permissions, and temporary PostgreSQL startup. `CHECKS=sql` is reserved for the SQL extension smoke story.

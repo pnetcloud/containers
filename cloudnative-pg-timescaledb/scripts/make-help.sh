@@ -20,6 +20,7 @@ Targets:
 Supported parameters:
   PG:     17, 18, 19beta1
   DEBIAN: trixie, bookworm
+  CHECKS: container, sql
 
 Controlled exit codes:
   64 missing required PG/DEBIAN parameters
