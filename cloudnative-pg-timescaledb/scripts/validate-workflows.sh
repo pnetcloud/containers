@@ -192,8 +192,18 @@ def action_allowed(policy, workflow, job, action):
     return any(item["workflow"] == workflow and item["job"] == job and item["action"] == action for item in policy["action_pin_exceptions"])
 
 
-def permission_allowed(policy, workflow, job, permission):
-    return any(item["workflow"] == workflow and item["job"] == job and item["permission"] == permission for item in policy["permission_allowlist"])
+def permission_allowed(policy, workflow, job, permission, level):
+    grant = f"{permission}: {level}"
+    matches = [item for item in policy["permission_allowlist"] if item["workflow"] == workflow and item["job"] == job and item["permission"] == grant]
+    if not matches:
+        return False
+    if workflow == ".github/workflows/update.yml" and job == "autocommit" and grant == "contents: write":
+        return any(
+            item["reason"] == "Commit resolver-owned metadata and generated artifacts after make validate"
+            and item["owner_story"] == "2.5"
+            for item in matches
+        )
+    return True
 
 
 def strict_allowed(policy, path):
@@ -251,7 +261,7 @@ def validate_workflow(path, policy):
                 continue
             if "pull_request" in triggers:
                 diag(path, "pull_request workflows do not receive write tokens", f"job={job} {permission}: write", "Do not grant write permissions to pull_request workflows.")
-            if permission not in RELEASE_WRITE_PERMISSIONS or not permission_allowed(policy, rel, job, permission):
+            if permission not in RELEASE_WRITE_PERMISSIONS or not permission_allowed(policy, rel, job, permission, value):
                 diag(path, "write permissions are explicitly allowlisted for named jobs", f"job={job} {permission}: write", "Add a justified workflow-policy permission_allowlist entry in the owning story.")
 
 

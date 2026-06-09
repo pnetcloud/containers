@@ -1,0 +1,5 @@
+# comments and blank lines are allowed
+cloudnative-pg-timescaledb/versions.yaml
+cloudnative-pg-timescaledb/generated/**
+cloudnative-pg-timescaledb/docker-bake.hcl
+cloudnative-pg-timescaledb/matrix.json

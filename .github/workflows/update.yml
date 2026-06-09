@@ -1,0 +1,58 @@
+name: Update Metadata
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudnative-pg-timescaledb-update-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  autocommit:
+    name: Update and autocommit resolver artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - name: Run deterministic update
+        run: make update UPDATE_ARGS=--json > /tmp/cloudnative-pg-timescaledb-update.json
+      - name: Validate repository gates
+        run: make validate
+      - name: Stage resolver-owned update paths
+        run: cloudnative-pg-timescaledb/scripts/autocommit-stage.sh
+      - name: Validate staged update paths
+        run: cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh
+      - name: Write update summary
+        run: |
+          set -Eeuo pipefail
+          {
+            printf '## Resolver-originated changes\n\n'
+            if git diff --cached --quiet; then
+              printf 'No resolver-owned metadata or generated artifact changes.\n\n'
+            else
+              git diff --cached --name-only | sed 's/^/- /'
+              printf '\n'
+            fi
+            printf '## Renovate-originated changes\n\n'
+            printf 'Not classified in Story 2.5.\n'
+          } >> "${GITHUB_STEP_SUMMARY}"
+      - name: Commit update
+        run: |
+          set -Eeuo pipefail
+          if git diff --cached --quiet; then
+            printf 'No resolver-owned update changes to commit.\n'
+            exit 0
+          fi
+          git config user.name 'pnetcloud-update-bot'
+          git config user.email 'pnetcloud-update-bot@users.noreply.github.com'
+          TZ=UTC git commit -m 'chore(cnpg-timescaledb): update resolver metadata'
+          git push

@@ -1,3 +1,8 @@
 action_pin_exceptions: []
 strict_mode_exceptions: []
-permission_allowlist: []
+permission_allowlist:
+  - workflow: .github/workflows/update.yml
+    job: autocommit
+    permission: "contents: write"
+    reason: Commit resolver-owned metadata and generated artifacts after make validate
+    owner_story: 2.5

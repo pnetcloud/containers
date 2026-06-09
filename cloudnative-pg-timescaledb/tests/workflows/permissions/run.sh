@@ -26,9 +26,65 @@ strict_mode_exceptions: []
 permission_allowlist:
   - workflow: .github/workflows/update.yml
     job: publish
-    permission: packages
+    permission: "packages: write"
     reason: Story fixture release permission
     owner_story: Story 4.5
+EOF
+}
+
+write_update_policy() {
+  local target="$1"
+  cat >"${target}" <<'EOF'
+action_pin_exceptions: []
+strict_mode_exceptions: []
+permission_allowlist:
+  - workflow: .github/workflows/update.yml
+    job: autocommit
+    permission: "contents: write"
+    reason: Commit resolver-owned metadata and generated artifacts after make validate
+    owner_story: 2.5
+EOF
+}
+
+write_update_wrong_reason_policy() {
+  local target="$1"
+  cat >"${target}" <<'EOF'
+action_pin_exceptions: []
+strict_mode_exceptions: []
+permission_allowlist:
+  - workflow: .github/workflows/update.yml
+    job: autocommit
+    permission: "contents: write"
+    reason: Wrong reason
+    owner_story: 2.5
+EOF
+}
+
+write_update_wrong_owner_policy() {
+  local target="$1"
+  cat >"${target}" <<'EOF'
+action_pin_exceptions: []
+strict_mode_exceptions: []
+permission_allowlist:
+  - workflow: .github/workflows/update.yml
+    job: autocommit
+    permission: "contents: write"
+    reason: Commit resolver-owned metadata and generated artifacts after make validate
+    owner_story: 9.9
+EOF
+}
+
+write_update_wrong_level_policy() {
+  local target="$1"
+  cat >"${target}" <<'EOF'
+action_pin_exceptions: []
+strict_mode_exceptions: []
+permission_allowlist:
+  - workflow: .github/workflows/update.yml
+    job: autocommit
+    permission: "contents: read"
+    reason: Commit resolver-owned metadata and generated artifacts after make validate
+    owner_story: 2.5
 EOF
 }
 
@@ -85,7 +141,7 @@ expect_fail() {
   rm -f "${tmp}"
 }
 
-for fixture in valid-least-privilege.yml write-all.yml top-level-write.yml pr-write-token.yml unpinned-action.yml release-sensitive-permission.yml valid-allowlisted-permission.yml invalid-allowlist-entry.yml missing-strict-mode.sh; do
+for fixture in valid-least-privilege.yml write-all.yml top-level-write.yml pr-write-token.yml unpinned-action.yml release-sensitive-permission.yml valid-allowlisted-permission.yml invalid-allowlist-entry.yml missing-strict-mode.sh valid-update-autocommit-contents-write.yml invalid-update-nonautocommit-contents-write.yml; do
   [[ -f "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -f" "${FIXTURE_DIR}/${fixture}" "fixture exists" "missing" "Restore Story 2.4 workflow policy fixtures."; exit 1; }
 done
 
@@ -100,6 +156,30 @@ prepare_root "${allow_root}"
 cp "${FIXTURE_DIR}/valid-allowlisted-permission.yml" "${allow_root}/.github/workflows/update.yml"
 write_allowlist_policy "${allow_root}/cloudnative-pg-timescaledb/workflow-policy.yaml"
 expect_pass "valid allowlisted permission" "${allow_root}"
+
+update_allow_root="${tmp_root}/update-allowlisted"
+prepare_root "${update_allow_root}"
+cp "${FIXTURE_DIR}/valid-update-autocommit-contents-write.yml" "${update_allow_root}/.github/workflows/update.yml"
+write_update_policy "${update_allow_root}/cloudnative-pg-timescaledb/workflow-policy.yaml"
+expect_pass "valid update autocommit contents write" "${update_allow_root}"
+
+update_reject_root="${tmp_root}/update-rejected"
+prepare_root "${update_reject_root}"
+cp "${FIXTURE_DIR}/invalid-update-nonautocommit-contents-write.yml" "${update_reject_root}/.github/workflows/update.yml"
+write_update_policy "${update_reject_root}/cloudnative-pg-timescaledb/workflow-policy.yaml"
+expect_fail "invalid update nonautocommit contents write" "write permissions are explicitly allowlisted" "${update_reject_root}"
+
+for tuple in \
+  "update-wrong-reason write_update_wrong_reason_policy" \
+  "update-wrong-owner write_update_wrong_owner_policy" \
+  "update-wrong-level write_update_wrong_level_policy"; do
+  read -r name writer <<<"${tuple}"
+  target="${tmp_root}/${name}"
+  prepare_root "${target}"
+  cp "${FIXTURE_DIR}/valid-update-autocommit-contents-write.yml" "${target}/.github/workflows/update.yml"
+  "${writer}" "${target}/cloudnative-pg-timescaledb/workflow-policy.yaml"
+  expect_fail "${name}" "write permissions are explicitly allowlisted" "${target}"
+done
 
 for tuple in \
   "write-all.yml no write-all permissions" \
