@@ -1,0 +1,19 @@
+{
+  "manifests": [
+    {
+      "tag": "17.10-standard-bookworm",
+      "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "18.4-standard-bookworm",
+      "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "19beta1-standard-bookworm",
+      "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    }
+  ]
+}
