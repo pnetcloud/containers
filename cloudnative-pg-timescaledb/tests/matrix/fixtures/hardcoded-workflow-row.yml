@@ -1,0 +1,12 @@
+name: Bad Build Matrix
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - pg_major: "18"
+            debian_variant: trixie
+    steps:
+      - run: echo bad

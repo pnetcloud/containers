@@ -4,11 +4,16 @@ set -Eeuo pipefail
 tags_validate_file() {
   local metadata_file="$1"
   local release_date="$2"
-  python3 - "$metadata_file" "$release_date" <<'PY'
+  local lib_dir
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  python3 - "$metadata_file" "$release_date" "$lib_dir" <<'PY'
 from datetime import datetime
 from pathlib import Path
 import re
 import sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, sys.argv[3])
+from tag_policy import generated_tags
 
 path = Path(sys.argv[1])
 release_date = sys.argv[2]
@@ -92,21 +97,6 @@ def parse_yaml_subset(text):
             continue
         fail("parseable tag metadata YAML subset", f"line {line_no}: {line!r}", "Use the versions.yaml schema indentation.")
     return data
-
-def generated_tags(entry):
-    suffix = "" if entry["debian_variant"] == "trixie" else f"-{entry['debian_variant']}"
-    immutable = f"{entry['pg_major']}-pg{entry['pg_version']}-ts{entry['timescaledb_version']}-{release_date}{suffix}"
-    if entry["experimental"]:
-        return [immutable]
-    tags = []
-    if entry["debian_variant"] == "trixie":
-        tags.append(entry["pg_major"])
-    else:
-        tags.append(f"{entry['pg_major']}-{entry['debian_variant']}")
-    tags.append(immutable)
-    if entry["latest_eligible"]:
-        tags.append("latest")
-    return tags
 
 if not re.fullmatch(r"[0-9]{8}", release_date):
     fail("UTC release date in YYYYMMDD", release_date, "Pass --date as an explicit UTC date, for example 20260609.")
@@ -198,7 +188,7 @@ for idx, entry in enumerate(entries):
             fail("taggable entries have required tag inputs", f"empty {empty}", "Populate PostgreSQL, Debian, and TimescaleDB values before generating tags.")
         if entry["publish"] and "tags" not in entry:
             fail(f"entries[{idx}].tags is present for publishable rows", "missing", "Materialize deterministic policy tags before an image row becomes publishable.")
-        actual = generated_tags(entry)
+        actual = generated_tags(entry, release_date)
         for tag in actual:
             if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", tag):
                 fail("generated Docker tags use valid tag grammar", repr(tag), "Use only Docker tag-safe PostgreSQL, Debian, TimescaleDB, and date values.")

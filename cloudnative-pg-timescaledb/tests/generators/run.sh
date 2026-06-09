@@ -100,21 +100,24 @@ elif kind == "bake":
         skipped_rows.append((row["pg_major"], row["debian_variant"]))
     require_exact_rows(rows + skipped_rows, "bake target plus skipped")
 elif kind == "matrix":
-    require_keys(payload, {"include"}, "matrix payload")
+    require_keys(payload, {"include", "skipped"}, "matrix payload")
     rows = []
     for row in payload["include"]:
-        require_keys(row, {"pg_major", "pg_version", "debian_variant", "platforms", "dockerfile", "skipped_marker", "bake_target", "publish", "experimental", "latest_eligible", "skip_reason"}, "matrix include row")
-        if row["publish"]:
-            if not row["dockerfile"] or not row["bake_target"] or row["skipped_marker"]:
-                fail("publishable matrix rows have dockerfile/bake_target and no skipped marker", repr(row), "Build matrix rows must expose build inputs only when publishable.")
-        else:
-            if row["dockerfile"] or row["bake_target"] or not row["skipped_marker"]:
-                fail("non-publish matrix rows have skipped_marker and no dockerfile/bake_target", repr(row), "Skipped entries must not become buildable matrix rows.")
+        require_keys(row, {"pg_major", "pg_version", "debian_variant", "image", "candidate_ref", "digest", "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental", "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"}, "matrix include row")
+        if row["publish"] is not True:
+            fail("matrix include rows are publishable", repr(row), "Only publishable metadata rows should become build matrix rows.")
+        if not row["dockerfile"] or not row["bake_target"] or not row["candidate_ref"] or not row["intended_tags"]:
+            fail("publishable matrix rows expose release inputs", repr(row), "Build matrix rows must expose Dockerfile, Bake target, candidate ref, and intended tags.")
+        rows.append((row["pg_major"], row["debian_variant"]))
+    for row in payload["skipped"]:
+        require_keys(row, {"pg_major", "pg_version", "debian_variant", "platforms", "publish", "experimental", "latest_eligible", "skip_reason"}, "matrix skipped row")
+        if row["publish"] is not False or not row["skip_reason"]:
+            fail("matrix skipped rows are non-publishable with skip_reason", repr(row), "Skipped matrix rows must remain summaries only.")
         rows.append((row["pg_major"], row["debian_variant"]))
     latest = latest_rows_from_matrix(payload["include"])
-    if latest != [("18", "trixie")]:
-        fail("matrix latest_eligible exactly 18-trixie", repr(latest), "Preserve latest eligibility from metadata without recomputing it downstream.")
-    require_exact_rows(rows, "matrix include")
+    if latest and latest != [("18", "trixie")]:
+        fail("matrix latest_eligible exactly 18-trixie when publishable latest is present", repr(latest), "Preserve latest eligibility from metadata without recomputing it downstream.")
+    require_exact_rows(rows, "matrix include plus skipped")
 elif kind == "catalog":
     require_keys(payload, {"catalogs"}, "catalog payload")
     latest = []
@@ -252,7 +255,7 @@ schema_check docs "${FIXTURE_DIR}/generate-docs-valid.json"
 expect_schema_fail "dockerfiles missing dockerfile" dockerfiles "${FIXTURE_DIR}/generate-dockerfiles-missing-dockerfile.json" "missing.*dockerfile"
 expect_schema_fail "dockerfiles missing matrix row" dockerfiles "${FIXTURE_DIR}/generate-dockerfiles-missing-row.json" "rows exactly"
 expect_schema_fail "bake missing target name" bake "${FIXTURE_DIR}/generate-bake-missing-target.json" "missing.*name"
-expect_schema_fail "matrix missing include key" matrix "${FIXTURE_DIR}/generate-matrix-missing-include-key.json" "missing.*dockerfile"
+expect_schema_fail "matrix missing include key" matrix "${FIXTURE_DIR}/generate-matrix-missing-include-key.json" "missing.*digest"
 expect_schema_fail "matrix duplicate row" matrix "${FIXTURE_DIR}/generate-matrix-duplicate-row.json" "rows exactly"
 expect_schema_fail "matrix wrong latest" matrix "${FIXTURE_DIR}/generate-matrix-wrong-latest-eligible.json" "latest_eligible exactly 18-trixie"
 expect_schema_fail "catalog missing catalog path" catalog "${FIXTURE_DIR}/generate-catalog-missing-catalog-path.json" "missing.*catalog_path"

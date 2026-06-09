@@ -1,0 +1,57 @@
+name: Build Matrix
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: Generate image matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      build_matrix: ${{ steps.matrix.outputs.build_matrix }}
+      has_include: ${{ steps.matrix.outputs.has_include }}
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - id: matrix
+        name: Generate matrix JSON
+        run: |
+          set -Eeuo pipefail
+          matrix_json="$(cloudnative-pg-timescaledb/scripts/generate-matrix.sh --json)"
+          cloudnative-pg-timescaledb/scripts/validate-matrix-json.py --json "${matrix_json}"
+          has_include="$(python3 -c 'import json,sys; print("true" if json.loads(sys.argv[1]).get("include") else "false")' "${matrix_json}")"
+          build_matrix="$(python3 -c 'import json,sys; payload=json.loads(sys.argv[1]); print(json.dumps({"include": payload.get("include", [])}, separators=(",", ":"), sort_keys=True))' "${matrix_json}")"
+          {
+            printf 'matrix=%s\n' "${matrix_json}"
+            printf 'build_matrix=%s\n' "${build_matrix}"
+            printf 'has_include=%s\n' "${has_include}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Matrix row contract
+    needs: matrix
+    if: ${{ needs.matrix.outputs.has_include == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.build_matrix) }}
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Validate matrix row contract
+        run: |
+          set -Eeuo pipefail
+          test -n '${{ matrix.candidate_ref }}'
+          test -n '${{ matrix.bake_target }}'
+          test -n '${{ matrix.dockerfile }}'
+          printf 'Matrix row %s %s %s\n' '${{ matrix.pg_major }}' '${{ matrix.debian_variant }}' '${{ matrix.candidate_ref }}'

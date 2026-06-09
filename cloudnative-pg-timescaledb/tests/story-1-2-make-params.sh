@@ -53,10 +53,32 @@ run_make_error() {
   rm -f "${tmp}"
 }
 
-run_expect_exit 69 "matrix delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/matrix.sh"
+run_expect_json() {
+  local description="$1"
+  shift
+  local tmp status
+  tmp="$(mktemp)"
+  set +e
+  "$@" >"${tmp}" 2>&1
+  status="$?"
+  set -e
+  if [[ "${status}" != "0" ]] || ! python3 -m json.tool "${tmp}" >/dev/null 2>&1; then
+    diag "${*}" "${description}" "exit 0 with valid JSON" "exit ${status}: $(tr '\n' ' ' <"${tmp}")" "Implemented JSON-producing targets should stay delegated and machine-readable."
+    rm -f "${tmp}"
+    exit 1
+  fi
+  if ! grep -Fq '"include"' "${tmp}" || ! grep -Fq '"skipped"' "${tmp}"; then
+    diag "${*}" "${description}" "matrix JSON contains include and skipped" "$(cat "${tmp}")" "Preserve the Story 4.1 matrix contract."
+    rm -f "${tmp}"
+    exit 1
+  fi
+  rm -f "${tmp}"
+}
+
+run_expect_json "matrix delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/matrix.sh"
 run_expect_exit 69 "catalog delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/catalog.sh"
 
-run_make_error 69 "matrix Make target" matrix
+run_expect_json "matrix Make target" make --no-print-directory -C "${ROOT_DIR}" matrix
 run_make_error 69 "catalog Make target" catalog
 
 build_script="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/build.sh"

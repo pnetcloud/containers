@@ -141,15 +141,15 @@ Consumers must require `bake_file` plus target `name`, `context`, `dockerfile`, 
 
 Command: `cloudnative-pg-timescaledb/scripts/generate-matrix.sh`
 
-Default output: `cloudnative-pg-timescaledb/matrix.json`
+Default outputs: `cloudnative-pg-timescaledb/matrix.json` and `cloudnative-pg-timescaledb/docs/generated/matrix-schema.md`
 
 Required JSON keys:
 
 ```json
-{"include":[{"pg_major":"18","pg_version":"18.4","debian_variant":"trixie","platforms":["linux/amd64","linux/arm64"],"dockerfile":"","skipped_marker":"cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile.skipped.json","bake_target":"","publish":false,"experimental":false,"latest_eligible":true,"skip_reason":"Pending Story 2 resolver population"}]}
+{"include":[{"bake_target":"pg18-trixie","candidate_ref":"ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609","debian_variant":"trixie","digest":"","dockerfile":"cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile","experimental":false,"image":"ghcr.io/pnetcloud/cloudnative-pg-timescaledb","intended_tags":["18","18-pg18.4-ts2.27.2-20260609","latest"],"latest_eligible":true,"pg_major":"18","pg_version":"18.4","platforms":["linux/amd64","linux/arm64"],"provenance_ref":"","publish":true,"sbom_ref":"","scan_result":"pending","signature_ref":""}],"skipped":[]}
 ```
 
-Consumers must require `include` rows with `pg_major`, `pg_version`, `debian_variant`, `platforms`, `dockerfile`, `skipped_marker`, `bake_target`, `publish`, `experimental`, `latest_eligible`, and `skip_reason`. Publishable rows expose `dockerfile` and `bake_target`; skipped rows expose `skipped_marker` only. Consumers must reject rows where `18-trixie` is not the sole `latest_eligible: true` row.
+Consumers must require `include` rows with `pg_major`, `pg_version`, `debian_variant`, `image`, `candidate_ref`, `digest`, `platforms`, `bake_target`, `dockerfile`, `intended_tags`, `publish`, `experimental`, `latest_eligible`, `scan_result`, `sbom_ref`, `provenance_ref`, and `signature_ref`. Publishable rows belong in `include[]`; skipped rows belong in `skipped[]` with `publish: false` and `skip_reason`. Consumers must reject rows where a publishable `latest_eligible: true` row is anything other than non-experimental `18-trixie`.
 
 ## Catalog
 
@@ -253,6 +253,7 @@ for payload in sys.argv[3:]:
         print(row["doc_path"])
 if "\nbarman_plugin:" in "\n" + metadata:
     print((docs_file.parent / "barman-plugin-reference.md").as_posix())
+print((docs_file.parent / "matrix-schema.md").as_posix())
 PY
 }
 

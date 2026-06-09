@@ -18,6 +18,7 @@ prepare_fixture() {
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/matrix.json" "${target}/matrix.json"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/compatibility.md" "${target}/docs/generated/compatibility.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" "${target}/docs/generated/barman-plugin-reference.md"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/matrix-schema.md" "${target}/docs/generated/matrix-schema.md"
 }
 
 run_validator() {
@@ -114,7 +115,7 @@ import sys
 from pathlib import Path
 path = Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["include"][1]["latest_eligible"] = False
+payload["skipped"][1]["latest_eligible"] = False
 path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 PY
 expect_fail "stale generated matrix" "matrix.json|committed output matches generated content|make generate" "${stale_matrix_root}"

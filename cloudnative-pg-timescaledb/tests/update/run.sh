@@ -21,6 +21,7 @@ prepare_project() {
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/catalog" "${target}/cloudnative-pg-timescaledb/catalog"
   mkdir -p "${target}/cloudnative-pg-timescaledb/docs/generated"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/compatibility.md" "${target}/cloudnative-pg-timescaledb/docs/generated/compatibility.md"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/matrix-schema.md" "${target}/cloudnative-pg-timescaledb/docs/generated/matrix-schema.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${target}/cloudnative-pg-timescaledb/versions.yaml"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docker-bake.hcl" "${target}/cloudnative-pg-timescaledb/docker-bake.hcl"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/matrix.json" "${target}/cloudnative-pg-timescaledb/matrix.json"
@@ -107,7 +108,7 @@ assert_allowlisted_status() {
   while IFS= read -r line; do
     path="${line:3}"
     case "${path}" in
-      cloudnative-pg-timescaledb/versions.yaml|cloudnative-pg-timescaledb/generated/*|cloudnative-pg-timescaledb/docker-bake.hcl|cloudnative-pg-timescaledb/matrix.json|cloudnative-pg-timescaledb/catalog/*|cloudnative-pg-timescaledb/docs/generated/compatibility.md|cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md) ;;
+      cloudnative-pg-timescaledb/versions.yaml|cloudnative-pg-timescaledb/generated/*|cloudnative-pg-timescaledb/docker-bake.hcl|cloudnative-pg-timescaledb/matrix.json|cloudnative-pg-timescaledb/catalog/*|cloudnative-pg-timescaledb/docs/generated/compatibility.md|cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md|cloudnative-pg-timescaledb/docs/generated/matrix-schema.md) ;;
       *) diag "git status" "${project}" "only resolver-owned metadata and generated artifacts" "${line}" "Keep update diffs reviewable for autocommit."; exit 1 ;;
     esac
   done <<<"${status}"

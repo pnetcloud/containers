@@ -1,0 +1,23 @@
+{
+  "include": [
+    {
+      "bake_target": "pg18-trixie",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609",
+      "debian_variant": "trixie",
+      "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
+      "experimental": false,
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+      "intended_tags": ["18", "18-pg18.4-ts2.27.2-20260609", "latest"],
+      "latest_eligible": true,
+      "pg_major": "18",
+      "pg_version": "18.4",
+      "platforms": ["linux/amd64", "linux/arm64"],
+      "provenance_ref": "",
+      "publish": true,
+      "sbom_ref": "",
+      "scan_result": "pending",
+      "signature_ref": ""
+    }
+  ],
+  "skipped": []
+}
