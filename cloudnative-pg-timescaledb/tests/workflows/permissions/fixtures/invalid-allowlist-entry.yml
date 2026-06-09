@@ -1,0 +1,7 @@
+action_pin_exceptions: []
+strict_mode_exceptions: []
+permission_allowlist:
+  - workflow: .github/workflows/publish.yml
+    job: publish
+    permission: packages
+    reason: missing owner story field

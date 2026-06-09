@@ -1,0 +1,34 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate repository gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install validation tools
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Validate local gates
+        run: make validate
+      - name: Validate workflows with actionlint
+        run: actionlint .github/workflows/*.yml
+      - name: Validate shell scripts with shellcheck
+        run: |
+          set -Eeuo pipefail
+          find cloudnative-pg-timescaledb/scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck

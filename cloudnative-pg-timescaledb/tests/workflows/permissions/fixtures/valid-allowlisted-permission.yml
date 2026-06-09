@@ -1,0 +1,10 @@
+name: Valid Allowlisted Permission
+on:
+  push:
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - run: true
