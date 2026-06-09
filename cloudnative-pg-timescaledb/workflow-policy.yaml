@@ -6,3 +6,8 @@ permission_allowlist:
     permission: "contents: write"
     reason: Commit resolver-owned metadata and generated artifacts after make validate
     owner_story: 2.5
+  - workflow: .github/workflows/build.yml
+    job: candidate
+    permission: "packages: write"
+    reason: Push GHCR release candidate tags after per-platform smoke gates
+    owner_story: 4.2

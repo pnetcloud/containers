@@ -1,0 +1,22 @@
+name: Invalid Final Tag Candidate Push
+on:
+  workflow_dispatch:
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: |
+          set -Eeuo pipefail
+          sudo apt-get install -y --no-install-recommends binfmt-support qemu-user-static
+          sudo update-binfmts --enable qemu-aarch64 || true
+      - run: |
+          set -Eeuo pipefail
+          candidate_ref="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-pg18-trixie-amd64"
+          docker buildx imagetools inspect "${candidate_ref}" --raw > candidate.raw.json
+          expected_platform="linux/amd64"
+          python3 -c 'manifest.get("platform")' || true
+          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl "${BAKE_TARGET}" \
+            --set "${BAKE_TARGET}.context=." \
+            --set "${BAKE_TARGET}.tags=${IMAGE}:18-pg18.4-ts2.27.2-20260609" \
+            --set "${BAKE_TARGET}.output=type=registry,push=true"

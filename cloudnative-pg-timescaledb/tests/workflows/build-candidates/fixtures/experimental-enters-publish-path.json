@@ -1,0 +1,27 @@
+{
+  "bake_target": "pg19beta1-trixie",
+  "candidate_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-100-1-pg19beta1-trixie-amd64",
+  "debian_variant": "trixie",
+  "dockerfile": "cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile",
+  "experimental": true,
+  "expected_platform": "linux/amd64",
+  "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+  "index_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "intended_tags": ["19beta1-pg19beta1-tsunresolved-20260609"],
+  "latest_eligible": false,
+  "pg_major": "19beta1",
+  "pg_version": "19beta1",
+  "platform": "linux/amd64",
+  "platform_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "platform_digests": {
+    "linux/amd64": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "linux/arm64": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "platforms": ["linux/amd64", "linux/arm64"],
+  "publish": true,
+  "runtime_architecture": "amd64",
+  "smoke_architecture_status": "passed",
+  "smoke_container_status": "passed",
+  "smoke_sql_status": "passed"
+}

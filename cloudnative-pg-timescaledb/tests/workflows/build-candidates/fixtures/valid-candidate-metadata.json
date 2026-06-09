@@ -1,0 +1,70 @@
+[
+  {
+    "bake_target": "pg18-trixie",
+    "candidate_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-100-1-pg18-trixie-amd64",
+    "debian_variant": "trixie",
+    "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
+    "experimental": false,
+    "expected_platform": "linux/amd64",
+    "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+    "index_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "intended_tags": [
+      "18-pg18.4-ts2.27.2-20260609",
+      "18",
+      "latest"
+    ],
+    "latest_eligible": true,
+    "pg_major": "18",
+    "pg_version": "18.4",
+    "platform": "linux/amd64",
+    "platform_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "platform_digests": {
+      "linux/amd64": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "linux/arm64": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+    ],
+    "publish": true,
+    "runtime_architecture": "amd64",
+    "smoke_architecture_status": "passed",
+    "smoke_container_status": "passed",
+    "smoke_sql_status": "passed"
+  },
+  {
+    "bake_target": "pg18-trixie",
+    "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-100-1-pg18-trixie-arm64",
+    "debian_variant": "trixie",
+    "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
+    "experimental": false,
+    "expected_platform": "linux/arm64",
+    "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+    "index_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "intended_tags": [
+      "18-pg18.4-ts2.27.2-20260609",
+      "18",
+      "latest"
+    ],
+    "latest_eligible": true,
+    "pg_major": "18",
+    "pg_version": "18.4",
+    "platform": "linux/arm64",
+    "platform_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "platform_digests": {
+      "linux/amd64": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "linux/arm64": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+    ],
+    "publish": true,
+    "runtime_architecture": "arm64",
+    "smoke_architecture_status": "passed",
+    "smoke_container_status": "passed",
+    "smoke_sql_status": "passed"
+  }
+]

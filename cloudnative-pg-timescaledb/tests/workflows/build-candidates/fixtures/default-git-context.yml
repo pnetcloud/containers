@@ -1,0 +1,12 @@
+name: Invalid Default Git Context
+on:
+  workflow_dispatch:
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: docker/build-push-action@1111111111111111111111111111111111111111
+        with:
+          push: true
+          tags: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-invalid

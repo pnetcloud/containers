@@ -32,9 +32,11 @@ docker_bin = sys.argv[6]
 pg = sys.argv[7]
 debian = sys.argv[8]
 checks = os.environ.get("CHECKS", "container") or "container"
+expected_platform = os.environ.get("SMOKE_EXPECTED_PLATFORM", "")
 SOURCE_REPOSITORY = "https://github.com/pnetcloud/containers"
 EXIT_UNSUPPORTED = 65
 EXIT_UNAVAILABLE = 69
+ARCH_TO_PLATFORM = {"amd64": "linux/amd64", "arm64": "linux/arm64"}
 
 
 def exit_with_message(code, command, artifact, image, check, expected, actual, remediation):
@@ -160,6 +162,7 @@ def collect_live(image_ref, entry):
 set -eu
 . /etc/os-release
 printf 'debian_release=%s\n' "${{VERSION_CODENAME}}"
+printf 'runtime_architecture=%s\n' "$(dpkg --print-architecture)"
 postgres_version="$(postgres --version | sed -E 's/^.*PostgreSQL\\) *//; s/ .*//')"
 printf 'postgres_server_version=%s\n' "${{postgres_version}}"
 printf 'postgres_major=%s\n' "${{postgres_version%%.*}}"
@@ -199,7 +202,11 @@ else
 fi
 rm -rf "${{data_dir}}"
 """
-    run = subprocess.run([docker_bin, "run", "--rm", "--entrypoint", "/bin/sh", image_ref, "-eu", "-c", shell], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    run_args = [docker_bin, "run", "--rm"]
+    if expected_platform:
+        run_args.extend(["--platform", expected_platform])
+    run_args.extend(["--entrypoint", "/bin/sh", image_ref, "-eu", "-c", shell])
+    run = subprocess.run(run_args, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if run.returncode != 0:
         exit_with_message(EXIT_UNAVAILABLE, "smoke-test container", image_ref, image_ref, "container runtime", "docker run smoke collector succeeds", run.stderr.strip()[:600], "Inspect the local image runtime and ensure Docker can run it.")
     values = {}
@@ -234,6 +241,11 @@ def run_checks(entry, payload):
     require_equal(payload, image_ref, "Debian release", entry["debian_variant"], value_at(payload, "debian_release"), "Use the Debian variant declared in versions.yaml.")
     require_equal(payload, image_ref, "PostgreSQL major", entry["pg_major"], value_at(payload, "postgres_major"), "Use a PostgreSQL server that belongs to the metadata major line.")
     require_equal(payload, image_ref, "PostgreSQL server version", entry["pg_version"], value_at(payload, "postgres_server_version"), "Build from the CNPG base tag resolved in metadata.")
+    if expected_platform:
+        runtime_arch = value_at(payload, "runtime_architecture")
+        actual_platform = ARCH_TO_PLATFORM.get(runtime_arch, f"unsupported/{runtime_arch}")
+        if actual_platform != expected_platform:
+            exit_with_message(1, "smoke-test container", fixture or image_ref, image_ref, "runtime architecture", expected_platform, f"dpkg={runtime_arch}; platform={actual_platform}", "Run the candidate smoke check with the platform that matches the built release candidate.")
 
     required_controls = ["timescaledb", "vector", "pgaudit"]
     if entry.get("toolkit_version", ""):
@@ -353,6 +365,7 @@ def collect_live_sql(image_ref, entry):
     validation_block = "\n".join(validation_script) or ":"
     shell = f"""
 set -eu
+printf 'runtime_architecture=%s\n' "$(dpkg --print-architecture)"
 bin_dir="{bin_dir}"
 control_dir="{control_dir}"
 non_creatable="{non_creatable_names}"
@@ -385,7 +398,11 @@ done
 "${{bin_dir}}/pg_ctl" -D "${{data_dir}}" -m fast -w stop >/tmp/cnpg-sql-stop.log 2>&1 || true
 rm -rf "${{data_dir}}"
 """
-    run = subprocess.run([docker_bin, "run", "--rm", "--entrypoint", "/bin/sh", image_ref, "-eu", "-c", shell], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    run_args = [docker_bin, "run", "--rm"]
+    if expected_platform:
+        run_args.extend(["--platform", expected_platform])
+    run_args.extend(["--entrypoint", "/bin/sh", image_ref, "-eu", "-c", shell])
+    run = subprocess.run(run_args, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if run.returncode != 0:
         exit_with_message(EXIT_UNAVAILABLE, "smoke-test sql", image_ref, image_ref, "SQL live collector", "docker run SQL smoke collector succeeds", run.stderr.strip()[:600], "Inspect the local image SQL runtime and required preload settings.")
     values = {}
@@ -403,6 +420,11 @@ def run_sql_checks(entry, transcript):
     require_sql(image_ref, artifact, transcript, "SELECT version()", "ok", sql_value(transcript, "select.version"), "Ensure the test PostgreSQL instance accepts basic SQL queries.")
     require_sql(image_ref, artifact, transcript, "SHOW server_version", entry["pg_version"], sql_value(transcript, "show.server_version"), "Start the PostgreSQL server version declared in metadata.")
     require_sql(image_ref, artifact, transcript, "shared_preload_libraries", canonical_preload, sql_value(transcript, "show.shared_preload_libraries"), f"Start SQL smoke with shared_preload_libraries={canonical_preload}.")
+    if expected_platform:
+        runtime_arch = sql_value(transcript, "runtime_architecture")
+        actual_platform = ARCH_TO_PLATFORM.get(runtime_arch, f"unsupported/{runtime_arch}")
+        if actual_platform != expected_platform:
+            exit_with_message(1, "smoke-test sql", artifact, image_ref, "runtime architecture", expected_platform, f"dpkg={runtime_arch}; platform={actual_platform}", "Run the candidate SQL smoke check with the platform that matches the built release candidate.")
 
     if extension_policy:
         exit_with_message(1, "smoke-test sql", "SMOKE_EXTENSION_POLICY", image_ref, "non-creatable extension policy source", "selected metadata entry extensions.<ext>.* fields", extension_policy, "Do not bypass metadata-owned non-creatable policy with an environment-only policy file.")
