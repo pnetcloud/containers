@@ -7,7 +7,7 @@
       "experimental": false,
       "latest_eligible": false,
       "pg_major": "17",
-      "pg_version": "17",
+      "pg_version": "17.10",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
@@ -22,7 +22,7 @@
       "experimental": false,
       "latest_eligible": true,
       "pg_major": "18",
-      "pg_version": "18",
+      "pg_version": "18.4",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
@@ -52,7 +52,7 @@
       "experimental": false,
       "latest_eligible": false,
       "pg_major": "17",
-      "pg_version": "17",
+      "pg_version": "17.10",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
@@ -67,7 +67,7 @@
       "experimental": false,
       "latest_eligible": false,
       "pg_major": "18",
-      "pg_version": "18",
+      "pg_version": "18.4",
       "platforms": [
         "linux/amd64",
         "linux/arm64"

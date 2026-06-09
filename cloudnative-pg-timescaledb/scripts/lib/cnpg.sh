@@ -279,7 +279,7 @@ def skip_reason_specific(skip_reason, expected_ref, missing_dimension):
     return expected_ref in skip_reason and missing_dimension in skip_reason
 
 
-def resolve_entries(data, inventory, use_remote, command, artifact):
+def resolve_entries(data, inventory, use_remote, command, artifact, allow_digest_drift=False):
     resolved = []
     for idx, entry in enumerate(data["entries"]):
         for required in ["pg_major", "pg_version", "debian_variant", "cnpg_tag", "cnpg_digest", "platforms", "publish", "experimental", "skip_reason"]:
@@ -332,7 +332,7 @@ def resolve_entries(data, inventory, use_remote, command, artifact):
                         fail_entry(command, artifact, entry, platform, expected_ref, f"{actual}; skip_reason={entry['skip_reason']!r}", "For publish: false, include the upstream reference and missing platform in skip_reason.")
             if missing_platforms:
                 digest = ""
-            if entry["cnpg_digest"].strip() and entry["cnpg_digest"] != digest:
+            if entry["cnpg_digest"].strip() and entry["cnpg_digest"] != digest and not allow_digest_drift:
                 fail_entry(command, artifact, entry, "all", expected_ref, f"metadata cnpg_digest={entry['cnpg_digest']} resolved digest={digest or 'unresolved'}", "Update cnpg_digest through the CNPG resolver only after all required platforms are present.")
         resolved_pg_version = selected["pg_version"] if selected else entry["pg_version"]
         resolved.append(
@@ -361,6 +361,7 @@ def build_parser():
     parser.add_argument("--metadata", default=str(DEFAULT_METADATA), help="versions.yaml metadata file.")
     parser.add_argument("--fixtures", help="Directory with positive CNPG upstream inventory fixtures.")
     parser.add_argument("--fixture-file", action="append", default=[], help="Additional CNPG upstream inventory fixture JSON file.")
+    parser.add_argument("--allow-digest-drift", action="store_true", help="Return resolved digests without failing when metadata contains an older resolver-owned digest.")
     parser.add_argument("--json", action="store_true", help="Emit compact JSON resolver output.")
     return parser
 
@@ -380,7 +381,7 @@ def main(argv):
     validate_resolver_metadata(data, command, metadata_path)
     inventory = load_fixture_inventory(args.fixtures, args.fixture_file, command)
     use_remote = not inventory and not args.fixtures and not args.fixture_file
-    entries = resolve_entries(data, inventory, use_remote, command, metadata_path)
+    entries = resolve_entries(data, inventory, use_remote, command, metadata_path, args.allow_digest_drift)
     payload = {"entries": entries}
     if args.json:
         print(json.dumps(payload, separators=(",", ":"), sort_keys=True))

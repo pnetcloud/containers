@@ -324,7 +324,12 @@ def skip_reason_specific(skip_reason, package_name, entry, platform):
     return package_name in skip_reason and entry["pg_major"] in skip_reason and entry["debian_variant"] in skip_reason and platform in skip_reason
 
 
-def resolve_package(command, artifact, inventory, entry, package_type):
+def manual_skip_preserved(entry, preserve_manual_skip):
+    reason = str(entry.get("skip_reason", ""))
+    return preserve_manual_skip and reason.strip() and not entry["publish"]
+
+
+def resolve_package(command, artifact, inventory, entry, package_type, preserve_manual_skip=False):
     package_name = expected_package_name(package_type, entry["pg_major"])
     versions_by_platform = {}
     for platform in entry["platforms"]:
@@ -337,6 +342,8 @@ def resolve_package(command, artifact, inventory, entry, package_type):
             actual = f"missing package for architecture {arch}"
             if entry["publish"]:
                 fail_entry(command, artifact, entry, package_type, platform, package_name, actual, "Publishable rows require TimescaleDB and Toolkit packages on every required platform.")
+            if manual_skip_preserved(entry, preserve_manual_skip):
+                return package_name, "", ""
             if not skip_reason_specific(entry["skip_reason"], package_name, entry, platform):
                 fail_entry(command, artifact, entry, package_type, platform, package_name, f"{actual}; skip_reason={entry['skip_reason']!r}", "For publish: false, include package name, PostgreSQL major, Debian variant, and missing platform in skip_reason.")
             return package_name, "", ""
@@ -346,6 +353,8 @@ def resolve_package(command, artifact, inventory, entry, package_type):
         actual = "; ".join(f"{platform}={sorted(versions)}" for platform, versions in sorted(versions_by_platform.items()))
         if entry["publish"]:
             fail_entry(command, artifact, entry, package_type, ",".join(entry["platforms"]), package_name, f"mismatched package versions: {actual}", "Choose one package version available on every required platform.")
+        if manual_skip_preserved(entry, preserve_manual_skip):
+            return package_name, "", ""
         if package_name not in entry["skip_reason"] or "mismatched package versions" not in entry["skip_reason"]:
             fail_entry(command, artifact, entry, package_type, ",".join(entry["platforms"]), package_name, f"mismatched package versions: {actual}; skip_reason={entry['skip_reason']!r}", "For publish: false, include package name and mismatched package versions in skip_reason.")
         return package_name, "", ""
@@ -353,7 +362,7 @@ def resolve_package(command, artifact, inventory, entry, package_type):
     return package_name, package_version, extension_version(package_type, package_version)
 
 
-def resolve_entries(command, artifact, data, inventory):
+def resolve_entries(command, artifact, data, inventory, preserve_manual_skip=False):
     results = []
     for idx, entry in enumerate(data["entries"]):
         for required in ["pg_major", "debian_variant", "platforms", "publish", "experimental", "skip_reason"]:
@@ -371,8 +380,8 @@ def resolve_entries(command, artifact, data, inventory):
             missing_platforms = sorted(required_platforms - platform_set)
             if missing_platforms and not all(platform in entry["skip_reason"] for platform in missing_platforms):
                 fail_entry(command, artifact, entry, "all", ",".join(entry["platforms"]), f"skip_reason names omitted platforms {missing_platforms}", entry["skip_reason"], "For publish: false with a reduced platform set, name every omitted required platform in skip_reason.")
-        ts_name, ts_pkg_version, ts_version = resolve_package(command, artifact, inventory, entry, "timescaledb")
-        tk_name, tk_pkg_version, tk_version = resolve_package(command, artifact, inventory, entry, "toolkit")
+        ts_name, ts_pkg_version, ts_version = resolve_package(command, artifact, inventory, entry, "timescaledb", preserve_manual_skip)
+        tk_name, tk_pkg_version, tk_version = resolve_package(command, artifact, inventory, entry, "toolkit", preserve_manual_skip)
         results.append(
             {
                 "pg_major": entry["pg_major"],
@@ -403,6 +412,7 @@ def build_parser():
     parser.add_argument("--fixtures", help="Directory with positive package fixture files.")
     parser.add_argument("--fixture-file", action="append", default=[], help="Additional package fixture JSON file.")
     parser.add_argument("--packagecloud-repo", default="timescale/timescaledb", help="Packagecloud user/repo for live package lookup.")
+    parser.add_argument("--preserve-manual-skip", action="store_true", help="Allow update mode to preserve non-prefixed maintainer skip reasons for non-publish rows.")
     parser.add_argument("--json", action="store_true", help="Emit compact JSON resolver output.")
     return parser
 
@@ -424,7 +434,7 @@ def main(argv):
         inventory = load_inventory(args.fixtures, args.fixture_file, command)
     else:
         inventory = load_live_inventory(data, args.packagecloud_repo, command)
-    entries = resolve_entries(command, metadata_path, data, inventory)
+    entries = resolve_entries(command, metadata_path, data, inventory, args.preserve_manual_skip)
     payload = {"entries": entries}
     if args.json:
         print(json.dumps(payload, separators=(",", ":"), sort_keys=True))

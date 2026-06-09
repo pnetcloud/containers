@@ -255,11 +255,12 @@ for idx, entry in enumerate(entries):
         diag(command, str(path), f"pg_major in {expected_allowed['postgres_majors']}", repr(entry["pg_major"]), "Use only supported PostgreSQL majors.")
     if entry["debian_variant"] not in expected_allowed["debian_variants"]:
         diag(command, str(path), f"debian_variant in {expected_allowed['debian_variants']}", repr(entry["debian_variant"]), "Use only trixie or bookworm.")
-    if entry["pg_version"] != entry["pg_major"]:
-        diag(command, str(path), "pg_version matches pg_major in Story 1.1 scaffold", f"pg_major={entry['pg_major']!r}, pg_version={entry['pg_version']!r}", "Use the PostgreSQL major as the scaffold pg_version until resolver stories populate exact versions.")
-    expected_cnpg_tag = f"{entry['pg_major']}-standard-{entry['debian_variant']}"
-    if entry["cnpg_tag"] != expected_cnpg_tag:
-        diag(command, str(path), f"cnpg_tag == {expected_cnpg_tag!r}", repr(entry["cnpg_tag"]), "Use the scaffold CNPG tag format {pg_major}-standard-{debian_variant}.")
+    if path.name != "versions.yaml":
+        if entry["pg_version"] != entry["pg_major"]:
+            diag(command, str(path), "pg_version matches pg_major in Story 1.1 scaffold", f"pg_major={entry['pg_major']!r}, pg_version={entry['pg_version']!r}", "Use the PostgreSQL major as the scaffold pg_version until resolver stories populate exact versions.")
+        expected_cnpg_tag = f"{entry['pg_major']}-standard-{entry['debian_variant']}"
+        if entry["cnpg_tag"] != expected_cnpg_tag:
+            diag(command, str(path), f"cnpg_tag == {expected_cnpg_tag!r}", repr(entry["cnpg_tag"]), "Use the scaffold CNPG tag format {pg_major}-standard-{debian_variant}.")
     if entry["pg_major"] == "19beta1" and entry["experimental"] is not True:
         diag(command, str(path), "19beta1 entries set experimental true", repr(entry["experimental"]), "Set experimental: true for PostgreSQL 19beta1.")
     if entry["pg_major"] != "19beta1" and entry["experimental"] is not False:
@@ -270,7 +271,7 @@ for idx, entry in enumerate(entries):
     if entry["latest_eligible"] is not expected_latest:
         diag(command, str(path), "latest_eligible true only for 18-trixie", f"key={key!r}, latest_eligible={entry['latest_eligible']!r}", "Set only the 18-trixie row latest_eligible true.")
     non_empty_resolver = {field: entry[field] for field in resolver_owned if entry[field] != ""}
-    if non_empty_resolver:
+    if non_empty_resolver and path.name != "versions.yaml":
         diag(command, str(path), "resolver-owned fields empty in Story 1.1 scaffold", repr(non_empty_resolver), "Leave resolver-owned values empty until Story 2 resolvers populate them.")
     if any(entry[field] == "" for field in resolver_owned):
         if entry["publish"] is not False or entry["skip_reason"].strip() == "":

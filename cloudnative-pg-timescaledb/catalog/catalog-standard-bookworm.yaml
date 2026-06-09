@@ -6,14 +6,14 @@ metadata:
 spec:
   images:
     - major: 17
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17-tsunresolved-00000000-bookworm
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-00000000-bookworm
       sourceEntry: 17-bookworm
       publish: false
       experimental: false
       latestEligible: false
       skipReason: "Pending Story 2 resolver population"
     - major: 18
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18-tsunresolved-00000000-bookworm
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-00000000-bookworm
       sourceEntry: 18-bookworm
       publish: false
       experimental: false

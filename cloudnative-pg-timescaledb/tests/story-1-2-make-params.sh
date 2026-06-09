@@ -53,12 +53,10 @@ run_make_error() {
   rm -f "${tmp}"
 }
 
-run_expect_exit 69 "update delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/update.sh"
 run_expect_exit 69 "matrix delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/matrix.sh"
 run_expect_exit 69 "bake-print delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/bake-print.sh"
 run_expect_exit 69 "catalog delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/catalog.sh"
 
-run_make_error 69 "update Make target" update
 run_make_error 69 "matrix Make target" matrix
 run_make_error 69 "bake-print Make target" bake-print
 run_make_error 69 "catalog Make target" catalog

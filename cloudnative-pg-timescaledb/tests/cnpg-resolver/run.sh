@@ -50,10 +50,113 @@ for fixture in \
   expect_file "${FIXTURE_DIR}/${fixture}"
 done
 
-"${RESOLVER}" --check-cnpg --fixtures "${FIXTURE_DIR}" >/tmp/story-2-1-positive.out
+fixture_metadata="$(mktemp)"
+python3 - "${fixture_metadata}" <<'PY'
+from pathlib import Path
+import sys
+
+Path(sys.argv[1]).write_text('''schema_version: "1"
+image:
+  registry: ghcr.io
+  repository: pnetcloud/cloudnative-pg-timescaledb
+  current_major: "18"
+  primary_debian_variant: trixie
+allowed:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: ["trixie", "bookworm"]
+  platforms: ["linux/amd64", "linux/arm64"]
+entries:
+  - pg_major: "17"
+    pg_version: "17.6"
+    debian_variant: trixie
+    cnpg_tag: "17.6-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: false
+    skip_reason: "fixture non-publish row"
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: trixie
+    cnpg_tag: "18.4-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: true
+    skip_reason: "fixture non-publish row"
+  - pg_major: "19beta1"
+    pg_version: "19beta1"
+    debian_variant: trixie
+    cnpg_tag: "19beta1-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: true
+    latest_eligible: false
+    skip_reason: "fixture non-publish row"
+  - pg_major: "17"
+    pg_version: "17.10"
+    debian_variant: bookworm
+    cnpg_tag: "17.10-standard-bookworm"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: false
+    skip_reason: "fixture non-publish row"
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: bookworm
+    cnpg_tag: "18.4-standard-bookworm"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: false
+    skip_reason: "fixture non-publish row"
+  - pg_major: "19beta1"
+    pg_version: "19beta1"
+    debian_variant: bookworm
+    cnpg_tag: "19beta1-standard-bookworm"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: true
+    latest_eligible: false
+    skip_reason: "fixture non-publish row"
+''')
+PY
+
+"${RESOLVER}" --check-cnpg --metadata "${fixture_metadata}" --fixtures "${FIXTURE_DIR}" >/tmp/story-2-1-positive.out
 
 json_output="$(mktemp)"
-"${RESOLVER}" --check-cnpg --fixtures "${FIXTURE_DIR}" --json >"${json_output}"
+"${RESOLVER}" --check-cnpg --metadata "${fixture_metadata}" --fixtures "${FIXTURE_DIR}" --json >"${json_output}"
 python3 - "${json_output}" <<'PY'
 import json
 import sys
@@ -86,7 +189,7 @@ for entry in entries:
     if entry["pg_version"] != expected_version or entry["cnpg_tag"] != expected_tag:
         raise SystemExit(f"wrong resolved CNPG version/tag: {entry}")
 PY
-rm -f "${json_output}"
+rm -f "${json_output}" "${fixture_metadata}"
 
 expect_fail \
   "deprecated system flavor" \
