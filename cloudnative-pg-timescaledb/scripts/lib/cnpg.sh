@@ -109,8 +109,9 @@ def parse_metadata(path, command):
 
 def validate_resolver_metadata(data, command, artifact):
     required_top = {"schema_version", "image", "allowed", "entries"}
-    if set(data) != required_top:
-        diag(command, artifact, f"top-level keys exactly {sorted(required_top)}", f"actual {sorted(data)}", "Use the versions.yaml metadata contract.")
+    optional_top = {"barman_plugin"}
+    if not required_top.issubset(data) or set(data) - required_top - optional_top:
+        diag(command, artifact, f"top-level keys include {sorted(required_top)} and optional {sorted(optional_top)}", f"actual {sorted(data)}", "Use the versions.yaml metadata contract.")
     allowed = data["allowed"]
     expected_allowed = {
         "postgres_majors": ["17", "18", "19beta1"],

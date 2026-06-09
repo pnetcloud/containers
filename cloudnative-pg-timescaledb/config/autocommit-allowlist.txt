@@ -1,5 +1,6 @@
 # comments and blank lines are allowed
 cloudnative-pg-timescaledb/versions.yaml
 cloudnative-pg-timescaledb/generated/**
+cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md
 cloudnative-pg-timescaledb/docker-bake.hcl
 cloudnative-pg-timescaledb/matrix.json

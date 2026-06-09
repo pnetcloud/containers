@@ -130,12 +130,13 @@ if not isinstance(data, dict):
     diag(command, str(path), "top-level YAML mapping", type(data).__name__, "Use mapping keys schema_version, image, allowed, and entries.")
 
 required_top = {"schema_version", "image", "allowed", "entries"}
+optional_top = {"barman_plugin"}
 missing_top = sorted(required_top - set(data))
 if missing_top:
     diag(command, str(path), f"top-level keys include {sorted(required_top)}", f"missing {missing_top}", "Add missing top-level metadata keys.")
-extra_top = sorted(set(data) - required_top)
+extra_top = sorted(set(data) - required_top - optional_top)
 if extra_top:
-    diag(command, str(path), f"top-level keys exactly {sorted(required_top)}", f"extra {extra_top}", "Remove unknown top-level metadata keys.")
+    diag(command, str(path), f"top-level keys exactly {sorted(required_top)} plus optional {sorted(optional_top)}", f"extra {extra_top}", "Remove unknown top-level metadata keys.")
 if data.get("schema_version") != "1":
     diag(command, str(path), "schema_version == '1'", repr(data.get("schema_version")), "Set schema_version to string '1'.")
 

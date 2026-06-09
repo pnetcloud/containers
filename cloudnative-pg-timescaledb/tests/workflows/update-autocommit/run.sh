@@ -10,12 +10,13 @@ diag() {
 
 prepare_project() {
   local target="$1"
-  mkdir -p "${target}/cloudnative-pg-timescaledb/scripts" "${target}/cloudnative-pg-timescaledb/config" "${target}/cloudnative-pg-timescaledb/generated/18/trixie" "${target}/cloudnative-pg-timescaledb/catalog"
+  mkdir -p "${target}/cloudnative-pg-timescaledb/scripts" "${target}/cloudnative-pg-timescaledb/config" "${target}/cloudnative-pg-timescaledb/generated/18/trixie" "${target}/cloudnative-pg-timescaledb/docs/generated" "${target}/cloudnative-pg-timescaledb/catalog"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/autocommit-stage.sh" "${target}/cloudnative-pg-timescaledb/scripts/autocommit-stage.sh"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh" "${target}/cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/config/autocommit-allowlist.txt" "${target}/cloudnative-pg-timescaledb/config/autocommit-allowlist.txt"
   printf 'baseline\n' >"${target}/cloudnative-pg-timescaledb/versions.yaml"
   printf 'baseline\n' >"${target}/cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile"
+  printf 'baseline\n' >"${target}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md"
   printf 'baseline\n' >"${target}/cloudnative-pg-timescaledb/docker-bake.hcl"
   printf '{"include":[]}\n' >"${target}/cloudnative-pg-timescaledb/matrix.json"
   printf 'baseline\n' >"${target}/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml"
@@ -61,7 +62,7 @@ assert_staged() {
   fi
 }
 
-for fixture in no-op metadata-change generated-change secret-file-staged untracked-vendor-staged runtime-artifact-staged outside-allowlist-staged; do
+for fixture in no-op metadata-change generated-change barman-doc-change secret-file-staged untracked-vendor-staged runtime-artifact-staged outside-allowlist-staged; do
   [[ -d "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -d" "${FIXTURE_DIR}/${fixture}" "fixture directory exists" "missing" "Restore Story 2.5 update-autocommit fixture directory."; exit 1; }
 done
 
@@ -83,6 +84,12 @@ prepare_project "${generated}"
 printf 'changed\n' >"${generated}/cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile"
 run_stage_validate "${generated}"
 assert_staged "${generated}" "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile"
+
+barman_doc="${tmp_root}/barman-doc-change"
+prepare_project "${barman_doc}"
+printf 'changed\n' >"${barman_doc}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md"
+run_stage_validate "${barman_doc}"
+assert_staged "${barman_doc}" "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md"
 
 secret="${tmp_root}/secret-file-staged"
 prepare_project "${secret}"

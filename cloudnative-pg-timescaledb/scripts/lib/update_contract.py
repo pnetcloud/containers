@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_METADATA = ROOT / "cloudnative-pg-timescaledb" / "versions.yaml"
 RESOLVE_SCRIPT = ROOT / "cloudnative-pg-timescaledb" / "scripts" / "resolve-versions.sh"
 GENERATE_SCRIPT = ROOT / "cloudnative-pg-timescaledb" / "scripts" / "generate.sh"
+BARMAN_PLUGIN_SCRIPT = ROOT / "cloudnative-pg-timescaledb" / "scripts" / "lib" / "barman-plugin.sh"
 SUMMARY_PATH = Path("/tmp") / "cloudnative-pg-timescaledb-update-summary.json"
 RESOLVER_FIELDS = [
     "pg_version",
@@ -23,9 +24,10 @@ RESOLVER_FIELDS = [
     "toolkit_package_version",
 ]
 POLICY_FIELDS = ["publish", "experimental", "latest_eligible"]
+BARMAN_FIELDS = ["release", "manifest_url", "plugin_image", "sidecar_image", "source_url", "updated_at_utc"]
 EXPECTED_ROWS = {("17", "trixie"), ("18", "trixie"), ("19beta1", "trixie"), ("17", "bookworm"), ("18", "bookworm"), ("19beta1", "bookworm")}
 ALLOWED_PLATFORMS = {"linux/amd64", "linux/arm64"}
-BARMAN_FORBIDDEN = re.compile(r"\b(barman-cloud|barman\s+package|apt-get\s+install[^\n]*barman|postgresql:.*barman)\b", re.IGNORECASE)
+BARMAN_FORBIDDEN = re.compile(r"\b((?<!plugin-)barman-cloud|barman\s+package|apt-get\s+install[^\n]*barman|postgresql:.*barman)\b", re.IGNORECASE)
 
 
 class UpdateError(Exception):
@@ -143,8 +145,12 @@ def render_metadata(data):
         f"  postgres_majors: {quote_value(data['allowed']['postgres_majors'])}",
         f"  debian_variants: {quote_value(data['allowed']['debian_variants'])}",
         f"  platforms: {quote_value(data['allowed']['platforms'])}",
-        "entries:",
     ]
+    if "barman_plugin" in data:
+        lines.append("barman_plugin:")
+        for field in BARMAN_FIELDS:
+            lines.append(f"  {field}: {quote_value(data['barman_plugin'][field])}")
+    lines.append("entries:")
     field_order = [
         "pg_major", "pg_version", "debian_variant", "cnpg_tag", "cnpg_digest",
         "timescaledb_version", "timescaledb_package_version", "toolkit_version",
@@ -178,6 +184,22 @@ def validate_invariants(data, command, artifact):
     text = render_metadata(data)
     if BARMAN_FORBIDDEN.search(text):
         diag(command, artifact, "no legacy Barman tooling in image metadata", "barman-cloud or Barman package reference", "Use only CloudNativePG Barman Cloud Plugin references in later docs stories.")
+    if "barman_plugin" in data:
+        plugin = data["barman_plugin"]
+        missing = [field for field in BARMAN_FIELDS if field not in plugin or not isinstance(plugin[field], str) or not plugin[field].strip()]
+        if missing:
+            diag(command, artifact, f"barman_plugin fields {BARMAN_FIELDS}", f"missing/empty {missing}", "Populate the CloudNativePG Barman Cloud Plugin reference fields.")
+        release = plugin["release"]
+        if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", release):
+            diag(command, artifact, "barman_plugin.release stable vX.Y.Z", release, "Track only stable CloudNativePG Barman Cloud Plugin releases.")
+        expected = {
+            "manifest_url": f"https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/{release}/manifest.yaml",
+            "plugin_image": f"ghcr.io/cloudnative-pg/plugin-barman-cloud:{release}",
+            "sidecar_image": f"ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:{release}",
+        }
+        drift = {field: {"expected": value, "actual": plugin[field]} for field, value in expected.items() if plugin[field] != value}
+        if drift:
+            diag(command, artifact, "barman_plugin references derive from release", drift, "Update Barman plugin manifest and image references together.")
 
 
 def run_json(args, command, artifact):
@@ -236,6 +258,31 @@ def update_entries(data, cnpg, packages):
         if changed_fields:
             updated.append({"pg_major": row[0], "debian_variant": row[1], "fields": changed_fields})
     return updated
+
+
+def update_barman_plugin(data, reference):
+    old = {field: data.get("barman_plugin", {}).get(field, "") for field in BARMAN_FIELDS}
+    data["barman_plugin"] = {
+        "release": reference["release"],
+        "manifest_url": reference["manifest_url"],
+        "plugin_image": reference["plugin_image"],
+        "sidecar_image": reference["sidecar_image"],
+        "source_url": reference["source_url"],
+        "updated_at_utc": reference["checked_at_utc"],
+    }
+    new = {field: data["barman_plugin"][field] for field in BARMAN_FIELDS}
+    changed_fields = {field: {"old": old[field], "new": new[field]} for field in BARMAN_FIELDS if old[field] != new[field]}
+    return {
+        "old_reference": old["release"],
+        "new_reference": new["release"],
+        "changed": bool(changed_fields),
+        "noop": not bool(changed_fields),
+        "changed_fields": changed_fields,
+        "manifest_url": new["manifest_url"],
+        "plugin_image": new["plugin_image"],
+        "sidecar_image": new["sidecar_image"],
+        "backup_tooling_free": True,
+    }
 
 
 def scan_barman_outputs(paths, command):
@@ -306,7 +353,9 @@ def main(argv):
         pkg_args.extend(["--fixtures", str(fixture_root / "packages")])
     cnpg = run_json(cnpg_args, command, metadata)
     packages = run_json(pkg_args, command, metadata)
+    barman_reference = run_json([str(BARMAN_PLUGIN_SCRIPT), "--json"], command, metadata)
     updated = update_entries(data, cnpg, packages)
+    barman_plugin = update_barman_plugin(data, barman_reference)
     validate_invariants(data, command, metadata)
     after_text = render_metadata(data)
     changed = before_text != after_text
@@ -317,6 +366,7 @@ def main(argv):
         "cloudnative-pg-timescaledb/matrix.json",
         "cloudnative-pg-timescaledb/catalog",
         "cloudnative-pg-timescaledb/docs/generated/compatibility.md",
+        "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md",
     ]
     snapshots = capture_paths([metadata] + generated_paths)
     try:
@@ -337,6 +387,7 @@ def main(argv):
     summary = {
         "changed": changed,
         "updated_entries": updated,
+        "barman_plugin": barman_plugin,
         "old": before_text if changed else "",
         "new": after_text if changed else "",
         "generated": generated,

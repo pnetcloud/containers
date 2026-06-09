@@ -98,10 +98,11 @@ except FileNotFoundError:
     fail("metadata file exists", str(path), "Create the metadata file before validating.")
 
 required_top = {"schema_version", "image", "allowed", "entries"}
-if set(data) != required_top:
+optional_top = {"barman_plugin"}
+if not required_top.issubset(data) or set(data) - required_top - optional_top:
     missing = sorted(required_top - set(data))
-    extra = sorted(set(data) - required_top)
-    fail(f"top-level keys exactly {sorted(required_top)}", f"missing {missing}, extra {extra}", "Use only schema_version, image, allowed, and entries.")
+    extra = sorted(set(data) - required_top - optional_top)
+    fail(f"top-level keys exactly {sorted(required_top)} plus optional {sorted(optional_top)}", f"missing {missing}, extra {extra}", "Use the documented versions.yaml metadata schema.")
 if data["schema_version"] != "1":
     fail("schema_version is string '1'", repr(data["schema_version"]), "Quote schema_version as '1'.")
 
@@ -129,6 +130,23 @@ if set(allowed) != set(expected_allowed):
 for key, expected in expected_allowed.items():
     if allowed[key] != expected:
         fail(f"allowed.{key} exactly {expected!r}", repr(allowed[key]), "Do not broaden supported PostgreSQL, Debian, or platform scope.")
+
+if "barman_plugin" in data:
+    barman_plugin = data["barman_plugin"]
+    required_barman = {"release", "manifest_url", "plugin_image", "sidecar_image", "source_url", "updated_at_utc"}
+    if not isinstance(barman_plugin, dict) or set(barman_plugin) != required_barman:
+        fail(f"barman_plugin keys exactly {sorted(required_barman)}", repr(barman_plugin), "Store the CloudNativePG Barman Cloud Plugin reference contract.")
+    for field in required_barman:
+        if not isinstance(barman_plugin[field], str) or not barman_plugin[field].strip():
+            fail(f"barman_plugin.{field} is non-empty string", repr(barman_plugin.get(field)), "Populate the tracked Barman plugin reference fields.")
+    release = barman_plugin["release"]
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", release):
+        fail("barman_plugin.release is stable vX.Y.Z", repr(release), "Track only stable CloudNativePG Barman Cloud Plugin releases.")
+    expected_manifest = f"https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/{release}/manifest.yaml"
+    expected_plugin = f"ghcr.io/cloudnative-pg/plugin-barman-cloud:{release}"
+    expected_sidecar = f"ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:{release}"
+    if barman_plugin["manifest_url"] != expected_manifest or barman_plugin["plugin_image"] != expected_plugin or barman_plugin["sidecar_image"] != expected_sidecar:
+        fail("barman_plugin URLs/images match release", repr(barman_plugin), "Derive manifest and image references from barman_plugin.release.")
 
 entries = data["entries"]
 if not isinstance(entries, list) or not entries:

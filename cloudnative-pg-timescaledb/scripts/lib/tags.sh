@@ -121,8 +121,9 @@ except FileNotFoundError:
     fail("metadata file exists", str(path), "Create the metadata file before validating tags.")
 
 required_top = {"schema_version", "image", "allowed", "entries"}
-if set(data) != required_top:
-    fail(f"top-level keys exactly {sorted(required_top)}", f"actual {sorted(data)}", "Use the versions.yaml metadata shape for tag validation.")
+optional_top = {"barman_plugin"}
+if not required_top.issubset(data) or set(data) - required_top - optional_top:
+    fail(f"top-level keys include {sorted(required_top)} and optional {sorted(optional_top)}", f"actual {sorted(data)}", "Use the versions.yaml metadata shape for tag validation.")
 if data["schema_version"] != "1":
     fail("schema_version is string '1'", repr(data["schema_version"]), "Quote schema_version as '1'.")
 

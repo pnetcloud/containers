@@ -234,10 +234,13 @@ collect_expected_files() {
   generated_json="$(${SCRIPT_DIR}/generate-dockerfiles.sh --metadata "${metadata}" --output "${generated_root}" --json)"
   catalog_json="$(${SCRIPT_DIR}/generate-catalog.sh --metadata "${metadata}" --output "${catalog_root}" --json)"
   docs_json="$(${SCRIPT_DIR}/generate-docs.sh --metadata "${metadata}" --output "${docs_file}" --json)"
-  python3 - "${generated_json}" "${catalog_json}" "${docs_json}" <<'PY'
+  python3 - "${metadata}" "${docs_file}" "${generated_json}" "${catalog_json}" "${docs_json}" <<'PY'
 import json
 import sys
-for payload in sys.argv[1:]:
+from pathlib import Path
+metadata = Path(sys.argv[1]).read_text()
+docs_file = Path(sys.argv[2])
+for payload in sys.argv[3:]:
     data = json.loads(payload)
     for row in data.get("dockerfiles", []):
         print(row["dockerfile"])
@@ -245,6 +248,8 @@ for payload in sys.argv[1:]:
         print(row["catalog_path"])
     for row in data.get("docs", []):
         print(row["doc_path"])
+if "\nbarman_plugin:" in "\n" + metadata:
+    print((docs_file.parent / "barman-plugin-reference.md").as_posix())
 PY
 }
 

@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 FIXTURE_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/update/fixtures"
 CNPG_FIXTURES="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/cnpg-resolver/fixtures"
 PKG_FIXTURES="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/packagecloud/fixtures"
+BARMAN_PLUGIN_FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json"
 
 diag() {
   printf 'command: %s\nartifact: %s\nexpected: %s\nactual: %s\nremediation: %s\n' "$@" >&2
@@ -56,7 +57,7 @@ run_update() {
   local stdout_file="$3"
   local stderr_file="$4"
   set +e
-  (cd "${project}" && make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
+  (cd "${project}" && BARMAN_PLUGIN_FIXTURE="${BARMAN_PLUGIN_FIXTURE}" make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
   local status="$?"
   set -e
   return "${status}"
@@ -70,7 +71,7 @@ import json
 import sys
 from pathlib import Path
 payload = json.loads(Path(sys.argv[1]).read_text())
-required = {"changed", "updated_entries", "old", "new", "generated", "summary_path", "exit_code", "failure_reason"}
+required = {"changed", "updated_entries", "barman_plugin", "old", "new", "generated", "summary_path", "exit_code", "failure_reason"}
 if set(payload) != required:
     raise SystemExit(f"wrong update JSON keys: {sorted(payload)}")
 if payload["exit_code"] != 0 or payload["failure_reason"] != "":
@@ -106,7 +107,7 @@ assert_allowlisted_status() {
   while IFS= read -r line; do
     path="${line:3}"
     case "${path}" in
-      cloudnative-pg-timescaledb/versions.yaml|cloudnative-pg-timescaledb/generated/*|cloudnative-pg-timescaledb/docker-bake.hcl|cloudnative-pg-timescaledb/matrix.json|cloudnative-pg-timescaledb/catalog/*|cloudnative-pg-timescaledb/docs/generated/compatibility.md) ;;
+      cloudnative-pg-timescaledb/versions.yaml|cloudnative-pg-timescaledb/generated/*|cloudnative-pg-timescaledb/docker-bake.hcl|cloudnative-pg-timescaledb/matrix.json|cloudnative-pg-timescaledb/catalog/*|cloudnative-pg-timescaledb/docs/generated/compatibility.md|cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md) ;;
       *) diag "git status" "${project}" "only resolver-owned metadata and generated artifacts" "${line}" "Keep update diffs reviewable for autocommit."; exit 1 ;;
     esac
   done <<<"${status}"

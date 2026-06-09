@@ -8,6 +8,13 @@ allowed:
   postgres_majors: ["17", "18", "19beta1"]
   debian_variants: ["trixie", "bookworm"]
   platforms: ["linux/amd64", "linux/arm64"]
+barman_plugin:
+  release: "v0.12.0"
+  manifest_url: "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.12.0/manifest.yaml"
+  plugin_image: "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.12.0"
+  sidecar_image: "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.12.0"
+  source_url: "https://github.com/cloudnative-pg/plugin-barman-cloud/releases"
+  updated_at_utc: "2026-06-09"
 entries:
   - pg_major: "17"
     pg_version: "17.10"

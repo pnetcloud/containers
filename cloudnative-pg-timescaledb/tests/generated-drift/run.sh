@@ -17,6 +17,7 @@ prepare_fixture() {
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docker-bake.hcl" "${target}/docker-bake.hcl"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/matrix.json" "${target}/matrix.json"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/compatibility.md" "${target}/docs/generated/compatibility.md"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" "${target}/docs/generated/barman-plugin-reference.md"
 }
 
 run_validator() {

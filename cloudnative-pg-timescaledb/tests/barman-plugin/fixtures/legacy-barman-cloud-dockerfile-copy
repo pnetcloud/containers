@@ -1,0 +1,2 @@
+FROM scratch
+COPY plugin-barman-cloud /opt/cloudnative-pg/plugin-barman-cloud
