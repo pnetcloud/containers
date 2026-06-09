@@ -20,6 +20,7 @@ prepare_fixture() {
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" "${target}/docs/generated/barman-plugin-reference.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/matrix-schema.md" "${target}/docs/generated/matrix-schema.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md" "${target}/docs/generated/release-candidate-schema.md"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md" "${target}/docs/generated/release-evidence-schema.md"
 }
 
 run_validator() {

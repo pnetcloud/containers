@@ -169,7 +169,7 @@ Consumers must require `debian_variant`, `catalog_path`, and entry `pg_major`, `
 
 Command: `cloudnative-pg-timescaledb/scripts/generate-docs.sh`
 
-Default output: `cloudnative-pg-timescaledb/docs/generated/compatibility.md` plus generated companion docs in the same directory, including `release-candidate-schema.md`.
+Default output: `cloudnative-pg-timescaledb/docs/generated/compatibility.md` plus generated companion docs in the same directory, including `release-candidate-schema.md` and `release-evidence-schema.md`.
 
 Required JSON keys:
 
@@ -177,7 +177,7 @@ Required JSON keys:
 {"docs":[{"doc_path":"cloudnative-pg-timescaledb/docs/generated/compatibility.md","source":"cloudnative-pg-timescaledb/versions.yaml","sections":["compatibility"],"publishable_entries":0,"experimental_entries":2}]}
 ```
 
-Consumers must require `doc_path`, `source`, `sections`, `publishable_entries`, and `experimental_entries`. Release workflows must consume `release-candidate-schema.md` for Story 4.2 candidate metadata. Final public documentation validation is owned by Epic 5.
+Consumers must require `doc_path`, `source`, `sections`, `publishable_entries`, and `experimental_entries`. Release workflows must consume `release-candidate-schema.md` for Story 4.2 candidate metadata and `release-evidence-schema.md` for Story 4.4 supply-chain evidence. Final public documentation validation is owned by Epic 5.
 '''
 actual = path.read_text()
 if actual != expected:
@@ -254,6 +254,7 @@ for payload in sys.argv[3:]:
 if "\nbarman_plugin:" in "\n" + metadata:
     print((docs_file.parent / "barman-plugin-reference.md").as_posix())
 print((docs_file.parent / "release-candidate-schema.md").as_posix())
+print((docs_file.parent / "release-evidence-schema.md").as_posix())
 print((docs_file.parent / "matrix-schema.md").as_posix())
 PY
 }

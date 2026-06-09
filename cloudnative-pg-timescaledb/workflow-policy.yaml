@@ -16,6 +16,16 @@ permission_allowlist:
     permission: "security-events: write"
     reason: Delegate SARIF upload permission to required reusable security scan gate
     owner_story: 4.3
+  - workflow: .github/workflows/build.yml
+    job: release_evidence
+    permission: "id-token: write"
+    reason: Request GitHub OIDC token for keyless cosign release evidence signing
+    owner_story: 4.4
+  - workflow: .github/workflows/build.yml
+    job: release_evidence
+    permission: "packages: write"
+    reason: Upload keyless cosign signature artifacts for immutable candidate digests
+    owner_story: 4.4
   - workflow: .github/workflows/security-scan.yml
     job: upload_sarif
     permission: "security-events: write"

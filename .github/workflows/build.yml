@@ -81,35 +81,66 @@ jobs:
           fi
           cloudnative-pg-timescaledb/scripts/generate-bake.sh --check >/dev/null
           mkdir -p "candidate-metadata/${BAKE_TARGET}"
-          refs_file="candidate-metadata/${BAKE_TARGET}/platform-refs.txt"
           digests_file="candidate-metadata/${BAKE_TARGET}/platform-digests.json"
           records_file="candidate-metadata/${BAKE_TARGET}/metadata.pre-index.json"
-          : > "${refs_file}"
           printf '{}\n' > "${digests_file}"
           printf '[]\n' > "${records_file}"
+
+          candidate_ref="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BAKE_TARGET}-index"
+          platforms_csv="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["PLATFORMS_JSON"])))')"
+          printf 'Building multi-platform candidate PG=%s DEBIAN=%s platforms=%s ref=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${platforms_csv}" "${candidate_ref}"
+          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl --sbom=true --provenance=mode=max "${BAKE_TARGET}" \
+            --set "${BAKE_TARGET}.context=." \
+            --set "${BAKE_TARGET}.platform=${platforms_csv}" \
+            --set "${BAKE_TARGET}.tags=${candidate_ref}" \
+            --set "${BAKE_TARGET}.output=type=registry,push=true"
+          inspect_raw="candidate-metadata/${BAKE_TARGET}/index.raw.json"
+          docker buildx imagetools inspect "${candidate_ref}" --raw > "${inspect_raw}"
+          index_digest="$(docker buildx imagetools inspect "${candidate_ref}" | awk '/Digest:/ {print $2; exit}')"
+          if [[ ! "${index_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            printf 'Invalid candidate index digest PG=%s DEBIAN=%s digest=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${index_digest}" >&2
+            exit 1
+          fi
+          python3 - "${inspect_raw}" "${platforms_csv}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text())
+          expected = set(sys.argv[2].split(","))
+          found = set()
+          attestation_count = 0
+          for manifest in payload.get("manifests", []):
+              annotations = manifest.get("annotations") or {}
+              if annotations.get("vnd.docker.reference.type") == "attestation-manifest":
+                  attestation_count += 1
+                  continue
+              platform = manifest.get("platform") or {}
+              if platform.get("os") and platform.get("architecture"):
+                  candidate = f"{platform['os']}/{platform['architecture']}"
+                  if platform.get("variant"):
+                      candidate = f"{candidate}/{platform['variant']}"
+                  found.add(candidate)
+          if found != expected:
+              raise SystemExit(f"candidate index platform coverage mismatch: expected={sorted(expected)} actual={sorted(found)}")
+          if attestation_count == 0:
+              raise SystemExit("candidate index has no BuildKit attestation manifests from --sbom/--provenance")
+          PY
 
           while IFS= read -r platform; do
             platform_slug="${platform#linux/}"
             platform_slug="${platform_slug//\//-}"
-            candidate_ref="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BAKE_TARGET}-${platform_slug}"
-            printf 'Building candidate PG=%s DEBIAN=%s platform=%s ref=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${platform}" "${candidate_ref}"
-            docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl "${BAKE_TARGET}" \
-              --set "${BAKE_TARGET}.context=." \
-              --set "${BAKE_TARGET}.platform=${platform}" \
-              --set "${BAKE_TARGET}.tags=${candidate_ref}" \
-              --set "${BAKE_TARGET}.output=type=registry,push=true"
-            inspect_raw="candidate-metadata/${BAKE_TARGET}/${platform_slug}.raw.json"
-            docker buildx imagetools inspect "${candidate_ref}" --raw > "${inspect_raw}"
-            candidate_digest="$(docker buildx imagetools inspect "${candidate_ref}" | awk '/Digest:/ {print $2; exit}')"
-            platform_digest="$(python3 - "${inspect_raw}" "${platform}" "${candidate_digest}" <<'PY'
+            platform_digest="$(python3 - "${inspect_raw}" "${platform}" <<'PY'
           import json
           import sys
           from pathlib import Path
 
           payload = json.loads(Path(sys.argv[1]).read_text())
           expected_platform = sys.argv[2]
-          fallback_digest = sys.argv[3]
           for manifest in payload.get("manifests", []):
+              annotations = manifest.get("annotations") or {}
+              if annotations.get("vnd.docker.reference.type") == "attestation-manifest":
+                  continue
               platform = manifest.get("platform") or {}
               candidate = f"{platform.get('os')}/{platform.get('architecture')}"
               if platform.get("variant"):
@@ -117,15 +148,9 @@ jobs:
               if candidate == expected_platform:
                   print(manifest.get("digest", ""))
                   raise SystemExit(0)
-          if payload.get("manifests"):
-              raise SystemExit(f"no manifest digest for platform {expected_platform}")
-          print(fallback_digest)
+          raise SystemExit(f"no manifest digest for platform {expected_platform}")
           PY
             )"
-            if [[ ! "${candidate_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-              printf 'Invalid candidate ref digest PG=%s DEBIAN=%s platform=%s digest=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${platform}" "${candidate_digest}" >&2
-              exit 1
-            fi
             if [[ ! "${platform_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               printf 'Invalid candidate digest PG=%s DEBIAN=%s platform=%s digest=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${platform}" "${platform_digest}" >&2
               exit 1
@@ -134,7 +159,6 @@ jobs:
             SMOKE_IMAGE_REF="${candidate_ref}" SMOKE_EXPECTED_PLATFORM="${platform}" CHECKS=container make smoke PG="${PG_MAJOR}" DEBIAN="${DEBIAN_VARIANT}"
             SMOKE_IMAGE_REF="${candidate_ref}" SMOKE_EXPECTED_PLATFORM="${platform}" CHECKS=sql make smoke PG="${PG_MAJOR}" DEBIAN="${DEBIAN_VARIANT}"
             runtime_architecture="$(docker run --rm --platform "${platform}" --entrypoint /bin/sh "${candidate_ref}" -c 'dpkg --print-architecture')"
-            printf '%s@%s\n' "${candidate_ref}" "${platform_digest}" >> "${refs_file}"
             python3 - "${digests_file}" "${platform}" "${platform_digest}" <<'PY'
           import json
           import sys
@@ -144,7 +168,7 @@ jobs:
           payload[sys.argv[2]] = sys.argv[3]
           path.write_text(json.dumps(payload, sort_keys=True) + "\n")
           PY
-            python3 - "${records_file}" "${IMAGE}" "${candidate_ref}" "${candidate_digest}" "${platform_digest}" "${platform}" "${runtime_architecture}" "${BAKE_TARGET}" "${DOCKERFILE}" "${PG_MAJOR}" "${PG_VERSION}" "${DEBIAN_VARIANT}" "${PUBLISH}" "${EXPERIMENTAL}" "${LATEST_ELIGIBLE}" "${PLATFORMS_JSON}" "${INTENDED_TAGS_JSON}" <<'PY'
+            python3 - "${records_file}" "${IMAGE}" "${candidate_ref}" "${platform_digest}" "${platform_digest}" "${platform}" "${runtime_architecture}" "${BAKE_TARGET}" "${DOCKERFILE}" "${PG_MAJOR}" "${PG_VERSION}" "${DEBIAN_VARIANT}" "${PUBLISH}" "${EXPERIMENTAL}" "${LATEST_ELIGIBLE}" "${PLATFORMS_JSON}" "${INTENDED_TAGS_JSON}" <<'PY'
           import json
           import sys
           from pathlib import Path
@@ -178,10 +202,6 @@ jobs:
           PY
           done < <(python3 -c 'import json,os; print("\n".join(json.loads(os.environ["PLATFORMS_JSON"])))')
 
-          mapfile -t platform_refs < "${refs_file}"
-          index_ref="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BAKE_TARGET}-index"
-          docker buildx imagetools create -t "${index_ref}" "${platform_refs[@]}"
-          index_digest="$(docker buildx imagetools inspect "${index_ref}" | awk '/Digest:/ {print $2; exit}')"
           python3 - "${records_file}" "${digests_file}" "${index_digest}" "candidate-metadata/${BAKE_TARGET}/release-candidate.json" <<'PY'
           import json
           import sys
@@ -226,3 +246,159 @@ jobs:
       bake_target: ${{ matrix.bake_target }}
       pg_major: ${{ matrix.pg_major }}
       debian_variant: ${{ matrix.debian_variant }}
+
+  release_evidence:
+    name: Release evidence ${{ matrix.pg_major }} ${{ matrix.debian_variant }}
+    needs:
+      - matrix
+      - candidate
+      - security_scan
+    if: ${{ needs.matrix.outputs.has_include == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.build_matrix) }}
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-candidate-${{ matrix.bake_target }}
+          path: release-evidence/input/candidate
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: vulnerability-scan-summary-${{ matrix.bake_target }}
+          path: release-evidence/input/scan-summary
+      # sigstore/cosign-installer v4.1.0
+      - uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22
+        with:
+          cosign-release: v3.0.2
+      - name: Login to GHCR for signature upload
+        run: |
+          set -Eeuo pipefail
+          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - id: evidence
+        name: Sign, verify, and write release evidence
+        env:
+          CANDIDATE_METADATA: release-evidence/input/candidate/release-candidate.json
+          SCAN_SUMMARY: release-evidence/input/scan-summary/vulnerability-scan-summary.json
+          EVIDENCE_DIR: release-evidence/output/${{ matrix.bake_target }}
+          EXPECTED_CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }}
+          COSIGN_CERTIFICATE_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${EVIDENCE_DIR}"
+          cloudnative-pg-timescaledb/scripts/validate-candidate-metadata.py --file "${CANDIDATE_METADATA}"
+          python3 - "${CANDIDATE_METADATA}" "${SCAN_SUMMARY}" "${EVIDENCE_DIR}/release-evidence.json" "${EXPECTED_CERTIFICATE_IDENTITY}" "${COSIGN_CERTIFICATE_ISSUER}" <<'PY' > "${EVIDENCE_DIR}/sign-verify.sh"
+          import json
+          import shlex
+          import sys
+          from pathlib import Path
+
+          candidate_path = Path(sys.argv[1])
+          scan_summary_path = Path(sys.argv[2])
+          evidence_path = Path(sys.argv[3])
+          expected_identity = sys.argv[4]
+          expected_issuer = sys.argv[5]
+          records = json.loads(candidate_path.read_text())
+          scans = json.loads(scan_summary_path.read_text())
+          if not records:
+              raise SystemExit("candidate metadata is empty")
+          if not scans or any(row.get("scan_result") != "passed" for row in scans):
+              raise SystemExit("vulnerability scan summary is missing or not passed")
+          expected_scans = {(record["candidate_ref"], record["platform_digest"]) for record in records}
+          actual_scans = {(row.get("candidate_ref"), row.get("digest")) for row in scans}
+          if actual_scans != expected_scans:
+              raise SystemExit(f"vulnerability scan summary does not match candidate digests: expected={sorted(expected_scans)} actual={sorted(actual_scans)}")
+          first = records[0]
+          image = first["image"]
+          platform_digests = first["platform_digests"]
+          index_digest = first["index_digest"]
+          digests = [index_digest, *platform_digests.values()]
+          attestation_path = evidence_path.parent / "attestations" / "index.raw.json"
+          evidence = {
+              "image": image,
+              "candidate_digest": first["candidate_digest"],
+              "index_digest": index_digest,
+              "platform_digests": platform_digests,
+              "per_digest_evidence": [],
+              "scan_result": "passed",
+              "expected_certificate_identity": expected_identity,
+              "cosign_certificate_issuer": expected_issuer,
+              "verified": True,
+          }
+          print("set -Eeuo pipefail")
+          print(f"evidence_path={shlex.quote(str(evidence_path))}")
+          print(f"mkdir -p {shlex.quote(str(evidence_path.parent / 'attestations'))} {shlex.quote(str(evidence_path.parent / 'verification'))}")
+          print(f"docker buildx imagetools inspect {shlex.quote(image + '@' + index_digest)} --raw > {shlex.quote(str(attestation_path))}")
+          for idx, digest in enumerate(digests):
+              subject = f"{image}@{digest}"
+              sbom_ref = f"{subject}#sbom"
+              provenance_ref = f"{subject}#provenance"
+              signature_ref = f"{subject}#signature"
+              verification_ref = f"{subject}#verification"
+              verification_path = evidence_path.parent / "verification" / (digest.replace(':', '-') + ".json")
+              print(f"cosign sign --yes {shlex.quote(subject)}")
+              print(
+                  "cosign verify --certificate-identity \"${EXPECTED_CERTIFICATE_IDENTITY}\" "
+                  f"--certificate-oidc-issuer {shlex.quote(expected_issuer)} {shlex.quote(subject)} "
+                  f"> {shlex.quote(str(verification_path))}"
+              )
+              evidence["per_digest_evidence"].append({
+                  "digest": digest,
+                  "sbom_ref": sbom_ref,
+                  "provenance_ref": provenance_ref,
+                  "signature_ref": signature_ref,
+                  "verification_ref": verification_ref,
+                  "verification_path": verification_path.relative_to(evidence_path.parent).as_posix(),
+                  "attestation_path": attestation_path.relative_to(evidence_path.parent).as_posix(),
+                  "signed_digest": digest,
+                  "verification_identity": expected_identity,
+                  "verification_issuer": expected_issuer,
+                  "verified": True,
+              })
+          evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          PY
+          bash "${EVIDENCE_DIR}/sign-verify.sh"
+          cloudnative-pg-timescaledb/scripts/validate-release-evidence.py \
+            --file "${EVIDENCE_DIR}/release-evidence.json" \
+            --expected-certificate-identity "${EXPECTED_CERTIFICATE_IDENTITY}" \
+            --cosign-certificate-issuer "${COSIGN_CERTIFICATE_ISSUER}"
+          printf 'evidence_path=%s\n' "${EVIDENCE_DIR}/release-evidence.json" >> "${GITHUB_OUTPUT}"
+      - name: Write release evidence summary
+        env:
+          EVIDENCE_PATH: ${{ steps.evidence.outputs.evidence_path }}
+        run: |
+          set -Eeuo pipefail
+          {
+            printf '## Release evidence\n\n'
+            python3 - "${EVIDENCE_PATH}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          evidence = json.loads(Path(sys.argv[1]).read_text())
+          print(f"- Image: `{evidence['image']}`")
+          print(f"- Candidate digest: `{evidence['candidate_digest']}`")
+          print(f"- Index digest: `{evidence['index_digest']}`")
+          print(f"- Scan result: `{evidence['scan_result']}`")
+          print(f"- Certificate identity: `{evidence['expected_certificate_identity']}`")
+          print(f"- OIDC issuer: `{evidence['cosign_certificate_issuer']}`")
+          for platform, digest in evidence["platform_digests"].items():
+              print(f"- Platform `{platform}` digest: `{digest}`")
+          for record in evidence["per_digest_evidence"]:
+              print(f"- Evidence `{record['digest']}`: SBOM `{record['sbom_ref']}`, provenance `{record['provenance_ref']}`, signature `{record['signature_ref']}`, verification `{record['verification_ref']}`, verified `{record['verified']}`")
+          PY
+          } >> "${GITHUB_STEP_SUMMARY}"
+      # actions/upload-artifact v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-evidence-${{ matrix.bake_target }}
+          path: release-evidence/output/${{ matrix.bake_target }}
+          if-no-files-found: error
+          retention-days: 30

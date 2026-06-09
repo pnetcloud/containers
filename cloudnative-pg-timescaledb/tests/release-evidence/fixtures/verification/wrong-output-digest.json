@@ -1,0 +1,9 @@
+[
+  {
+    "critical": {
+      "image": {
+        "docker-manifest-digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    }
+  }
+]

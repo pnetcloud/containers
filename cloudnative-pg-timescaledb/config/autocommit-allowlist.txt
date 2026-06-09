@@ -4,5 +4,6 @@ cloudnative-pg-timescaledb/generated/**
 cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md
 cloudnative-pg-timescaledb/docs/generated/matrix-schema.md
 cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md
+cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md
 cloudnative-pg-timescaledb/docker-bake.hcl
 cloudnative-pg-timescaledb/matrix.json

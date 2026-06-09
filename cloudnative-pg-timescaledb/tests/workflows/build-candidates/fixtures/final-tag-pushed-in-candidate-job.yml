@@ -15,8 +15,8 @@ jobs:
           candidate_ref="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-pg18-trixie-amd64"
           docker buildx imagetools inspect "${candidate_ref}" --raw > candidate.raw.json
           expected_platform="linux/amd64"
-          python3 -c 'manifest.get("platform")' || true
-          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl "${BAKE_TARGET}" \
+          python3 -c 'manifest.get("platform"); print("attestation-manifest")' || true
+          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl --sbom=true --provenance=mode=max "${BAKE_TARGET}" \
             --set "${BAKE_TARGET}.context=." \
             --set "${BAKE_TARGET}.tags=${IMAGE}:18-pg18.4-ts2.27.2-20260609" \
             --set "${BAKE_TARGET}.output=type=registry,push=true"

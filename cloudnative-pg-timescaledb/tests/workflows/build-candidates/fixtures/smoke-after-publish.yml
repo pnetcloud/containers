@@ -13,11 +13,14 @@ jobs:
       - run: |
           set -Eeuo pipefail
           candidate_ref="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-pg18-trixie-amd64"
-          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl "${BAKE_TARGET}" --set "${BAKE_TARGET}.context=." --set "${BAKE_TARGET}.tags=${candidate_ref}" --set "${BAKE_TARGET}.output=type=registry,push=true"
+          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl --sbom=true --provenance=mode=max "${BAKE_TARGET}" --set "${BAKE_TARGET}.context=." --set "${BAKE_TARGET}.tags=${candidate_ref}" --set "${BAKE_TARGET}.output=type=registry,push=true"
           docker buildx imagetools inspect "${candidate_ref}" --raw > candidate.raw.json
           expected_platform="linux/amd64"
-          python3 -c 'manifest.get("platform")' || true
+          python3 -c 'manifest.get("platform"); print("attestation-manifest")' || true
           runtime_architecture="$(docker run --rm --platform "linux/amd64" --entrypoint /bin/sh "${candidate_ref}" -c 'dpkg --print-architecture')"
-          docker buildx imagetools create -t "${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-pg18-trixie-index" "${candidate_ref}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-candidate-${{ matrix.bake_target }}
+          path: candidate-metadata/pg18-trixie/release-candidate.json
           SMOKE_IMAGE_REF="${IMAGE}:candidate-amd64" SMOKE_EXPECTED_PLATFORM="linux/amd64" CHECKS=container make smoke PG="18" DEBIAN="trixie"
           SMOKE_IMAGE_REF="${IMAGE}:candidate-amd64" SMOKE_EXPECTED_PLATFORM="linux/amd64" CHECKS=sql make smoke PG="18" DEBIAN="trixie"

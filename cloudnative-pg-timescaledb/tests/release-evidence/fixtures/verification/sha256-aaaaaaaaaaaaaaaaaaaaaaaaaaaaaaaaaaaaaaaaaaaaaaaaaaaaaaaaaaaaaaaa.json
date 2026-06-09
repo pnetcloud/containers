@@ -1,0 +1,13 @@
+[
+  {
+    "critical": {
+      "image": {
+        "docker-manifest-digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "optional": {
+      "identity": "https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main",
+      "issuer": "https://token.actions.githubusercontent.com"
+    }
+  }
+]
