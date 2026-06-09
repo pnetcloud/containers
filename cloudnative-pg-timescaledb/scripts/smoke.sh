@@ -11,7 +11,7 @@ case "${checks}" in
     "${SCRIPT_DIR}/smoke-test.sh" "${pg}" "${debian}"
     ;;
   sql)
-    controlled_unavailable "make smoke PG=${pg} DEBIAN=${debian} CHECKS=sql" "Story 3.5" "Implement SQL extension smoke checks before using CHECKS=sql."
+    "${SCRIPT_DIR}/smoke-test.sh" "${pg}" "${debian}"
     ;;
   *)
     diag "make smoke PG=${pg} DEBIAN=${debian}" "CHECKS" "one of container, sql" "${checks}" "Use CHECKS=container for Story 3.4 or CHECKS=sql after Story 3.5."

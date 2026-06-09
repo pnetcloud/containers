@@ -182,7 +182,7 @@ grep -Fq 'run --rm --entrypoint /bin/sh' "${capture}" || {
 rm -rf "${tmpdir}"
 
 expect_make_error 65 "production smoke skipped until publishable" "publishable smoke target|skipped:" smoke PG=18 DEBIAN=trixie CHECKS=container
-expect_make_error 69 "sql smoke remains Story 3.5" "Story 3.5" smoke PG=18 DEBIAN=trixie CHECKS=sql
+expect_make_error 65 "sql smoke skipped until publishable" "publishable SQL smoke target|skipped:" smoke PG=18 DEBIAN=trixie CHECKS=sql
 expect_make_error 64 "unknown smoke checks rejected" "one of container, sql" smoke PG=18 DEBIAN=trixie CHECKS=network
 
 expect_fail "wrong Debian release" "check: Debian release.*expected: 'trixie'.*actual: 'bookworm'" env SMOKE_METADATA="${METADATA_FIXTURE}" SMOKE_CONTAINER_FIXTURE="${FIXTURE_DIR}/wrong-debian-release.json" "${SCRIPT_DIR}/smoke-test.sh" 18 trixie

@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 metadata="${SMOKE_METADATA:-${SCRIPT_DIR}/../versions.yaml}"
 fixture="${SMOKE_CONTAINER_FIXTURE:-}"
+sql_fixture="${SMOKE_SQL_FIXTURE:-}"
+extension_policy="${SMOKE_EXTENSION_POLICY:-}"
 docker_bin="${DOCKER_BIN:-docker}"
 pg="${1:-}"
 debian="${2:-}"
@@ -12,20 +14,24 @@ debian="${2:-}"
 source "${SCRIPT_DIR}/lib/command.sh"
 require_pg_debian "smoke-test container" "${pg}" "${debian}"
 
-python3 - "${ROOT_DIR}" "${metadata}" "${fixture}" "${docker_bin}" "${pg}" "${debian}" <<'PY'
+python3 - "${ROOT_DIR}" "${metadata}" "${fixture}" "${sql_fixture}" "${extension_policy}" "${docker_bin}" "${pg}" "${debian}" <<'PY'
 import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 
 ROOT = Path(sys.argv[1])
 metadata = Path(sys.argv[2])
 fixture = sys.argv[3]
-docker_bin = sys.argv[4]
-pg = sys.argv[5]
-debian = sys.argv[6]
+sql_fixture = sys.argv[4]
+extension_policy = sys.argv[5]
+docker_bin = sys.argv[6]
+pg = sys.argv[7]
+debian = sys.argv[8]
+checks = os.environ.get("CHECKS", "container") or "container"
 SOURCE_REPOSITORY = "https://github.com/pnetcloud/containers"
 EXIT_UNSUPPORTED = 65
 EXIT_UNAVAILABLE = 69
@@ -263,14 +269,186 @@ def run_checks(entry, payload):
         exit_with_message(1, "smoke-test container", fixture or image_ref, image_ref, "label org.opencontainers.image.created", "UTC YYYY-MM-DD date", repr(created), "Build the image from the generated Dockerfile label contract.")
 
 
+def parse_sql_transcript(path):
+    values = {}
+    try:
+        lines = Path(path).read_text().splitlines()
+    except FileNotFoundError:
+        exit_with_message(1, "smoke-test sql", path, "", "SQL fixture", "fixture exists", "missing", "Create the SQL smoke fixture.")
+    for raw in lines:
+        line = raw.strip()
+        if not line.startswith("-- smoke:"):
+            continue
+        item = line[len("-- smoke:"):].strip()
+        if "=" not in item:
+            exit_with_message(1, "smoke-test sql", path, "", "SQL fixture", "-- smoke: key=value", line, "Use deterministic key/value smoke transcript lines.")
+        key, value = item.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def sql_value(transcript, key):
+    return transcript.get(key)
+
+
+def require_sql(image_ref, artifact, transcript, check, expected, actual, remediation):
+    if actual != expected:
+        exit_with_message(1, "smoke-test sql", artifact, image_ref, check, repr(expected), repr(actual), remediation)
+
+
+def require_sql_present(image_ref, artifact, transcript, check, actual, remediation):
+    if actual in {None, "", "missing", "failed"}:
+        exit_with_message(1, "smoke-test sql", artifact, image_ref, check, "present/non-empty result", repr(actual), remediation)
+
+
+def extension_policies_for_entry(entry):
+    by_extension = {}
+    for key, value in entry.items():
+        parts = key.split(".")
+        if len(parts) != 3 or parts[0] != "extensions":
+            continue
+        by_extension.setdefault(parts[1], {"extension": parts[1]})[parts[2]] = value
+    false_policies = {}
+    for extension, policy in by_extension.items():
+        if policy.get("creatable") is not False:
+            continue
+        required_false = {"non_creatable_reason", "validation_mode", "validation_target"}
+        missing_false = [key for key in required_false if not str(policy.get(key, "")).strip()]
+        if missing_false:
+            exit_with_message(1, "smoke-test sql", metadata, "", f"extension {extension} creatable: false", f"non-empty {sorted(required_false)}", f"missing {missing_false}; actual metadata {policy}", "Document non-creatable extensions with reason, validation mode, and validation target.")
+        if policy.get("validation_mode") not in {"control-file", "library", "preinstalled-extension"}:
+            exit_with_message(1, "smoke-test sql", metadata, "", f"extension {extension} validation_mode", "control-file|library|preinstalled-extension", repr(policy.get("validation_mode")), "Use a supported validation-only mode for non-creatable extensions.")
+        false_policies[extension] = policy
+    return false_policies
+
+
+def expected_extensions(entry):
+    extensions = [
+        {"name": "timescaledb", "expected_version": entry.get("timescaledb_version", ""), "library": True},
+        {"name": "vector", "expected_version": entry.get("pgvector_package_version", ""), "library": False},
+        {"name": "pgaudit", "expected_version": entry.get("pgaudit_package_version", ""), "library": False},
+    ]
+    if entry.get("toolkit_version", ""):
+        extensions.insert(1, {"name": "timescaledb_toolkit", "expected_version": entry.get("toolkit_version", ""), "library": False})
+    return extensions
+
+
+def collect_live_sql(image_ref, entry):
+    pg_major = entry["pg_major"]
+    bin_dir = f"/usr/lib/postgresql/{pg_major}/bin"
+    control_dir = f"/usr/share/postgresql/{pg_major}/extension"
+    policies = extension_policies_for_entry(entry)
+    non_creatable_names = " ".join(sorted(policies))
+    validation_script = []
+    for extension, policy in sorted(policies.items()):
+        mode = policy["validation_mode"]
+        target = policy["validation_target"]
+        validation_script.append(f"printf 'validation.{extension}.target=%s\\n' {shlex.quote(target)}")
+        if mode == "control-file":
+            validation_script.append(f"if [ -f \"${{control_dir}}/{shlex.quote(target)}\" ]; then printf 'validation.{extension}.result=present\\n'; else printf 'validation.{extension}.result=missing\\n'; fi")
+        elif mode == "library":
+            validation_script.append(f"if [ -e {shlex.quote(target)} ] || ls {shlex.quote(target)} >/dev/null 2>&1; then printf 'validation.{extension}.result=present\\n'; else printf 'validation.{extension}.result=missing\\n'; fi")
+        elif mode == "preinstalled-extension":
+            validation_script.append(f"value=\"$($psql \"SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname='{extension}'), '')\")\"; printf 'extversion.{extension}=%s\\n' \"${{value}}\"; if [ -n \"${{value}}\" ]; then printf 'validation.{extension}.result=present\\n'; else printf 'validation.{extension}.result=missing\\n'; fi")
+    validation_block = "\n".join(validation_script) or ":"
+    shell = f"""
+set -eu
+bin_dir="{bin_dir}"
+control_dir="{control_dir}"
+non_creatable="{non_creatable_names}"
+data_dir="$(mktemp -d /tmp/cnpg-sql-smoke.XXXXXX)"
+"${{bin_dir}}/initdb" -D "${{data_dir}}" >/tmp/cnpg-sql-initdb.log 2>&1
+cat >>"${{data_dir}}/postgresql.conf" <<'CONF'
+shared_preload_libraries = 'timescaledb,pgaudit'
+CONF
+"${{bin_dir}}/pg_ctl" -D "${{data_dir}}" -o "-c listen_addresses= -c unix_socket_directories=/tmp" -w start >/tmp/cnpg-sql-start.log 2>&1
+psql="${{bin_dir}}/psql -h /tmp -d postgres -Atqc"
+if $psql "SELECT version()" >/tmp/cnpg-sql-version.out 2>&1; then printf 'select.version=ok\n'; else printf 'select.version=failed\n'; fi
+printf 'show.server_version=%s\n' "$($psql "SHOW server_version")"
+printf 'show.shared_preload_libraries=%s\n' "$($psql "SHOW shared_preload_libraries")"
+if ls "$(${{bin_dir}}/pg_config --pkglibdir 2>/dev/null || printf /usr/lib/postgresql/{pg_major}/lib)"/timescaledb*.so >/dev/null 2>&1; then printf 'library.timescaledb=present\n'; else printf 'library.timescaledb=missing\n'; fi
+for ext in timescaledb timescaledb_toolkit vector pgaudit; do
+  case " ${{non_creatable}} " in
+    *" ${{ext}} "*) continue ;;
+  esac
+  if $psql "CREATE EXTENSION IF NOT EXISTS ${{ext}}" >/tmp/cnpg-sql-create-${{ext}}.log 2>&1; then
+    printf 'create.%s=ok\n' "${{ext}}"
+  else
+    printf 'create.%s=missing\n' "${{ext}}"
+  fi
+  printf 'extversion.%s=%s\n' "${{ext}}" "$($psql "SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname='${{ext}}'), '')")"
+done
+for ext in vector pgaudit; do
+  if [ -f "${{control_dir}}/${{ext}}.control" ]; then printf 'control.%s=%s.control:present\n' "${{ext}}" "${{ext}}"; else printf 'control.%s=%s.control:missing\n' "${{ext}}" "${{ext}}"; fi
+done
+{validation_block}
+"${{bin_dir}}/pg_ctl" -D "${{data_dir}}" -m fast -w stop >/tmp/cnpg-sql-stop.log 2>&1 || true
+rm -rf "${{data_dir}}"
+"""
+    run = subprocess.run([docker_bin, "run", "--rm", "--entrypoint", "/bin/sh", image_ref, "-eu", "-c", shell], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if run.returncode != 0:
+        exit_with_message(EXIT_UNAVAILABLE, "smoke-test sql", image_ref, image_ref, "SQL live collector", "docker run SQL smoke collector succeeds", run.stderr.strip()[:600], "Inspect the local image SQL runtime and required preload settings.")
+    values = {}
+    for line in run.stdout.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values
+
+
+def run_sql_checks(entry, transcript):
+    image_ref = os.environ.get("SMOKE_IMAGE_REF", default_image_ref(entry))
+    artifact = sql_fixture or image_ref
+    canonical_preload = "timescaledb,pgaudit"
+    require_sql(image_ref, artifact, transcript, "SELECT version()", "ok", sql_value(transcript, "select.version"), "Ensure the test PostgreSQL instance accepts basic SQL queries.")
+    require_sql(image_ref, artifact, transcript, "SHOW server_version", entry["pg_version"], sql_value(transcript, "show.server_version"), "Start the PostgreSQL server version declared in metadata.")
+    require_sql(image_ref, artifact, transcript, "shared_preload_libraries", canonical_preload, sql_value(transcript, "show.shared_preload_libraries"), f"Start SQL smoke with shared_preload_libraries={canonical_preload}.")
+
+    if extension_policy:
+        exit_with_message(1, "smoke-test sql", "SMOKE_EXTENSION_POLICY", image_ref, "non-creatable extension policy source", "selected metadata entry extensions.<ext>.* fields", extension_policy, "Do not bypass metadata-owned non-creatable policy with an environment-only policy file.")
+    non_creatable = extension_policies_for_entry(entry)
+    for extension in expected_extensions(entry):
+        name = extension["name"]
+        if name in non_creatable:
+            mode = non_creatable[name]["validation_mode"]
+            target = non_creatable[name]["validation_target"]
+            require_sql(image_ref, metadata, transcript, f"extension {name} creatable: false validation target", target, sql_value(transcript, f"validation.{name}.target"), "Run the documented validation-only probe target for the non-creatable extension.")
+            if mode in {"control-file", "library"}:
+                require_sql(image_ref, metadata, transcript, f"extension {name} {mode} validation", "present", sql_value(transcript, f"validation.{name}.result"), "The validation-only target must prove the documented control file or library is available.")
+            elif mode == "preinstalled-extension":
+                require_sql_present(image_ref, metadata, transcript, f"extension {name} preinstalled extversion", sql_value(transcript, f"extversion.{name}"), "Preinstalled-extension validation must query pg_extension.extversion.")
+            continue
+
+        require_sql(image_ref, artifact, transcript, f"CREATE EXTENSION {name}", "ok", sql_value(transcript, f"create.{name}"), "Create expected PostgreSQL extensions unless metadata explicitly marks them non-creatable.")
+        expected_version = extension["expected_version"]
+        if expected_version:
+            require_sql(image_ref, artifact, transcript, f"pg_extension.extversion {name}", expected_version, sql_value(transcript, f"extversion.{name}"), "Extension version must match metadata before publish eligibility.")
+        else:
+            require_sql_present(image_ref, artifact, transcript, f"pg_extension.extversion {name}", sql_value(transcript, f"extversion.{name}"), "Extensions without exact package metadata still need a visible pg_extension.extversion or explicit validation policy.")
+            if name in {"vector", "pgaudit"}:
+                control_name = "vector.control" if name == "vector" else "pgaudit.control"
+                require_sql(image_ref, artifact, transcript, f"control-file expectation {name}", f"{control_name}:present", sql_value(transcript, f"control.{name}"), "Extensions without exact package metadata must also match the documented control-file expectation.")
+        if extension["library"]:
+            require_sql(image_ref, artifact, transcript, "TimescaleDB shared library", "present", sql_value(transcript, "library.timescaledb"), "Validate TimescaleDB library availability before publish eligibility.")
+
+    print(f"PASS SQL smoke image={image_ref} PG={pg} DEBIAN={debian}")
+
+
 data = parse_metadata(metadata)
 entry = find_entry(data)
 image_ref = default_image_ref(entry)
 
-if not entry.get("publish") and not fixture:
-    exit_with_message(EXIT_UNSUPPORTED, "smoke-test container", metadata, image_ref, "publishable smoke target", f"publish:true row for PG={pg} DEBIAN={debian}", f"skipped: {entry.get('skip_reason', '')}", "Enable the release gate for this row and build the image before running container smoke checks.")
-
-payload = load_fixture(fixture, image_ref) if fixture else collect_live(image_ref, entry)
-run_checks(entry, payload)
-print(f"PASS container smoke image={payload.get('image_ref') or image_ref} PG={pg} DEBIAN={debian}")
+if checks == "container":
+    if not entry.get("publish") and not fixture:
+        exit_with_message(EXIT_UNSUPPORTED, "smoke-test container", metadata, image_ref, "publishable smoke target", f"publish:true row for PG={pg} DEBIAN={debian}", f"skipped: {entry.get('skip_reason', '')}", "Enable the release gate for this row and build the image before running container smoke checks.")
+    payload = load_fixture(fixture, image_ref) if fixture else collect_live(image_ref, entry)
+    run_checks(entry, payload)
+    print(f"PASS container smoke image={payload.get('image_ref') or image_ref} PG={pg} DEBIAN={debian}")
+elif checks == "sql":
+    if not entry.get("publish") and not sql_fixture:
+        exit_with_message(EXIT_UNSUPPORTED, "smoke-test sql", metadata, image_ref, "publishable SQL smoke target", f"publish:true row for PG={pg} DEBIAN={debian}", f"skipped: {entry.get('skip_reason', '')}", "Enable the release gate for this row and build the image before running SQL smoke checks.")
+    transcript = parse_sql_transcript(sql_fixture) if sql_fixture else collect_live_sql(image_ref, entry)
+    run_sql_checks(entry, transcript)
+else:
+    exit_with_message(64, "smoke-test", "CHECKS", image_ref, "CHECKS", "container or sql", checks, "Use CHECKS=container or CHECKS=sql.")
 PY

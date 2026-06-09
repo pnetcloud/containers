@@ -1,0 +1,12 @@
+-- smoke: select.version=ok
+-- smoke: show.server_version=18.4
+-- smoke: show.shared_preload_libraries=timescaledb,pgaudit
+-- smoke: create.timescaledb=ok
+-- smoke: extversion.timescaledb=2.27.2
+-- smoke: library.timescaledb=present
+-- smoke: create.timescaledb_toolkit=ok
+-- smoke: extversion.timescaledb_toolkit=1.23.0
+-- smoke: validation.vector.target=vector.control
+-- smoke: validation.vector.result=present
+-- smoke: validation.pgaudit.target=pgaudit.control
+-- smoke: validation.pgaudit.result=present

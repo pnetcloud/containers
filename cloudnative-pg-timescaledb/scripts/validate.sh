@@ -32,6 +32,9 @@ fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/container/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/container/run.sh"
 fi
+if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/sql/run.sh" ]]; then
+  "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/sql/run.sh"
+fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/generated-drift/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/generated-drift/run.sh"
 fi

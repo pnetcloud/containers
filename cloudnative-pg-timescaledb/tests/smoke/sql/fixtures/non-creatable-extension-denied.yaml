@@ -1,0 +1,14 @@
+entries:
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: trixie
+    cnpg_tag: "18.4-standard-trixie"
+    cnpg_digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    timescaledb_version: "2.27.2"
+    toolkit_version: "1.23.0"
+    pgvector_package_version: ""
+    pgaudit_package_version: ""
+    publish: true
+    extensions.pgaudit.creatable: false
+    extensions.pgaudit.validation_mode: control-file
+    extensions.pgaudit.validation_target: pgaudit.control

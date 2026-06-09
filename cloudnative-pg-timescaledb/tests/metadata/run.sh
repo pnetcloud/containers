@@ -32,8 +32,60 @@ expect_fail() {
   rm -f "${tmp}"
 }
 
+policy_fixture() {
+  local output="$1"
+  local extension="$2"
+  local creatable="$3"
+  local reason="$4"
+  local mode="$5"
+  local target="$6"
+  python3 - "${FIXTURE_DIR}/valid.yaml" "${output}" "${extension}" "${creatable}" "${reason}" "${mode}" "${target}" <<'PY'
+from pathlib import Path
+import sys
+
+source, output, extension, creatable, reason, mode, target = sys.argv[1:]
+lines = Path(source).read_text().splitlines()
+insert = [f"    extensions.{extension}.creatable: {creatable}"]
+if reason != "__omit__":
+    insert.append(f"    extensions.{extension}.non_creatable_reason: {reason}")
+if mode != "__omit__":
+    insert.append(f"    extensions.{extension}.validation_mode: {mode}")
+if target != "__omit__":
+    insert.append(f"    extensions.{extension}.validation_target: {target}")
+
+result = []
+in_latest_row = False
+inserted = False
+for line in lines:
+    result.append(line)
+    if line == '    latest_eligible: true':
+        in_latest_row = True
+        continue
+    if in_latest_row and line.startswith('    skip_reason:') and not inserted:
+        result.extend(insert)
+        inserted = True
+        in_latest_row = False
+if not inserted:
+    raise SystemExit('failed to inject extension policy fixture')
+Path(output).write_text('\n'.join(result) + '\n')
+PY
+}
+
 "${VALIDATOR}" "${FIXTURE_DIR}/valid.yaml" >/tmp/story-1-3-valid.out
 "${VALIDATOR}" "${FIXTURE_DIR}/valid-extension-sources.yaml" >/tmp/story-3-2-valid-extension-sources.out
+
+valid_policy_fixture="$(mktemp)"
+missing_reason_fixture="$(mktemp)"
+missing_target_fixture="$(mktemp)"
+unsupported_mode_fixture="$(mktemp)"
+unknown_extension_fixture="$(mktemp)"
+trap 'rm -f "${valid_policy_fixture}" "${missing_reason_fixture}" "${missing_target_fixture}" "${unsupported_mode_fixture}" "${unknown_extension_fixture}"' EXIT
+policy_fixture "${valid_policy_fixture}" pgaudit false "PGAudit is validated by control file" control-file pgaudit.control
+policy_fixture "${missing_reason_fixture}" pgaudit false __omit__ control-file pgaudit.control
+policy_fixture "${missing_target_fixture}" pgaudit false "PGAudit is validated by control file" control-file __omit__
+policy_fixture "${unsupported_mode_fixture}" pgaudit false "PGAudit is validated by control file" sql-only pgaudit.control
+policy_fixture "${unknown_extension_fixture}" postgis false "PostGIS is outside this image contract" control-file postgis.control
+"${VALIDATOR}" "${valid_policy_fixture}" >/tmp/story-3-5-valid-extension-policy.out
 
 expect_fail "missing top-level key" "top-level keys exactly" "${FIXTURE_DIR}/missing-top-level-key.yaml"
 expect_fail "wrong current major" "image.current_major" "${FIXTURE_DIR}/wrong-current-major.yaml"
@@ -65,6 +117,10 @@ expect_fail "publish empty CNPG tag" "cnpg_tag matches pg_version and debian_var
 expect_fail "publish false without skip" "non-published entries have non-empty skip_reason" "${FIXTURE_DIR}/publish-false-without-skip-reason.yaml"
 expect_fail "invalid extension source" "pgvector_source is base or package|pgaudit_source is base or package" "${FIXTURE_DIR}/invalid-extension-source.yaml"
 expect_fail "package extension source missing package version" "package_version.*non-empty when .*_source=package" "${FIXTURE_DIR}/package-source-missing-package-version.yaml"
+expect_fail "extension policy missing reason" "non_creatable_reason" "${missing_reason_fixture}"
+expect_fail "extension policy missing target" "validation_target" "${missing_target_fixture}"
+expect_fail "extension policy unsupported mode" "extensions.pgaudit.validation_mode is supported" "${unsupported_mode_fixture}"
+expect_fail "extension policy unknown extension" "extensions.<ext> uses supported extension names" "${unknown_extension_fixture}"
 
 if ! grep -Fq 'validate-metadata.sh' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate.sh"; then
   diag "scan validate.sh" "cloudnative-pg-timescaledb/scripts/validate.sh" "make validate calls validate-metadata.sh" "missing" "Wire metadata validation into make validate."

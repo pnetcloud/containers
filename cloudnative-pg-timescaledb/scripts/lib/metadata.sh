@@ -164,21 +164,61 @@ string_fields = required_entry - {"platforms", "publish", "experimental", "lates
 bool_fields = {"publish", "experimental", "latest_eligible"}
 resolver_owned = {"cnpg_digest", "timescaledb_version", "timescaledb_package_name", "timescaledb_package_version", "toolkit_version", "toolkit_package_name", "toolkit_package_version"}
 extension_sources = {"base", "package"}
+supported_policy_extensions = {"timescaledb", "timescaledb_toolkit", "vector", "pgaudit"}
+supported_policy_fields = {"creatable", "non_creatable_reason", "validation_mode", "validation_target"}
+supported_validation_modes = {"control-file", "library", "preinstalled-extension"}
 expected_rows = {("17", "trixie"), ("18", "trixie"), ("19beta1", "trixie"), ("17", "bookworm"), ("18", "bookworm"), ("19beta1", "bookworm")}
 seen = set()
 latest_rows = []
 
+def parse_extension_policy_key(key):
+    parts = key.split(".")
+    if len(parts) != 3 or parts[0] != "extensions":
+        return None
+    return parts[1], parts[2]
+
+def entry_extension_policies(entry, idx):
+    policies = {}
+    for key, value in entry.items():
+        parsed = parse_extension_policy_key(key)
+        if not parsed:
+            continue
+        extension, field = parsed
+        if extension not in supported_policy_extensions:
+            fail(f"entries[{idx}].extensions.<ext> uses supported extension names", repr(key), "Use only timescaledb, timescaledb_toolkit, vector, or pgaudit in extension validation policy metadata.")
+        if field not in supported_policy_fields:
+            fail(f"entries[{idx}].extensions.{extension} uses supported policy fields", repr(key), "Use only creatable, non_creatable_reason, validation_mode, or validation_target.")
+        policies.setdefault(extension, {})[field] = value
+    return policies
+
 for idx, entry in enumerate(entries):
     if not isinstance(entry, dict):
         fail(f"entries[{idx}] is mapping", type(entry).__name__, "Use mapping entries.")
-    if set(entry) != required_entry:
-        fail(f"entries[{idx}] keys exactly {sorted(required_entry)}", f"missing {sorted(required_entry - set(entry))}, extra {sorted(set(entry) - required_entry)}", "Fix entry metadata keys.")
+    extension_policy_keys = {key for key in entry if parse_extension_policy_key(key)}
+    extra_entry_keys = set(entry) - required_entry - extension_policy_keys
+    if not required_entry.issubset(entry) or extra_entry_keys:
+        fail(f"entries[{idx}] keys exactly {sorted(required_entry)} plus optional extensions.<ext>.* policy keys", f"missing {sorted(required_entry - set(entry))}, extra {sorted(extra_entry_keys)}", "Fix entry metadata keys.")
     for field in string_fields:
         if not isinstance(entry[field], str):
             fail(f"entries[{idx}].{field} is string", type(entry[field]).__name__, f"Quote {field} if needed.")
     for field in bool_fields:
         if not isinstance(entry[field], bool):
             fail(f"entries[{idx}].{field} is boolean", type(entry[field]).__name__, f"Use true or false for {field}.")
+    extension_policies = entry_extension_policies(entry, idx)
+    for extension, policy in extension_policies.items():
+        creatable = policy.get("creatable")
+        if not isinstance(creatable, bool):
+            fail(f"entries[{idx}].extensions.{extension}.creatable is boolean", repr(creatable), "Set creatable explicitly to true or false when extension validation policy metadata is present.")
+        for field in ["non_creatable_reason", "validation_mode", "validation_target"]:
+            if field in policy and not isinstance(policy[field], str):
+                fail(f"entries[{idx}].extensions.{extension}.{field} is string", type(policy[field]).__name__, "Quote extension validation policy text values if needed.")
+        if creatable is False:
+            required_false = {"non_creatable_reason", "validation_mode", "validation_target"}
+            missing_false = sorted(field for field in required_false if not str(policy.get(field, "")).strip())
+            if missing_false:
+                fail(f"entries[{idx}].extensions.{extension} creatable:false has complete validation policy", f"missing {missing_false}; actual {policy}", "Document non-creatable extensions with reason, validation mode, and validation target.")
+            if policy["validation_mode"] not in supported_validation_modes:
+                fail(f"entries[{idx}].extensions.{extension}.validation_mode is supported", repr(policy["validation_mode"]), "Use control-file, library, or preinstalled-extension.")
     platforms = entry["platforms"]
     if not isinstance(platforms, list) or not platforms:
         fail(f"entries[{idx}].platforms is non-empty list", type(platforms).__name__, "Set explicit platform list.")
