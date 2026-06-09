@@ -1,0 +1,1 @@
+{"bake_file":"cloudnative-pg-timescaledb/docker-bake.hcl","targets":[{"context":".","dockerfile":"cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile","experimental":false,"platforms":["linux/amd64","linux/arm64"],"publish":false}]}
