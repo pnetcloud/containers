@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["github-actions", "npm"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^cloudnative-pg-timescaledb/versions\\.yaml$"],
+      "matchStrings": [
+        "pg_major:\\s*(?<currentValue>17|18|19beta1)",
+        "pg_version:\\s*(?<currentValue>[^\\s]+)",
+        "debian_variant:\\s*(?<currentValue>trixie|bookworm)"
+      ],
+      "depNameTemplate": "resolver-owned-pg-debian-matrix-fields",
+      "datasourceTemplate": "custom.resolver"
+    }
+  ],
+  "ignorePaths": [
+    "vendor/**",
+    "cloudnative-pg-timescaledb/versions.yaml",
+    "cloudnative-pg-timescaledb/generated/**"
+  ]
+}

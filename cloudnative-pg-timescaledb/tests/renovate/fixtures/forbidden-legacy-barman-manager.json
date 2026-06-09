@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["github-actions", "npm"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^cloudnative-pg-timescaledb/scripts/.*\\.sh$"],
+      "matchStrings": ["barman-cloud=(?<currentValue>[^\\s]+)"],
+      "depNameTemplate": "barman-cloud",
+      "datasourceTemplate": "pypi"
+    }
+  ],
+  "ignorePaths": [
+    "vendor/**",
+    "cloudnative-pg-timescaledb/versions.yaml",
+    "cloudnative-pg-timescaledb/generated/**"
+  ]
+}

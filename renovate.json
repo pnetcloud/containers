@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": true,
+  "enabledManagers": ["github-actions", "npm"],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "description": "Require manual review for major updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "dependencyDashboardApproval": true,
+      "labels": ["dependencies", "major-update"]
+    },
+    {
+      "description": "Allow validated patch/minor updates for non-release-sensitive npm tooling",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr",
+      "labels": ["dependencies", "tooling"]
+    },
+    {
+      "description": "Keep GitHub Actions reviewable because workflows are release-sensitive",
+      "matchManagers": ["github-actions"],
+      "automerge": false,
+      "labels": ["dependencies", "github-actions", "release-sensitive"]
+    }
+  ],
+  "ignorePaths": [
+    "vendor/**",
+    "cloudnative-pg-timescaledb/vendor/**",
+    "cloudnative-pg-timescaledb/versions.yaml",
+    "cloudnative-pg-timescaledb/generated/**",
+    "cloudnative-pg-timescaledb/catalog/**",
+    "cloudnative-pg-timescaledb/docs/generated/**"
+  ]
+}

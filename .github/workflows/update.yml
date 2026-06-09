@@ -34,16 +34,27 @@ jobs:
       - name: Write update summary
         run: |
           set -Eeuo pipefail
+          changed_files="$(mktemp)"
+          classified="$(mktemp)"
+          git diff --cached --name-only > "${changed_files}"
+          if [[ -s "${changed_files}" && -x cloudnative-pg-timescaledb/scripts/classify-update-origin.sh ]]; then
+            cloudnative-pg-timescaledb/scripts/classify-update-origin.sh \
+              --rules cloudnative-pg-timescaledb/config/change-origin-rules.json \
+              --changed-files "${changed_files}" > "${classified}"
+          else
+            printf '{"renovate_originated":[],"resolver_originated":[],"unknown":[]}' > "${classified}"
+          fi
+          list_origin() {
+            python3 -c 'import json, sys; data=json.load(open(sys.argv[1], encoding="utf-8")); items=data.get(sys.argv[2], []); print("\n".join(f"- {item}" for item in items) if items else sys.argv[3])' "$@"
+          }
           {
             printf '## Resolver-originated changes\n\n'
-            if git diff --cached --quiet; then
-              printf 'No resolver-owned metadata or generated artifact changes.\n\n'
-            else
-              git diff --cached --name-only | sed 's/^/- /'
-              printf '\n'
-            fi
+            list_origin "${classified}" resolver_originated 'No resolver-owned metadata or generated artifact changes.'
+            printf '\n'
             printf '## Renovate-originated changes\n\n'
-            printf 'Not classified in Story 2.5.\n'
+            list_origin "${classified}" renovate_originated 'No Renovate-originated dependency changes.'
+            printf '\n## Unknown-origin changes\n\n'
+            list_origin "${classified}" unknown 'No unknown-origin changes.'
           } >> "${GITHUB_STEP_SUMMARY}"
       - name: Commit update
         run: |

@@ -1,0 +1,30 @@
+{
+  "changed_files": [
+    "renovate.json",
+    "package.json",
+    "package-lock.json",
+    ".github/workflows/validate.yml",
+    "cloudnative-pg-timescaledb/versions.yaml",
+    "cloudnative-pg-timescaledb/generated/dockerfiles/18-trixie/Dockerfile",
+    "cloudnative-pg-timescaledb/docker-bake.hcl",
+    "cloudnative-pg-timescaledb/matrix.json",
+    "docs/catalog/security.md"
+  ],
+  "expected": {
+    "renovate_originated": [
+      "renovate.json",
+      "package.json",
+      "package-lock.json",
+      ".github/workflows/validate.yml"
+    ],
+    "resolver_originated": [
+      "cloudnative-pg-timescaledb/versions.yaml",
+      "cloudnative-pg-timescaledb/generated/dockerfiles/18-trixie/Dockerfile",
+      "cloudnative-pg-timescaledb/docker-bake.hcl",
+      "cloudnative-pg-timescaledb/matrix.json"
+    ],
+    "unknown": [
+      "docs/catalog/security.md"
+    ]
+  }
+}

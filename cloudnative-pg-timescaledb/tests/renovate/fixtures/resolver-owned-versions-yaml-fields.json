@@ -1,0 +1,30 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["github-actions", "npm"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^cloudnative-pg-timescaledb/versions\\.yaml$"],
+      "matchStrings": [
+        "cnpg_digest:\\s*(?<currentValue>sha256:[a-f0-9]+)",
+        "timescaledb_version:\\s*(?<currentValue>[0-9.]+)",
+        "timescaledb_package_version:\\s*(?<currentValue>[^\\s]+)",
+        "toolkit_version:\\s*(?<currentValue>[0-9.]+)",
+        "toolkit_package_version:\\s*(?<currentValue>[^\\s]+)",
+        "platforms:\\s*(?<currentValue>[^\\n]+)",
+        "publish:\\s*(?<currentValue>true|false)",
+        "experimental:\\s*(?<currentValue>true|false)",
+        "latest_eligible:\\s*(?<currentValue>true|false)",
+        "skip_reason:\\s*(?<currentValue>[^\\n]+)"
+      ],
+      "depNameTemplate": "resolver-owned-versions-yaml-fields",
+      "datasourceTemplate": "custom.resolver"
+    }
+  ],
+  "ignorePaths": [
+    "vendor/**",
+    "cloudnative-pg-timescaledb/versions.yaml",
+    "cloudnative-pg-timescaledb/generated/**"
+  ]
+}

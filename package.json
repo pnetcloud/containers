@@ -1,0 +1,11 @@
+{
+  "name": "pnet-containers-automation",
+  "private": true,
+  "version": "0.0.0",
+  "devDependencies": {
+    "renovate": "43.217.0"
+  },
+  "scripts": {
+    "validate:renovate": "renovate-config-validator renovate.json"
+  }
+}

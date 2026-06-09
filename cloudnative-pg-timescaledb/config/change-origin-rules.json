@@ -1,0 +1,29 @@
+{
+  "renovate_originated": [
+    {"path": "renovate.json"},
+    {"path": "package.json"},
+    {"path": "package-lock.json"},
+    {"path": ".github/workflows/*.yml"}
+  ],
+  "resolver_originated": [
+    {"path": "cloudnative-pg-timescaledb/versions.yaml"},
+    {"path": "cloudnative-pg-timescaledb/generated/**"},
+    {"path": "cloudnative-pg-timescaledb/docker-bake.hcl"},
+    {"path": "cloudnative-pg-timescaledb/matrix.json"},
+    {"metadata_field": "pg_major"},
+    {"metadata_field": "pg_version"},
+    {"metadata_field": "debian_variant"},
+    {"metadata_field": "cnpg_tag"},
+    {"metadata_field": "cnpg_digest"},
+    {"metadata_field": "timescaledb_version"},
+    {"metadata_field": "timescaledb_package_version"},
+    {"metadata_field": "toolkit_version"},
+    {"metadata_field": "toolkit_package_version"},
+    {"metadata_field": "platforms"},
+    {"metadata_field": "publish"},
+    {"metadata_field": "experimental"},
+    {"metadata_field": "latest_eligible"},
+    {"metadata_field": "skip_reason"},
+    {"metadata_field": "barman_plugin.*"}
+  ]
+}

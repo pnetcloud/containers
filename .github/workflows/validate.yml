@@ -24,6 +24,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends shellcheck
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Validate Renovate config
+        run: |
+          set -Eeuo pipefail
+          npm ci
+          npm exec -- renovate-config-validator renovate.json
       - name: Validate local gates
         run: make validate
       - name: Validate workflows with actionlint
