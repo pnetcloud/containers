@@ -1,0 +1,25 @@
+schema_version: "1"
+image:
+  registry: ghcr.io
+  repository: pnetcloud/cloudnative-pg-timescaledb
+  current_major: "18"
+  primary_debian_variant: trixie
+allowed:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: ["trixie", "bookworm"]
+  platforms: ["linux/amd64", "linux/arm64"]
+entries:
+  - pg_major: "18"
+    pg_version: "18"
+    debian_variant: trixie
+    cnpg_tag: "18-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: true
+    skip_reason: "Missing other matrix rows"
