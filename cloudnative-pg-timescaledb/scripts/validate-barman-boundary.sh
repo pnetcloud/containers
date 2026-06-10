@@ -85,7 +85,9 @@ def is_negated(text, start):
             "does not",
             "must never",
             "not appear",
+            "not part",
             "not supported",
+            "outside the image filesystem",
             "reserved for the cloudnativepg barman cloud plugin",
         ]
     )

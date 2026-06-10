@@ -8,6 +8,8 @@
   "resolver_originated": [
     {"path": "cloudnative-pg-timescaledb/versions.yaml"},
     {"path": "cloudnative-pg-timescaledb/generated/**"},
+    {"path": "cloudnative-pg-timescaledb/docs/generated/compatibility.md"},
+    {"path": "cloudnative-pg-timescaledb/docs/generated/compatibility-table.md"},
     {"path": "cloudnative-pg-timescaledb/docs/generated/matrix-schema.md"},
     {"path": "cloudnative-pg-timescaledb/docker-bake.hcl"},
     {"path": "cloudnative-pg-timescaledb/matrix.json"},

@@ -1,6 +1,8 @@
 # comments and blank lines are allowed
 cloudnative-pg-timescaledb/versions.yaml
 cloudnative-pg-timescaledb/generated/**
+cloudnative-pg-timescaledb/docs/generated/compatibility.md
+cloudnative-pg-timescaledb/docs/generated/compatibility-table.md
 cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md
 cloudnative-pg-timescaledb/docs/generated/matrix-schema.md
 cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md

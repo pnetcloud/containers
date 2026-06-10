@@ -135,9 +135,11 @@ elif kind == "docs":
     if len(payload["docs"]) != 1:
         fail("docs payload has exactly one compatibility doc row", repr(payload["docs"]), "Keep Story 1.5 docs contract scoped to compatibility skeleton output.")
     for row in payload["docs"]:
-        require_keys(row, {"doc_path", "source", "sections", "publishable_entries", "experimental_entries"}, "docs row")
+        require_keys(row, {"doc_path", "companion_paths", "source", "sections", "publishable_entries", "experimental_entries"}, "docs row")
         if row["sections"] != ["compatibility"]:
             fail("docs sections exactly compatibility", repr(row["sections"]), "Preserve the documented generated docs contract.")
+        if row["companion_paths"] != ["cloudnative-pg-timescaledb/docs/generated/compatibility-table.md"]:
+            fail("docs companion paths include generated compatibility-table.md", repr(row["companion_paths"]), "Expose the public README compatibility table as a generated companion artifact.")
 else:
     fail("known generator kind", kind, "Use a documented generator schema kind.")
 PY
