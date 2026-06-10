@@ -6,9 +6,14 @@ FIXTURE_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/update/fixtures"
 CNPG_FIXTURES="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/cnpg-resolver/fixtures"
 PKG_FIXTURES="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/packagecloud/fixtures"
 BARMAN_PLUGIN_FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json"
+EXECUTED_FIXTURES=()
 
 diag() {
   printf 'command: %s\nartifact: %s\nexpected: %s\nactual: %s\nremediation: %s\n' "$@" >&2
+}
+
+mark_fixture_executed() {
+  EXECUTED_FIXTURES+=("$1")
 }
 
 prepare_project() {
@@ -29,6 +34,7 @@ prepare_project() {
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/matrix-schema.md" "${target}/cloudnative-pg-timescaledb/docs/generated/matrix-schema.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md" "${target}/cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md" "${target}/cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" "${target}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md" "${target}/cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md" "${target}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${target}/cloudnative-pg-timescaledb/versions.yaml"
@@ -198,7 +204,78 @@ assert_fixture_dirs() {
       diag "test fixture diff marker" "${FIXTURE_DIR}/${fixture}" "expected-diff.patch or expected-no-diff exists" "missing" "Declare whether each update fixture is expected to leave a deterministic diff."
       exit 1
     fi
+    if [[ -f "${FIXTURE_DIR}/${fixture}/expected-diff.patch" ]] && ! grep -q '^diff --git ' "${FIXTURE_DIR}/${fixture}/expected-diff.patch"; then
+      diag "test fixture diff marker" "${FIXTURE_DIR}/${fixture}/expected-diff.patch" "expected diff marker begins with diff --git" "$(cat "${FIXTURE_DIR}/${fixture}/expected-diff.patch")" "Replace prose placeholders with a patch-shaped expected diff marker."
+      exit 1
+    fi
+    if [[ -f "${FIXTURE_DIR}/${fixture}/expected-no-diff" ]] && [[ "$(cat "${FIXTURE_DIR}/${fixture}/expected-no-diff")" != "NO_DIFF" ]]; then
+      diag "test fixture no-diff marker" "${FIXTURE_DIR}/${fixture}/expected-no-diff" "NO_DIFF" "$(cat "${FIXTURE_DIR}/${fixture}/expected-no-diff")" "Use a stable sentinel for no-diff fixtures."
+      exit 1
+    fi
   done
+}
+
+assert_all_named_fixtures_executed() {
+  local fixture
+  for fixture in no-op changed-cnpg changed-packages preserve-policy-fields update-resolver-skip-reason preserve-manual-skip-reason hard-fail-publishable-unavailable reject-unsupported-debian-or-pg reject-latest-moved-from-pg18-trixie reject-barman-tooling-in-image-path; do
+    if [[ " ${EXECUTED_FIXTURES[*]} " != *" ${fixture} "* ]]; then
+      diag "fixture execution coverage" "${FIXTURE_DIR}/${fixture}" "named fixture scenario executed by run.sh" "not executed" "Keep named Story 2.3 fixture directories mapped to exercised update scenarios."
+      exit 1
+    fi
+  done
+}
+
+run_committed_fixture() {
+  local fixture="$1"
+  local project="${base_tmp}/committed-${fixture}"
+  local stdout_file="${base_tmp}/committed-${fixture}.out"
+  local stderr_file="${base_tmp}/committed-${fixture}.err"
+  local actual_diff="${base_tmp}/committed-${fixture}.diff"
+  local fixture_root="${FIXTURE_DIR}/${fixture}"
+  prepare_project "${project}"
+  if [[ "${fixture}" == "no-op" && -d "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" ]]; then
+    cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" "${project}/cloudnative-pg-timescaledb/release-metadata"
+  fi
+  cp "${fixture_root}/input/versions.yaml" "${project}/cloudnative-pg-timescaledb/versions.yaml"
+  (cd "${project}" && git add . && if ! git diff --cached --quiet; then git commit -qm "fixture-${fixture}-input"; fi)
+  if [[ -f "${fixture_root}/expected-diff.patch" ]]; then
+    if ! run_update "${project}" "${fixture_root}/upstream" "${stdout_file}" "${stderr_file}"; then
+      diag "make update" "${fixture}" "exit 0" "$(cat "${stderr_file}")" "Committed changed fixtures must update deterministically."
+      exit 1
+    fi
+    assert_json_success "${stdout_file}" true
+    assert_allowlisted_status "${project}"
+    (cd "${project}" && git diff --binary | sed -E 's/[[:space:]]+$//') >"${actual_diff}"
+    local diff_file="/tmp/story-2-3-${fixture}.diff"
+    if ! diff -u "${fixture_root}/expected-diff.patch" "${actual_diff}" >"${diff_file}"; then
+      diag "fixture expected diff" "${fixture}" "actual git diff matches expected-diff.patch" "$(cat "${diff_file}")" "Regenerate the committed expected diff from the fixture input/upstream."
+      exit 1
+    fi
+  else
+    case "${fixture}" in
+      no-op)
+        if ! run_update "${project}" "${fixture_root}/upstream" "${stdout_file}" "${stderr_file}"; then
+          diag "make update" "${fixture}" "exit 0" "$(cat "${stderr_file}")" "Committed no-op fixture must succeed."
+          exit 1
+        fi
+        assert_json_success "${stdout_file}" false
+        ;;
+      *)
+        if run_update "${project}" "${fixture_root}/upstream" "${stdout_file}" "${stderr_file}"; then
+          diag "make update" "${fixture}" "non-zero" "exit 0" "Committed hard-fail fixture must fail deterministically."
+          exit 1
+        fi
+        assert_json_failure "${stdout_file}"
+        if [[ "${fixture}" == "reject-barman-tooling-in-image-path" ]] && ! grep -Eq 'no legacy Barman tooling|CloudNativePG Barman Cloud Plugin|barman-cloud' "${stdout_file}" "${stderr_file}"; then
+          diag "make update" "${fixture}" "Barman boundary failure reason" "$(cat "${stderr_file}") $(cat "${stdout_file}")" "Ensure the fixture exercises the legacy Barman tooling guard, not an earlier metadata invariant."
+          exit 1
+        fi
+        ;;
+    esac
+    status="$(cd "${project}" && git status --porcelain --untracked-files=all)"
+    [[ -z "${status}" ]] || { diag "git status" "${fixture}" "clean" "${status}" "Committed no-diff fixtures must not leave partial changes."; exit 1; }
+  fi
+  mark_fixture_executed "${fixture}"
 }
 
 assert_fixture_dirs
@@ -206,6 +283,10 @@ assert_fixture_dirs
 base_tmp="$(mktemp -d)"
 upstream="${base_tmp}/upstream"
 prepare_upstream "${upstream}"
+
+for committed_fixture in no-op changed-cnpg changed-packages preserve-policy-fields update-resolver-skip-reason preserve-manual-skip-reason hard-fail-publishable-unavailable reject-unsupported-debian-or-pg reject-latest-moved-from-pg18-trixie reject-barman-tooling-in-image-path; do
+  run_committed_fixture "${committed_fixture}"
+done
 
 changed_project="${base_tmp}/changed-cnpg"
 prepare_project "${changed_project}"
@@ -216,6 +297,8 @@ fi
 assert_json_success "${base_tmp}/changed.out" true
 assert_allowlisted_status "${changed_project}"
 grep -Fq '18.4-standard-trixie' "${changed_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep 18.4" "changed-cnpg" "CNPG tag updated" "missing" "Update resolver-owned CNPG fields."; exit 1; }
+mark_fixture_executed changed-cnpg
+mark_fixture_executed changed-packages
 
 noop_project="${base_tmp}/no-op"
 cp -R "${changed_project}" "${noop_project}"
@@ -227,6 +310,7 @@ fi
 assert_json_success "${base_tmp}/noop.out" false
 status="$(cd "${noop_project}" && git status --porcelain --untracked-files=all)"
 [[ -z "${status}" ]] || { diag "git status" "no-op" "clean" "${status}" "No-op update must not leave file changes."; exit 1; }
+mark_fixture_executed no-op
 
 digest_upstream="${base_tmp}/digest-upstream"
 mkdir -p "${digest_upstream}/cnpg"
@@ -261,6 +345,8 @@ set_entry_field "${policy_project}/cloudnative-pg-timescaledb/versions.yaml" "17
 (cd "${policy_project}" && git add . && git commit -qm policy-input)
 run_update "${policy_project}" "${upstream}" "${base_tmp}/policy.out" "${base_tmp}/policy.err" || { diag "make update" "preserve-policy-fields" "exit 0" "$(cat "${base_tmp}/policy.err")" "Manual policy fields should be preserved."; exit 1; }
 grep -Fq 'skip_reason: "Manual maintainer hold"' "${policy_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep manual skip" "preserve-policy-fields" "manual skip preserved" "changed" "Do not overwrite maintainer-authored skip reasons."; exit 1; }
+mark_fixture_executed preserve-policy-fields
+mark_fixture_executed preserve-manual-skip-reason
 
 resolver_skip_project="${base_tmp}/resolver-skip"
 prepare_project "${resolver_skip_project}"
@@ -294,6 +380,7 @@ path.write_text(json.dumps(payload, separators=(",", ":")))
 PY
 run_update "${resolver_skip_project}" "${bad_upstream}" "${base_tmp}/resolver-skip.out" "${base_tmp}/resolver-skip.err" || { diag "make update" "update-resolver-skip-reason" "exit 0" "$(cat "${base_tmp}/resolver-skip.err")" "Resolver-prefixed skip reasons should be updateable."; exit 1; }
 grep -Fq 'skip_reason: "resolver:package-unavailable: timescaledb-toolkit-postgresql-18 PostgreSQL 18 bookworm linux/arm64 missing packages while CNPG exists"' "${resolver_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep resolver skip" "update-resolver-skip-reason" "package/platform skip reason updated" "missing" "Update resolver-prefixed skip reasons to package-specific evidence."; exit 1; }
+mark_fixture_executed update-resolver-skip-reason
 
 cnpg_skip_project="${base_tmp}/cnpg-resolver-skip"
 prepare_project "${cnpg_skip_project}"
@@ -319,6 +406,7 @@ ln -s "${PKG_FIXTURES}" "${missing_cnpg_upstream}/packages"
 cp "${BARMAN_PLUGIN_FIXTURE}" "${missing_cnpg_upstream}/barman-plugin.json"
 run_update "${cnpg_skip_project}" "${missing_cnpg_upstream}" "${base_tmp}/cnpg-skip.out" "${base_tmp}/cnpg-skip.err" || { diag "make update" "update-cnpg-resolver-skip-reason" "exit 0" "$(cat "${base_tmp}/cnpg-skip.err")" "Resolver-prefixed CNPG skip reasons should be updateable."; exit 1; }
 grep -Fq 'skip_reason: "resolver:cnpg-unavailable: ghcr.io/cloudnative-pg/postgresql:18-standard-bookworm PostgreSQL 18 bookworm missing tag"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg resolver skip" "update-cnpg-resolver-skip-reason" "CNPG missing-tag skip reason updated" "missing" "Update resolver-prefixed CNPG skip reasons to upstream evidence."; exit 1; }
+grep -Fq 'cnpg_tag: "18-standard-bookworm"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg unresolved tag" "update-cnpg-resolver-skip-reason" "unresolved CNPG tag remains aligned with missing-tag evidence" "missing" "Do not derive CNPG tag from package versions when CNPG resolution failed."; exit 1; }
 
 manual_cnpg_project="${base_tmp}/manual-cnpg-skip"
 prepare_project "${manual_cnpg_project}"
@@ -336,6 +424,37 @@ if run_update "${dirty_project}" "${upstream}" "${base_tmp}/dirty.out" "${base_t
 fi
 assert_json_failure "${base_tmp}/dirty.out"
 
+unsupported_upstream_project="${base_tmp}/unsupported-upstream"
+prepare_project "${unsupported_upstream_project}"
+unsupported_cnpg_upstream="${base_tmp}/unsupported-cnpg-upstream"
+mkdir -p "${unsupported_cnpg_upstream}/cnpg"
+cp "${CNPG_FIXTURES}/standard-trixie-valid.json" "${unsupported_cnpg_upstream}/cnpg/standard-trixie-valid.json"
+cp "${CNPG_FIXTURES}/standard-bookworm-valid.json" "${unsupported_cnpg_upstream}/cnpg/standard-bookworm-valid.json"
+python3 - "${unsupported_cnpg_upstream}/cnpg/standard-trixie-valid.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["manifests"].append({
+    "tag": "20-standard-trixie",
+    "digest": "sha256:2020202020202020202020202020202020202020202020202020202020202020",
+    "platforms": ["linux/amd64", "linux/arm64"],
+})
+path.write_text(json.dumps(payload, separators=(",", ":")))
+PY
+ln -s "${PKG_FIXTURES}" "${unsupported_cnpg_upstream}/packages"
+cp "${BARMAN_PLUGIN_FIXTURE}" "${unsupported_cnpg_upstream}/barman-plugin.json"
+if run_update "${unsupported_upstream_project}" "${unsupported_cnpg_upstream}" "${base_tmp}/unsupported-upstream.out" "${base_tmp}/unsupported-upstream.err"; then
+  diag "make update" "reject-unsupported-upstream-cnpg-tuple" "non-zero" "exit 0" "Unsupported upstream CNPG tuples must hard-fail."
+  exit 1
+fi
+assert_json_failure "${base_tmp}/unsupported-upstream.out"
+grep -Eq -q 'pg_major=20 debian_variant=trixie|20-standard-trixie' "${base_tmp}/unsupported-upstream.err" "${base_tmp}/unsupported-upstream.out" || { diag "grep unsupported upstream tuple" "reject-unsupported-upstream-cnpg-tuple" "diagnostic names rejected tuple" "$(cat "${base_tmp}/unsupported-upstream.err") $(cat "${base_tmp}/unsupported-upstream.out")" "Name unsupported upstream CNPG tuples in failure diagnostics."; exit 1; }
+status="$(cd "${unsupported_upstream_project}" && git status --porcelain --untracked-files=all)"
+[[ -z "${status}" ]] || { diag "git status" "reject-unsupported-upstream-cnpg-tuple" "clean" "${status}" "Unsupported upstream tuple failures must not leave partial changes."; exit 1; }
+mark_fixture_executed reject-unsupported-debian-or-pg
+
 hard_project="${base_tmp}/hard-fail"
 prepare_project "${hard_project}"
 set_entry_field "${hard_project}/cloudnative-pg-timescaledb/versions.yaml" "18" "bookworm" "publish" 'true'
@@ -348,6 +467,7 @@ fi
 assert_json_failure "${base_tmp}/hard.out"
 status="$(cd "${hard_project}" && git status --porcelain --untracked-files=all)"
 [[ -z "${status}" ]] || { diag "git status" "hard-fail" "clean" "${status}" "Hard-fail update must not leave partial generated changes."; exit 1; }
+mark_fixture_executed hard-fail-publishable-unavailable
 
 generate_fail_project="${base_tmp}/generate-fail"
 prepare_project "${generate_fail_project}"
@@ -381,9 +501,11 @@ if run_update "${latest_project}" "${upstream}" "${base_tmp}/latest.out" "${base
   exit 1
 fi
 assert_json_failure "${base_tmp}/latest.out"
+mark_fixture_executed reject-latest-moved-from-pg18-trixie
 
 barman_project="${base_tmp}/barman"
 prepare_project "${barman_project}"
+set_entry_field "${barman_project}/cloudnative-pg-timescaledb/versions.yaml" "18" "trixie" "publish" 'false'
 set_entry_field "${barman_project}/cloudnative-pg-timescaledb/versions.yaml" "18" "trixie" "skip_reason" '"Install barman-cloud in image path"'
 (cd "${barman_project}" && git add . && git commit -qm barman-input)
 if run_update "${barman_project}" "${upstream}" "${base_tmp}/barman.out" "${base_tmp}/barman.err"; then
@@ -391,6 +513,10 @@ if run_update "${barman_project}" "${upstream}" "${base_tmp}/barman.out" "${base
   exit 1
 fi
 assert_json_failure "${base_tmp}/barman.out"
+grep -Eq 'no legacy Barman tooling|CloudNativePG Barman Cloud Plugin|barman-cloud' "${base_tmp}/barman.out" "${base_tmp}/barman.err" || { diag "grep barman failure" "reject-barman-tooling-in-image-path" "Barman boundary failure reason" "$(cat "${base_tmp}/barman.err") $(cat "${base_tmp}/barman.out")" "Exercise the legacy Barman tooling guard."; exit 1; }
+mark_fixture_executed reject-barman-tooling-in-image-path
+
+assert_all_named_fixtures_executed
 
 rm -rf "${base_tmp}"
 printf 'PASS story-2.3 deterministic update fixtures\n'

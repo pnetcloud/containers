@@ -1,0 +1,34 @@
+{
+  "manifests": [
+    {
+      "tag": "17-standard-trixie",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "17.6-standard-trixie",
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "17.10-standard-trixie",
+      "digest": "sha256:fdc339fb142d56b852e2c9ca2474f1d52bf798ff9b8381800b520597f0ff7cc2",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "18-standard-trixie",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "18.4-standard-trixie",
+      "digest": "sha256:184219ecec559d15fa03932b0d3005e0372f7027746bb682aca478bc4918f776",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "19beta1-standard-trixie",
+      "digest": "sha256:ce40f7266c82a453bb38f4a253819a8226606460e6fc12bbd4abfe337f955e60",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+schema_version: "1"
+image:
+  registry: "ghcr.io"
+  repository: "pnetcloud/cloudnative-pg-timescaledb"
+  current_major: "18"
+  primary_debian_variant: trixie
+allowed:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: ["trixie", "bookworm"]
+  platforms: ["linux/amd64", "linux/arm64"]
+barman_plugin:
+  release: "v0.13.0"
+  manifest_url: "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.13.0/manifest.yaml"
+  plugin_image: "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
+  sidecar_image: "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
+  source_url: "https://github.com/cloudnative-pg/plugin-barman-cloud/releases"
+  updated_at_utc: "2026-06-10"
+entries:
+  - pg_major: "17"
+    pg_version: "17.10"
+    debian_variant: trixie
+    cnpg_tag: "17.10-standard-trixie"
+    cnpg_digest: "sha256:fdc339fb142d56b852e2c9ca2474f1d52bf798ff9b8381800b520597f0ff7cc2"
+    timescaledb_version: "2.27.2"
+    timescaledb_package_name: "timescaledb-2-postgresql-17"
+    timescaledb_package_version: "2.27.2~debian13-1710"
+    toolkit_version: "1.23.0"
+    toolkit_package_name: "timescaledb-toolkit-postgresql-17"
+    toolkit_package_version: "1:1.23.0~debian13"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: true
+    experimental: false
+    latest_eligible: false
+    skip_reason: ""
+    tags: ["17", "17-pg17.10-ts2.27.2-20260609"]
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: trixie
+    cnpg_tag: "18.4-standard-trixie"
+    cnpg_digest: "sha256:184219ecec559d15fa03932b0d3005e0372f7027746bb682aca478bc4918f776"
+    timescaledb_version: "2.27.2"
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
+    timescaledb_package_version: "2.27.2~debian13-1804"
+    toolkit_version: "1.23.0"
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+    toolkit_package_version: "1:1.23.0~debian13"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: true
+    skip_reason: "Install barman-cloud in image path"
+    tags: ["18", "18-pg18.4-ts2.27.2-20260609", "latest"]
+  - pg_major: "19beta1"
+    pg_version: "19beta1"
+    debian_variant: trixie
+    cnpg_tag: "19beta1-standard-trixie"
+    cnpg_digest: "sha256:ce40f7266c82a453bb38f4a253819a8226606460e6fc12bbd4abfe337f955e60"
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-19"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-19"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: true
+    latest_eligible: false
+    skip_reason: "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists"
+  - pg_major: "17"
+    pg_version: "17.10"
+    debian_variant: bookworm
+    cnpg_tag: "17.10-standard-bookworm"
+    cnpg_digest: "sha256:1273ed2ff3c3777541a010f98b805f139810f89ea240b8caeaee3efaca7bb2b8"
+    timescaledb_version: "2.27.2"
+    timescaledb_package_name: "timescaledb-2-postgresql-17"
+    timescaledb_package_version: "2.27.2~debian12-1710"
+    toolkit_version: "1.23.0"
+    toolkit_package_name: "timescaledb-toolkit-postgresql-17"
+    toolkit_package_version: "1:1.23.0~debian12"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: true
+    experimental: false
+    latest_eligible: false
+    skip_reason: ""
+    tags: ["17-bookworm", "17-pg17.10-ts2.27.2-20260609-bookworm"]
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: bookworm
+    cnpg_tag: "18.4-standard-bookworm"
+    cnpg_digest: "sha256:6d1090d7ae1ea1cf2ba35959ba0fea38a78df91cf99e02e94a28b8e1f6df3de5"
+    timescaledb_version: "2.27.2"
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
+    timescaledb_package_version: "2.27.2~debian12-1804"
+    toolkit_version: "1.23.0"
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+    toolkit_package_version: "1:1.23.0~debian12"
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: true
+    experimental: false
+    latest_eligible: false
+    skip_reason: ""
+    tags: ["18-bookworm", "18-pg18.4-ts2.27.2-20260609-bookworm"]
+  - pg_major: "19beta1"
+    pg_version: "19beta1"
+    debian_variant: bookworm
+    cnpg_tag: "19beta1-standard-bookworm"
+    cnpg_digest: "sha256:5622736e77f38a017b0ed8ea64a8d690808235492344f831a9863f38779f2a71"
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-19"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-19"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: true
+    latest_eligible: false
+    skip_reason: "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 bookworm linux/amd64 linux/arm64 missing packages while CNPG exists"

@@ -1,1 +1,649 @@
-Fixture produces a resolver-owned diff while preserving policy fields.
+diff --git a/cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml b/cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
+index 9be60ab..ad7f4ff 100644
+--- a/cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
++++ b/cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
+@@ -4,8 +4,4 @@ kind: ClusterImageCatalog
+ metadata:
+   name: cloudnative-pg-timescaledb-standard-bookworm
+ spec:
+-  images:
+-    - major: 17
+-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609-bookworm@sha256:b0dc5fb71a029ba46b83211a96e443e504365b5355f9005bfdbaef2fd499e3b2
+-    - major: 18
+-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609-bookworm@sha256:906d0275f6030e45f164a5866cfebd287a407655c7d83b1316afd747693c8dc8
++  images: []
+diff --git a/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml b/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
+index b845964..e1f93b5 100644
+--- a/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
++++ b/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
+@@ -4,8 +4,4 @@ kind: ClusterImageCatalog
+ metadata:
+   name: cloudnative-pg-timescaledb-standard-trixie
+ spec:
+-  images:
+-    - major: 17
+-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609@sha256:4e555145268a3f81ca35667ddcafea59f43142ac9af1f51ded6082243f88d584
+-    - major: 18
+-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:16d532e04dec8c5d41094c2df4f40ff7a1134d983f359a359115eeb6075a5e7a
++  images: []
+diff --git a/cloudnative-pg-timescaledb/docker-bake.hcl b/cloudnative-pg-timescaledb/docker-bake.hcl
+index edd2c6c..7a442ea 100644
+--- a/cloudnative-pg-timescaledb/docker-bake.hcl
++++ b/cloudnative-pg-timescaledb/docker-bake.hcl
+@@ -2,61 +2,5 @@
+ # Local build targets are generated from versions.yaml publishable entries.
+ group "default" {
+   targets = [
+-    "pg17-trixie",
+-    "pg18-trixie",
+-    "pg17-bookworm",
+-    "pg18-bookworm",
+   ]
+ }
+-
+-target "pg17-trixie" {
+-  context = "cloudnative-pg-timescaledb"
+-  dockerfile = "generated/17/trixie/Dockerfile"
+-  platforms = ["linux/amd64", "linux/arm64"]
+-  tags = ["local/pg17-trixie:skeleton"]
+-  labels = {
+-    "org.opencontainers.image.version" = "17"
+-    "io.pnet.pg-major" = "17"
+-    "io.pnet.debian-variant" = "trixie"
+-    "io.pnet.publish" = "true"
+-  }
+-}
+-
+-target "pg18-trixie" {
+-  context = "cloudnative-pg-timescaledb"
+-  dockerfile = "generated/18/trixie/Dockerfile"
+-  platforms = ["linux/amd64", "linux/arm64"]
+-  tags = ["local/pg18-trixie:skeleton"]
+-  labels = {
+-    "org.opencontainers.image.version" = "18"
+-    "io.pnet.pg-major" = "18"
+-    "io.pnet.debian-variant" = "trixie"
+-    "io.pnet.publish" = "true"
+-  }
+-}
+-
+-target "pg17-bookworm" {
+-  context = "cloudnative-pg-timescaledb"
+-  dockerfile = "generated/17/bookworm/Dockerfile"
+-  platforms = ["linux/amd64", "linux/arm64"]
+-  tags = ["local/pg17-bookworm:skeleton"]
+-  labels = {
+-    "org.opencontainers.image.version" = "17"
+-    "io.pnet.pg-major" = "17"
+-    "io.pnet.debian-variant" = "bookworm"
+-    "io.pnet.publish" = "true"
+-  }
+-}
+-
+-target "pg18-bookworm" {
+-  context = "cloudnative-pg-timescaledb"
+-  dockerfile = "generated/18/bookworm/Dockerfile"
+-  platforms = ["linux/amd64", "linux/arm64"]
+-  tags = ["local/pg18-bookworm:skeleton"]
+-  labels = {
+-    "org.opencontainers.image.version" = "18"
+-    "io.pnet.pg-major" = "18"
+-    "io.pnet.debian-variant" = "bookworm"
+-    "io.pnet.publish" = "true"
+-  }
+-}
+diff --git a/cloudnative-pg-timescaledb/docs/generated/compatibility-table.md b/cloudnative-pg-timescaledb/docs/generated/compatibility-table.md
+index 39693bb..e55f826 100644
+--- a/cloudnative-pg-timescaledb/docs/generated/compatibility-table.md
++++ b/cloudnative-pg-timescaledb/docs/generated/compatibility-table.md
+@@ -4,9 +4,9 @@
+
+ | PostgreSQL | Debian | Publish | Experimental | Latest Eligible | Platforms | Skip Reason |
+ | --- | --- | --- | --- | --- | --- | --- |
+-| 17 | trixie | true | false | false | linux/amd64, linux/arm64 |  |
+-| 18 | trixie | true | false | true | linux/amd64, linux/arm64 |  |
++| 17 | trixie | false | false | false | linux/amd64, linux/arm64 | Manual maintainer hold |
++| 18 | trixie | false | false | true | linux/amd64, linux/arm64 | Pending resolver update fixture |
+ | 19beta1 | trixie | false | true | false | linux/amd64, linux/arm64 | timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists |
+-| 17 | bookworm | true | false | false | linux/amd64, linux/arm64 |  |
+-| 18 | bookworm | true | false | false | linux/amd64, linux/arm64 |  |
++| 17 | bookworm | false | false | false | linux/amd64, linux/arm64 | Pending resolver update fixture |
++| 18 | bookworm | false | false | false | linux/amd64, linux/arm64 | Pending resolver update fixture |
+ | 19beta1 | bookworm | false | true | false | linux/amd64, linux/arm64 | timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 bookworm linux/amd64 linux/arm64 missing packages while CNPG exists |
+diff --git a/cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile b/cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile
+deleted file mode 100644
+index 7fe228c..0000000
+--- a/cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile
++++ /dev/null
+@@ -1,59 +0,0 @@
+-# Generated by cloudnative-pg-timescaledb/scripts/generate-dockerfiles.sh
+-# Source entry: 17-bookworm
+-# Do not edit by hand; update cloudnative-pg-timescaledb/versions.yaml and run make generate.
+-FROM ghcr.io/cloudnative-pg/postgresql:17.10-standard-bookworm@sha256:1273ed2ff3c3777541a010f98b805f139810f89ea240b8caeaee3efaca7bb2b8
+-
+-USER root
+-
+-COPY scripts/verify-package-install.sh /usr/local/bin/verify-package-install
+-
+-ARG TARGETARCH
+-RUN set -eux; \
+-    case "bookworm:${TARGETARCH}" in \
+-      trixie:amd64|trixie:arm64|bookworm:amd64|bookworm:arm64) ;; \
+-      *) echo "unsupported Debian variant or target architecture: bookworm:${TARGETARCH}" >&2; exit 1 ;; \
+-    esac; \
+-    . /etc/os-release; \
+-    test "${VERSION_CODENAME}" = "bookworm"; \
+-    test "$(dpkg --print-architecture)" = "${TARGETARCH}"; \
+-    export DEBIAN_FRONTEND=noninteractive; \
+-    apt-get update; \
+-    apt-get upgrade -y; \
+-    apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+-    install -d -m 0755 /usr/share/keyrings; \
+-    curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /usr/share/keyrings/timescale-timescaledb.gpg; \
+-    echo "deb [signed-by=/usr/share/keyrings/timescale-timescaledb.gpg] https://packagecloud.io/timescale/timescaledb/debian/ bookworm main" > /etc/apt/sources.list.d/timescale-timescaledb.list; \
+-    apt-get update; \
+-    apt-get install -y --no-install-recommends \
+-      "timescaledb-2-postgresql-17=2.27.2~debian12-1710" \
+-      "timescaledb-toolkit-postgresql-17=1:1.23.0~debian12"; \
+-    /usr/local/bin/verify-package-install \
+-      "timescaledb-2-postgresql-17" "2.27.2~debian12-1710" \
+-      "timescaledb-toolkit-postgresql-17" "1:1.23.0~debian12"; \
+-    if [ "base" = "package" ]; then \
+-      apt-get install -y --no-install-recommends "postgresql-17-pgvector="; \
+-      dpkg-query -W -f='${Version}' "postgresql-17-pgvector" | grep -Fx ""; \
+-    else \
+-      test -f "/usr/share/postgresql/17/extension/vector.control"; \
+-      dpkg-query -S "/usr/share/postgresql/17/extension/vector.control"; \
+-    fi; \
+-    if [ "base" = "package" ]; then \
+-      apt-get install -y --no-install-recommends "postgresql-17-pgaudit="; \
+-      dpkg-query -W -f='${Version}' "postgresql-17-pgaudit" | grep -Fx ""; \
+-    else \
+-      test -f "/usr/share/postgresql/17/extension/pgaudit.control"; \
+-      dpkg-query -S "/usr/share/postgresql/17/extension/pgaudit.control"; \
+-    fi; \
+-    rm -rf /var/lib/apt/lists/* /tmp/*
+-
+-LABEL org.opencontainers.image.source="https://github.com/pnetcloud/containers" \
+-      org.opencontainers.image.created="2026-06-09" \
+-      org.pnet.postgresql.major="17" \
+-      org.pnet.postgresql.version="17.10" \
+-      org.pnet.debian.variant="bookworm" \
+-      org.pnet.cnpg.tag="17.10-standard-bookworm" \
+-      org.pnet.cnpg.digest="sha256:1273ed2ff3c3777541a010f98b805f139810f89ea240b8caeaee3efaca7bb2b8" \
+-      org.pnet.timescaledb.version="2.27.2" \
+-      org.pnet.timescaledb_toolkit.version="1.23.0"
+-
+-USER 26
+diff --git a/cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile b/cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile
+deleted file mode 100644
+index 58a8f59..0000000
+--- a/cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile
++++ /dev/null
+@@ -1,59 +0,0 @@
+-# Generated by cloudnative-pg-timescaledb/scripts/generate-dockerfiles.sh
+-# Source entry: 17-trixie
+-# Do not edit by hand; update cloudnative-pg-timescaledb/versions.yaml and run make generate.
+-FROM ghcr.io/cloudnative-pg/postgresql:17.10-standard-trixie@sha256:fdc339fb142d56b852e2c9ca2474f1d52bf798ff9b8381800b520597f0ff7cc2
+-
+-USER root
+-
+-COPY scripts/verify-package-install.sh /usr/local/bin/verify-package-install
+-
+-ARG TARGETARCH
+-RUN set -eux; \
+-    case "trixie:${TARGETARCH}" in \
+-      trixie:amd64|trixie:arm64|bookworm:amd64|bookworm:arm64) ;; \
+-      *) echo "unsupported Debian variant or target architecture: trixie:${TARGETARCH}" >&2; exit 1 ;; \
+-    esac; \
+-    . /etc/os-release; \
+-    test "${VERSION_CODENAME}" = "trixie"; \
+-    test "$(dpkg --print-architecture)" = "${TARGETARCH}"; \
+-    export DEBIAN_FRONTEND=noninteractive; \
+-    apt-get update; \
+-    apt-get upgrade -y; \
+-    apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+-    install -d -m 0755 /usr/share/keyrings; \
+-    curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /usr/share/keyrings/timescale-timescaledb.gpg; \
+-    echo "deb [signed-by=/usr/share/keyrings/timescale-timescaledb.gpg] https://packagecloud.io/timescale/timescaledb/debian/ trixie main" > /etc/apt/sources.list.d/timescale-timescaledb.list; \
+-    apt-get update; \
+-    apt-get install -y --no-install-recommends \
+-      "timescaledb-2-postgresql-17=2.27.2~debian13-1710" \
+-      "timescaledb-toolkit-postgresql-17=1:1.23.0~debian13"; \
+-    /usr/local/bin/verify-package-install \
+-      "timescaledb-2-postgresql-17" "2.27.2~debian13-1710" \
+-      "timescaledb-toolkit-postgresql-17" "1:1.23.0~debian13"; \
+-    if [ "base" = "package" ]; then \
+-      apt-get install -y --no-install-recommends "postgresql-17-pgvector="; \
+-      dpkg-query -W -f='${Version}' "postgresql-17-pgvector" | grep -Fx ""; \
+-    else \
+-      test -f "/usr/share/postgresql/17/extension/vector.control"; \
+-      dpkg-query -S "/usr/share/postgresql/17/extension/vector.control"; \
+-    fi; \
+-    if [ "base" = "package" ]; then \
+-      apt-get install -y --no-install-recommends "postgresql-17-pgaudit="; \
+-      dpkg-query -W -f='${Version}' "postgresql-17-pgaudit" | grep -Fx ""; \
+-    else \
+-      test -f "/usr/share/postgresql/17/extension/pgaudit.control"; \
+-      dpkg-query -S "/usr/share/postgresql/17/extension/pgaudit.control"; \
+-    fi; \
+-    rm -rf /var/lib/apt/lists/* /tmp/*
+-
+-LABEL org.opencontainers.image.source="https://github.com/pnetcloud/containers" \
+-      org.opencontainers.image.created="2026-06-09" \
+-      org.pnet.postgresql.major="17" \
+-      org.pnet.postgresql.version="17.10" \
+-      org.pnet.debian.variant="trixie" \
+-      org.pnet.cnpg.tag="17.10-standard-trixie" \
+-      org.pnet.cnpg.digest="sha256:fdc339fb142d56b852e2c9ca2474f1d52bf798ff9b8381800b520597f0ff7cc2" \
+-      org.pnet.timescaledb.version="2.27.2" \
+-      org.pnet.timescaledb_toolkit.version="1.23.0"
+-
+-USER 26
+diff --git a/cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile b/cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile
+deleted file mode 100644
+index f6e6a2d..0000000
+--- a/cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile
++++ /dev/null
+@@ -1,59 +0,0 @@
+-# Generated by cloudnative-pg-timescaledb/scripts/generate-dockerfiles.sh
+-# Source entry: 18-bookworm
+-# Do not edit by hand; update cloudnative-pg-timescaledb/versions.yaml and run make generate.
+-FROM ghcr.io/cloudnative-pg/postgresql:18.4-standard-bookworm@sha256:6d1090d7ae1ea1cf2ba35959ba0fea38a78df91cf99e02e94a28b8e1f6df3de5
+-
+-USER root
+-
+-COPY scripts/verify-package-install.sh /usr/local/bin/verify-package-install
+-
+-ARG TARGETARCH
+-RUN set -eux; \
+-    case "bookworm:${TARGETARCH}" in \
+-      trixie:amd64|trixie:arm64|bookworm:amd64|bookworm:arm64) ;; \
+-      *) echo "unsupported Debian variant or target architecture: bookworm:${TARGETARCH}" >&2; exit 1 ;; \
+-    esac; \
+-    . /etc/os-release; \
+-    test "${VERSION_CODENAME}" = "bookworm"; \
+-    test "$(dpkg --print-architecture)" = "${TARGETARCH}"; \
+-    export DEBIAN_FRONTEND=noninteractive; \
+-    apt-get update; \
+-    apt-get upgrade -y; \
+-    apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+-    install -d -m 0755 /usr/share/keyrings; \
+-    curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /usr/share/keyrings/timescale-timescaledb.gpg; \
+-    echo "deb [signed-by=/usr/share/keyrings/timescale-timescaledb.gpg] https://packagecloud.io/timescale/timescaledb/debian/ bookworm main" > /etc/apt/sources.list.d/timescale-timescaledb.list; \
+-    apt-get update; \
+-    apt-get install -y --no-install-recommends \
+-      "timescaledb-2-postgresql-18=2.27.2~debian12-1804" \
+-      "timescaledb-toolkit-postgresql-18=1:1.23.0~debian12"; \
+-    /usr/local/bin/verify-package-install \
+-      "timescaledb-2-postgresql-18" "2.27.2~debian12-1804" \
+-      "timescaledb-toolkit-postgresql-18" "1:1.23.0~debian12"; \
+-    if [ "base" = "package" ]; then \
+-      apt-get install -y --no-install-recommends "postgresql-18-pgvector="; \
+-      dpkg-query -W -f='${Version}' "postgresql-18-pgvector" | grep -Fx ""; \
+-    else \
+-      test -f "/usr/share/postgresql/18/extension/vector.control"; \
+-      dpkg-query -S "/usr/share/postgresql/18/extension/vector.control"; \
+-    fi; \
+-    if [ "base" = "package" ]; then \
+-      apt-get install -y --no-install-recommends "postgresql-18-pgaudit="; \
+-      dpkg-query -W -f='${Version}' "postgresql-18-pgaudit" | grep -Fx ""; \
+-    else \
+-      test -f "/usr/share/postgresql/18/extension/pgaudit.control"; \
+-      dpkg-query -S "/usr/share/postgresql/18/extension/pgaudit.control"; \
+-    fi; \
+-    rm -rf /var/lib/apt/lists/* /tmp/*
+-
+-LABEL org.opencontainers.image.source="https://github.com/pnetcloud/containers" \
+-      org.opencontainers.image.created="2026-06-09" \
+-      org.pnet.postgresql.major="18" \
+-      org.pnet.postgresql.version="18.4" \
+-      org.pnet.debian.variant="bookworm" \
+-      org.pnet.cnpg.tag="18.4-standard-bookworm" \
+-      org.pnet.cnpg.digest="sha256:6d1090d7ae1ea1cf2ba35959ba0fea38a78df91cf99e02e94a28b8e1f6df3de5" \
+-      org.pnet.timescaledb.version="2.27.2" \
+-      org.pnet.timescaledb_toolkit.version="1.23.0"
+-
+-USER 26
+diff --git a/cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile b/cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile
+deleted file mode 100644
+index bcf0517..0000000
+--- a/cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile
++++ /dev/null
+@@ -1,59 +0,0 @@
+-# Generated by cloudnative-pg-timescaledb/scripts/generate-dockerfiles.sh
+-# Source entry: 18-trixie
+-# Do not edit by hand; update cloudnative-pg-timescaledb/versions.yaml and run make generate.
+-FROM ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie@sha256:184219ecec559d15fa03932b0d3005e0372f7027746bb682aca478bc4918f776
+-
+-USER root
+-
+-COPY scripts/verify-package-install.sh /usr/local/bin/verify-package-install
+-
+-ARG TARGETARCH
+-RUN set -eux; \
+-    case "trixie:${TARGETARCH}" in \
+-      trixie:amd64|trixie:arm64|bookworm:amd64|bookworm:arm64) ;; \
+-      *) echo "unsupported Debian variant or target architecture: trixie:${TARGETARCH}" >&2; exit 1 ;; \
+-    esac; \
+-    . /etc/os-release; \
+-    test "${VERSION_CODENAME}" = "trixie"; \
+-    test "$(dpkg --print-architecture)" = "${TARGETARCH}"; \
+-    export DEBIAN_FRONTEND=noninteractive; \
+-    apt-get update; \
+-    apt-get upgrade -y; \
+-    apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+-    install -d -m 0755 /usr/share/keyrings; \
+-    curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /usr/share/keyrings/timescale-timescaledb.gpg; \
+-    echo "deb [signed-by=/usr/share/keyrings/timescale-timescaledb.gpg] https://packagecloud.io/timescale/timescaledb/debian/ trixie main" > /etc/apt/sources.list.d/timescale-timescaledb.list; \
+-    apt-get update; \
+-    apt-get install -y --no-install-recommends \
+-      "timescaledb-2-postgresql-18=2.27.2~debian13-1804" \
+-      "timescaledb-toolkit-postgresql-18=1:1.23.0~debian13"; \
+-    /usr/local/bin/verify-package-install \
+-      "timescaledb-2-postgresql-18" "2.27.2~debian13-1804" \
+-      "timescaledb-toolkit-postgresql-18" "1:1.23.0~debian13"; \
+-    if [ "base" = "package" ]; then \
+-      apt-get install -y --no-install-recommends "postgresql-18-pgvector="; \
+-      dpkg-query -W -f='${Version}' "postgresql-18-pgvector" | grep -Fx ""; \
+-    else \
+-      test -f "/usr/share/postgresql/18/extension/vector.control"; \
+-      dpkg-query -S "/usr/share/postgresql/18/extension/vector.control"; \
+-    fi; \
+-    if [ "base" = "package" ]; then \
+-      apt-get install -y --no-install-recommends "postgresql-18-pgaudit="; \
+-      dpkg-query -W -f='${Version}' "postgresql-18-pgaudit" | grep -Fx ""; \
+-    else \
+-      test -f "/usr/share/postgresql/18/extension/pgaudit.control"; \
+-      dpkg-query -S "/usr/share/postgresql/18/extension/pgaudit.control"; \
+-    fi; \
+-    rm -rf /var/lib/apt/lists/* /tmp/*
+-
+-LABEL org.opencontainers.image.source="https://github.com/pnetcloud/containers" \
+-      org.opencontainers.image.created="2026-06-09" \
+-      org.pnet.postgresql.major="18" \
+-      org.pnet.postgresql.version="18.4" \
+-      org.pnet.debian.variant="trixie" \
+-      org.pnet.cnpg.tag="18.4-standard-trixie" \
+-      org.pnet.cnpg.digest="sha256:184219ecec559d15fa03932b0d3005e0372f7027746bb682aca478bc4918f776" \
+-      org.pnet.timescaledb.version="2.27.2" \
+-      org.pnet.timescaledb_toolkit.version="1.23.0"
+-
+-USER 26
+diff --git a/cloudnative-pg-timescaledb/matrix.json b/cloudnative-pg-timescaledb/matrix.json
+index 9ec8b5d..9a37b34 100644
+--- a/cloudnative-pg-timescaledb/matrix.json
++++ b/cloudnative-pg-timescaledb/matrix.json
+@@ -1,17 +1,10 @@
+ {
+-  "include": [
++  "include": [],
++  "skipped": [
+     {
+       "bake_target": "pg17-trixie",
+-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609",
+       "debian_variant": "trixie",
+-      "digest": "",
+-      "dockerfile": "cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile",
+       "experimental": false,
+-      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+-      "intended_tags": [
+-        "17",
+-        "17-pg17.10-ts2.27.2-20260609"
+-      ],
+       "latest_eligible": false,
+       "pg_major": "17",
+       "pg_version": "17.10",
+@@ -19,26 +12,14 @@
+         "linux/amd64",
+         "linux/arm64"
+       ],
+-      "provenance_ref": "",
+-      "publish": true,
+-      "sbom_ref": "",
+-      "scan_result": "pending",
+-      "signature_ref": "",
+-      "timescaledb_version": "2.27.2"
++      "publish": false,
++      "skip_reason": "Manual maintainer hold",
++      "skipped_marker": "cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile.skipped.json"
+     },
+     {
+       "bake_target": "pg18-trixie",
+-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609",
+       "debian_variant": "trixie",
+-      "digest": "",
+-      "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
+       "experimental": false,
+-      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+-      "intended_tags": [
+-        "18",
+-        "18-pg18.4-ts2.27.2-20260609",
+-        "latest"
+-      ],
+       "latest_eligible": true,
+       "pg_major": "18",
+       "pg_version": "18.4",
+@@ -46,25 +27,29 @@
+         "linux/amd64",
+         "linux/arm64"
+       ],
+-      "provenance_ref": "",
+-      "publish": true,
+-      "sbom_ref": "",
+-      "scan_result": "pending",
+-      "signature_ref": "",
+-      "timescaledb_version": "2.27.2"
++      "publish": false,
++      "skip_reason": "Pending resolver update fixture",
++      "skipped_marker": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile.skipped.json"
++    },
++    {
++      "bake_target": "pg19beta1-trixie",
++      "debian_variant": "trixie",
++      "experimental": true,
++      "latest_eligible": false,
++      "pg_major": "19beta1",
++      "pg_version": "19beta1",
++      "platforms": [
++        "linux/amd64",
++        "linux/arm64"
++      ],
++      "publish": false,
++      "skip_reason": "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists",
++      "skipped_marker": "cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile.skipped.json"
+     },
+     {
+       "bake_target": "pg17-bookworm",
+-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609-bookworm",
+       "debian_variant": "bookworm",
+-      "digest": "",
+-      "dockerfile": "cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile",
+       "experimental": false,
+-      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+-      "intended_tags": [
+-        "17-bookworm",
+-        "17-pg17.10-ts2.27.2-20260609-bookworm"
+-      ],
+       "latest_eligible": false,
+       "pg_major": "17",
+       "pg_version": "17.10",
+@@ -72,25 +57,14 @@
+         "linux/amd64",
+         "linux/arm64"
+       ],
+-      "provenance_ref": "",
+-      "publish": true,
+-      "sbom_ref": "",
+-      "scan_result": "pending",
+-      "signature_ref": "",
+-      "timescaledb_version": "2.27.2"
++      "publish": false,
++      "skip_reason": "Pending resolver update fixture",
++      "skipped_marker": "cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile.skipped.json"
+     },
+     {
+       "bake_target": "pg18-bookworm",
+-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609-bookworm",
+       "debian_variant": "bookworm",
+-      "digest": "",
+-      "dockerfile": "cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile",
+       "experimental": false,
+-      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+-      "intended_tags": [
+-        "18-bookworm",
+-        "18-pg18.4-ts2.27.2-20260609-bookworm"
+-      ],
+       "latest_eligible": false,
+       "pg_major": "18",
+       "pg_version": "18.4",
+@@ -98,29 +72,9 @@
+         "linux/amd64",
+         "linux/arm64"
+       ],
+-      "provenance_ref": "",
+-      "publish": true,
+-      "sbom_ref": "",
+-      "scan_result": "pending",
+-      "signature_ref": "",
+-      "timescaledb_version": "2.27.2"
+-    }
+-  ],
+-  "skipped": [
+-    {
+-      "bake_target": "pg19beta1-trixie",
+-      "debian_variant": "trixie",
+-      "experimental": true,
+-      "latest_eligible": false,
+-      "pg_major": "19beta1",
+-      "pg_version": "19beta1",
+-      "platforms": [
+-        "linux/amd64",
+-        "linux/arm64"
+-      ],
+       "publish": false,
+-      "skip_reason": "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists",
+-      "skipped_marker": "cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile.skipped.json"
++      "skip_reason": "Pending resolver update fixture",
++      "skipped_marker": "cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile.skipped.json"
+     },
+     {
+       "bake_target": "pg19beta1-bookworm",
+diff --git a/cloudnative-pg-timescaledb/versions.yaml b/cloudnative-pg-timescaledb/versions.yaml
+index 78fe49b..bf8d028 100644
+--- a/cloudnative-pg-timescaledb/versions.yaml
++++ b/cloudnative-pg-timescaledb/versions.yaml
+@@ -17,16 +17,16 @@ barman_plugin:
+   updated_at_utc: "2026-06-10"
+ entries:
+   - pg_major: "17"
+-    pg_version: "17"
++    pg_version: "17.10"
+     debian_variant: trixie
+-    cnpg_tag: "17-standard-trixie"
+-    cnpg_digest: ""
+-    timescaledb_version: ""
++    cnpg_tag: "17.10-standard-trixie"
++    cnpg_digest: "sha256:fdc339fb142d56b852e2c9ca2474f1d52bf798ff9b8381800b520597f0ff7cc2"
++    timescaledb_version: "2.27.2"
+     timescaledb_package_name: "timescaledb-2-postgresql-17"
+-    timescaledb_package_version: ""
+-    toolkit_version: ""
++    timescaledb_package_version: "2.27.2~debian13-1710"
++    toolkit_version: "1.23.0"
+     toolkit_package_name: "timescaledb-toolkit-postgresql-17"
+-    toolkit_package_version: ""
++    toolkit_package_version: "1:1.23.0~debian13"
+     pgvector_source: base
+     pgvector_package_version: ""
+     pgaudit_source: base
+@@ -37,16 +37,16 @@ entries:
+     latest_eligible: false
+     skip_reason: "Manual maintainer hold"
+   - pg_major: "18"
+-    pg_version: "18"
++    pg_version: "18.4"
+     debian_variant: trixie
+-    cnpg_tag: "18-standard-trixie"
+-    cnpg_digest: ""
+-    timescaledb_version: ""
++    cnpg_tag: "18.4-standard-trixie"
++    cnpg_digest: "sha256:184219ecec559d15fa03932b0d3005e0372f7027746bb682aca478bc4918f776"
++    timescaledb_version: "2.27.2"
+     timescaledb_package_name: "timescaledb-2-postgresql-18"
+-    timescaledb_package_version: ""
+-    toolkit_version: ""
++    timescaledb_package_version: "2.27.2~debian13-1804"
++    toolkit_version: "1.23.0"
+     toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+-    toolkit_package_version: ""
++    toolkit_package_version: "1:1.23.0~debian13"
+     pgvector_source: base
+     pgvector_package_version: ""
+     pgaudit_source: base
+@@ -60,7 +60,7 @@ entries:
+     pg_version: "19beta1"
+     debian_variant: trixie
+     cnpg_tag: "19beta1-standard-trixie"
+-    cnpg_digest: ""
++    cnpg_digest: "sha256:ce40f7266c82a453bb38f4a253819a8226606460e6fc12bbd4abfe337f955e60"
+     timescaledb_version: ""
+     timescaledb_package_name: "timescaledb-2-postgresql-19"
+     timescaledb_package_version: ""
+@@ -77,16 +77,16 @@ entries:
+     latest_eligible: false
+     skip_reason: "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists"
+   - pg_major: "17"
+-    pg_version: "17"
++    pg_version: "17.10"
+     debian_variant: bookworm
+-    cnpg_tag: "17-standard-bookworm"
+-    cnpg_digest: ""
+-    timescaledb_version: ""
++    cnpg_tag: "17.10-standard-bookworm"
++    cnpg_digest: "sha256:1273ed2ff3c3777541a010f98b805f139810f89ea240b8caeaee3efaca7bb2b8"
++    timescaledb_version: "2.27.2"
+     timescaledb_package_name: "timescaledb-2-postgresql-17"
+-    timescaledb_package_version: ""
+-    toolkit_version: ""
++    timescaledb_package_version: "2.27.2~debian12-1710"
++    toolkit_version: "1.23.0"
+     toolkit_package_name: "timescaledb-toolkit-postgresql-17"
+-    toolkit_package_version: ""
++    toolkit_package_version: "1:1.23.0~debian12"
+     pgvector_source: base
+     pgvector_package_version: ""
+     pgaudit_source: base
+@@ -97,16 +97,16 @@ entries:
+     latest_eligible: false
+     skip_reason: "Pending resolver update fixture"
+   - pg_major: "18"
+-    pg_version: "18"
++    pg_version: "18.4"
+     debian_variant: bookworm
+-    cnpg_tag: "18-standard-bookworm"
+-    cnpg_digest: ""
+-    timescaledb_version: ""
++    cnpg_tag: "18.4-standard-bookworm"
++    cnpg_digest: "sha256:6d1090d7ae1ea1cf2ba35959ba0fea38a78df91cf99e02e94a28b8e1f6df3de5"
++    timescaledb_version: "2.27.2"
+     timescaledb_package_name: "timescaledb-2-postgresql-18"
+-    timescaledb_package_version: ""
+-    toolkit_version: ""
++    timescaledb_package_version: "2.27.2~debian12-1804"
++    toolkit_version: "1.23.0"
+     toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+-    toolkit_package_version: ""
++    toolkit_package_version: "1:1.23.0~debian12"
+     pgvector_source: base
+     pgvector_package_version: ""
+     pgaudit_source: base
+@@ -120,7 +120,7 @@ entries:
+     pg_version: "19beta1"
+     debian_variant: bookworm
+     cnpg_tag: "19beta1-standard-bookworm"
+-    cnpg_digest: ""
++    cnpg_digest: "sha256:5622736e77f38a017b0ed8ea64a8d690808235492344f831a9863f38779f2a71"
+     timescaledb_version: ""
+     timescaledb_package_name: "timescaledb-2-postgresql-19"
+     timescaledb_package_version: ""

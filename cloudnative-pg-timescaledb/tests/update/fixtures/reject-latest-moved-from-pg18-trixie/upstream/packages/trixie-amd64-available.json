@@ -1,0 +1,10 @@
+{
+  "packages": [
+    {"name": "timescaledb-2-postgresql-17", "version": "2.27.2~debian13-1710", "distribution": "trixie", "architecture": "amd64", "pg_major": "17", "package_type": "timescaledb", "source_url": "fixture://trixie/amd64/timescaledb/17"},
+    {"name": "timescaledb-toolkit-postgresql-17", "version": "1:1.23.0~debian13", "distribution": "trixie", "architecture": "amd64", "pg_major": "17", "package_type": "toolkit", "source_url": "fixture://trixie/amd64/toolkit/17"},
+    {"name": "timescaledb-2-postgresql-18", "version": "2.27.2~debian13-1804", "distribution": "trixie", "architecture": "amd64", "pg_major": "18", "package_type": "timescaledb", "source_url": "fixture://trixie/amd64/timescaledb/18"},
+    {"name": "timescaledb-2-postgresql-18", "version": "2.27.2~debian13-1804~rc1", "distribution": "trixie", "architecture": "amd64", "pg_major": "18", "package_type": "timescaledb", "source_url": "fixture://trixie/amd64/timescaledb/18-prerelease"},
+    {"name": "timescaledb-toolkit-postgresql-18", "version": "1:1.23.0~debian13", "distribution": "trixie", "architecture": "amd64", "pg_major": "18", "package_type": "toolkit", "source_url": "fixture://trixie/amd64/toolkit/18"},
+    {"name": "timescaledb-toolkit-postgresql-18", "version": "2.0.0~debian13", "distribution": "trixie", "architecture": "amd64", "pg_major": "18", "package_type": "toolkit", "source_url": "fixture://trixie/amd64/toolkit/18-noepoch"}
+  ]
+}

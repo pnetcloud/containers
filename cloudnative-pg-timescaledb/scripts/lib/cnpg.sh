@@ -186,6 +186,10 @@ def load_fixture_inventory(fixtures_dir, fixture_files, command):
         manifests.extend(load_fixture_file(Path(file_name), command))
     inventory = {}
     for manifest in manifests:
+        if "-standard-" in manifest["tag"] and parse_standard_tag(manifest["tag"]) is None:
+            match = re.fullmatch(r"(?P<pg>[^-]+)(?:-[0-9]{8,12})?-standard-(?P<debian>[^-]+)", manifest["tag"])
+            actual = f"pg_major={match.group('pg') if match else 'unknown'} debian_variant={match.group('debian') if match else 'unknown'} tag={manifest['tag']}"
+            diag(command, manifest["source"], "CNPG standard fixture tags use only PostgreSQL 17, 18, 19beta1 and Debian trixie/bookworm", actual, "Remove unsupported upstream CNPG standard tags from deterministic update fixtures.")
         previous = inventory.get(manifest["tag"])
         if previous and previous != manifest:
             diag(command, manifest["source"], "one manifest per CNPG tag", manifest["tag"], "Remove duplicate/conflicting fixture tag entries.")

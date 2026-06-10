@@ -249,7 +249,7 @@ def update_entries(data, cnpg, packages):
         pkg_row = pkg_by_row[row]
         pg_version = cnpg_row["pg_version"]
         cnpg_tag = cnpg_row["cnpg_tag"]
-        if pg_version == entry["pg_major"] and entry["pg_major"] in {"17", "18"}:
+        if cnpg_row["cnpg_digest"] and pg_version == entry["pg_major"] and entry["pg_major"] in {"17", "18"}:
             match = re.search(rf"-{entry['pg_major']}(?P<minor>[0-9]{{2}})(?:$|[^0-9])", pkg_row["timescaledb_package_version"])
             if match:
                 pg_version = f"{entry['pg_major']}.{int(match.group('minor'))}"
@@ -398,7 +398,7 @@ def build_parser():
     parser = argparse.ArgumentParser(description="Deterministically update resolver-owned metadata.")
     parser.add_argument("mode", choices=["update"])
     parser.add_argument("--metadata", default=str(DEFAULT_METADATA))
-    parser.add_argument("--fixtures", help="Fixture root containing cnpg/ and packages/ inventories.")
+    parser.add_argument("--fixtures", help="Complete fixture root containing cnpg/, packages/, and barman-plugin.json inventories.")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--summary", default=str(SUMMARY_PATH))
     parser.add_argument("--tag-date", default=os.environ.get("TAG_VALIDATION_DATE") or os.environ.get("DATE") or DEFAULT_TAG_DATE, help="UTC release date used to materialize deterministic image tags.")

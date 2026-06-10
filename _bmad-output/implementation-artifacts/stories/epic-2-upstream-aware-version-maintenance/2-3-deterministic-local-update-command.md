@@ -185,6 +185,10 @@ Every implementation story must finish with a working repository state and must 
 - Fixed nested `make update` JSON cleanliness under `make validate` with `--no-print-directory`.
 - Subagent review round 1 found CNPG digest drift, rollback, and fixture-structure gaps; all were fixed.
 - Subagent review round 2 reported no blocking findings.
+- Follow-up review found stale CNPG resolver-owned skip reasons, out-of-contract update JSON, incomplete fixture-root determinism for Barman plugin resolution, generated-only drift reporting, duplicate row detection, failure summary path handling, and release rehearsal fixture-root coupling; all were fixed.
+- `--fixtures` is now a complete deterministic upstream root containing `cnpg/`, `packages/`, and `barman-plugin.json`, so update tests and release rehearsal do not depend on live Barman plugin releases.
+- Follow-up review found unsupported upstream CNPG standard tags could be ignored, unresolved CNPG rows could derive package-minor CNPG tags, and named fixture directories needed executable coverage; all were fixed with resolver guards and fixture execution coverage assertions.
+- Acceptance review required named Story 2.3 fixtures to be real committed inputs instead of marker-only directories; each fixture now carries `input/versions.yaml`, a complete `upstream/` root, expected artifacts, and the runner executes every committed fixture before the supplemental dynamic edge-case checks.
 
 ### Validation Commands
 
@@ -192,7 +196,14 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/tests/update/run.sh` - passed.
 - `make update` - passed, no-op `changed=false`.
 - `make update UPDATE_ARGS=--json` - passed, compact JSON on stdout.
+- `jq 'keys, {changed, exit_code, failure_reason, generated_count:(.generated|length), updated_count:(.updated_entries|length), summary_path}' /tmp/story-2-3-update.json` - passed; JSON fields are exactly `changed`, `updated_entries`, `old`, `new`, `generated`, `summary_path`, `exit_code`, and `failure_reason`.
+- `bash cloudnative-pg-timescaledb/tests/barman-plugin/run.sh` - passed after moving Barman update fixtures into the shared update fixture root.
+- `bash cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh` - passed after release rehearsal consumed the shared update fixture root.
+- `shellcheck -x cloudnative-pg-timescaledb/scripts/update.sh cloudnative-pg-timescaledb/scripts/resolve-versions.sh cloudnative-pg-timescaledb/tests/update/run.sh cloudnative-pg-timescaledb/scripts/lib/cnpg.sh` - passed.
+- `shellcheck -x cloudnative-pg-timescaledb/tests/barman-plugin/run.sh cloudnative-pg-timescaledb/scripts/release-rehearsal.sh cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh` - passed.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile cloudnative-pg-timescaledb/scripts/lib/update_contract.py` - passed.
 - `make validate` - passed.
+- `git diff --check HEAD~1..HEAD` - passed.
 - `git diff --cached --check` - passed.
 - Staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && make validate` - passed.
 
@@ -203,6 +214,10 @@ Every implementation story must finish with a working repository state and must 
 - NFR-1: no-op update leaves a clean tree; hard failures and post-write failures restore metadata/generated artifacts.
 - NFR-5: update JSON and summary output include changed status, updated entries, generated paths, exit code, and failure reason.
 - Additional requirements: Debian remains `trixie`/`bookworm`; PostgreSQL remains `17`, `18`, `19beta1`; `latest_eligible` remains PG18 trixie; legacy in-image Barman tooling remains forbidden.
+- The compact update JSON no longer includes Barman-specific fields; Barman plugin update behavior is verified through metadata/generated doc diffs and the shared summary path while preserving Story 2.3's exact machine contract.
+- Generated-only drift now contributes to top-level `changed=true`; rollback snapshots include the full generated docs directory; dirty update-owned metadata/generated paths fail before update starts.
+- Unsupported upstream CNPG standard tags now hard-fail with tuple diagnostics before update writes, and unresolved CNPG rows keep CNPG tag/skip-reason evidence aligned instead of deriving a tag from package versions.
+- Named Story 2.3 fixture directories now have committed input/upstream/expected data; the update runner executes those fixtures and compares `git diff --binary` against `expected-diff.patch` or clean status against `expected-no-diff`.
 
 ## File List
 
@@ -226,6 +241,14 @@ Every implementation story must finish with a working repository state and must 
 - `cloudnative-pg-timescaledb/tests/story-1-1-source-of-truth.sh`
 - `cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh`
 - `cloudnative-pg-timescaledb/tests/update/**`
+- `cloudnative-pg-timescaledb/tests/update/fixtures/*/expected-diff.patch`
+- `cloudnative-pg-timescaledb/tests/update/fixtures/*/expected-no-diff`
+- `cloudnative-pg-timescaledb/tests/update/fixtures/*/input/versions.yaml`
+- `cloudnative-pg-timescaledb/tests/update/fixtures/*/upstream/**`
+- `cloudnative-pg-timescaledb/tests/update/fixtures/*/expected/contract.txt`
+- `cloudnative-pg-timescaledb/tests/barman-plugin/run.sh`
+- `cloudnative-pg-timescaledb/scripts/release-rehearsal.sh`
+- `cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh`
 - `cloudnative-pg-timescaledb/docs/maintainer-guide/update-process.md`
 
 ## Change Log
@@ -235,3 +258,6 @@ Every implementation story must finish with a working repository state and must 
 - Regenerated committed Dockerfile, matrix, and catalog outputs from updated metadata.
 - Added update fixture runner, fixture directory contract markers, rollback tests, and update documentation.
 - Adjusted earlier validation gates for the post-Story-2 populated metadata state.
+- Hardened deterministic fixture roots, CNPG resolver-owned skip evidence refresh, exact update JSON keys, failure summary output, generated drift detection, full generated-doc rollback coverage, and release rehearsal/Barman fixture consumers.
+- Rejected unsupported upstream CNPG standard tags, kept unresolved CNPG metadata aligned with CNPG evidence, and added named fixture execution coverage checks.
+- Replaced Story 2.3 marker-only update fixture directories with executable committed fixtures and exact normalized expected diffs.

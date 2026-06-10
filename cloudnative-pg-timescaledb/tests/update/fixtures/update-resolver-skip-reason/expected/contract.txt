@@ -1,0 +1,2 @@
+fixture=update-resolver-skip-reason
+kind=diff

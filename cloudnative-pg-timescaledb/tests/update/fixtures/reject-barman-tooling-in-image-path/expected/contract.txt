@@ -1,0 +1,2 @@
+fixture=reject-barman-tooling-in-image-path
+kind=no-diff

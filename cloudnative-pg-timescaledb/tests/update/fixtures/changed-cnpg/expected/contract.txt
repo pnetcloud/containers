@@ -1,0 +1,2 @@
+fixture=changed-cnpg
+kind=diff
