@@ -235,11 +235,13 @@ orchestration_tmp="$(mktemp -d)"
 orchestration_project="${orchestration_tmp}/project"
 orchestration_bin="${orchestration_tmp}/bin"
 orchestration_capture="${orchestration_tmp}/commands.log"
+orchestration_report="${orchestration_tmp}/release-rehearsal-report.md"
 prepare_orchestration_project "${orchestration_project}"
 prepare_orchestration_shims "${orchestration_bin}"
 
 RELEASE_REHEARSAL_CAPTURE="${orchestration_capture}" PATH="${orchestration_bin}:${PATH}" \
-  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" --no-report >/tmp/story-5-9-orchestration.out
+  WORKFLOW_RUN_URL=https://github.com/pnetcloud/containers/actions/runs/1234567890 \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" --report "${orchestration_report}" >/tmp/story-5-9-orchestration.out
 
 for token in \
   'make update' \
@@ -257,6 +259,17 @@ for token in \
   'validate-docs'; do
   if ! grep -Fq "${token}" "${orchestration_capture}"; then
     diag "release rehearsal orchestration" "${orchestration_capture}" "orchestration runs ${token}" "$(cat "${orchestration_capture}")" "Default release rehearsal must execute commands, not only validate fixture evidence."
+    exit 1
+  fi
+done
+
+for token in \
+  '# Release Rehearsal Report' \
+  'Mode: `dry-run`' \
+  'make build PG=18 DEBIAN=trixie PLATFORM=linux/arm64' \
+  'https://github.com/pnetcloud/containers/actions/runs/1234567890'; do
+  if ! grep -Fq "${token}" "${orchestration_report}"; then
+    diag "release rehearsal orchestration report" "${orchestration_report}" "report includes ${token}" "$(cat "${orchestration_report}" 2>/dev/null || true)" "Default release rehearsal must write an uploadable report after executed commands."
     exit 1
   fi
 done
