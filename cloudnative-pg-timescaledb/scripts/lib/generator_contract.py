@@ -404,25 +404,197 @@ def matrix_summary(data, entries):
     }
 
 
-def catalog_summary(data, entries, output_root="cloudnative-pg-timescaledb/catalog"):
+def digest_ref(image, tag, digest):
+    return f"{image}:{tag}@{digest}"
+
+
+def numeric_pg_major(pg_major):
+    match = re.match(r"^([0-9]+)", str(pg_major))
+    return match.group(1) if match else str(pg_major)
+
+
+def immutable_release_tag(entry, tags, command, artifact):
+    tags = tags if isinstance(tags, list) else []
+    suffix = "" if entry["debian_variant"] == "trixie" else f"-{entry['debian_variant']}"
+    prefix = f"{entry['pg_major']}-pg{entry['pg_version']}-ts{entry['timescaledb_version'] or 'unresolved'}-"
+    candidates = []
+    for tag in tags:
+        if not isinstance(tag, str) or not tag.startswith(prefix) or not tag.endswith(suffix):
+            continue
+        if entry["debian_variant"] == "trixie" and any(tag.endswith(f"-{variant}") for variant in ["bookworm"]):
+            continue
+        candidates.append(tag)
+    if len(candidates) != 1:
+        diag(command, artifact, f"one immutable final tag for {row_id(entry)} with prefix {prefix!r} and suffix {suffix!r}", tags, "Publish metadata must include the exact immutable release tag before catalog generation.")
+    return candidates[0]
+
+
+def release_metadata_paths(paths):
+    result = []
+    for raw in paths or []:
+        path = Path(raw)
+        if path.is_dir():
+            result.extend(sorted(child for child in path.rglob("*.json") if child.is_file()))
+        else:
+            result.append(path)
+    return result
+
+
+def release_entry_match(entry, payload, command, artifact):
+    tags = payload.get("final_tags")
+    if not isinstance(tags, list):
+        diag(command, artifact, "release metadata final_tags is a list", repr(tags), "Use Story 4.5 ghcr-release-metadata.json artifacts.")
+    try:
+        immutable_release_tag(entry, tags, command, artifact)
+    except SystemExit:
+        return False
+    return True
+
+
+def load_release_records(data, entries, release_metadata, command):
+    records = {}
+    artifacts = {}
+    paths = release_metadata_paths(release_metadata)
+    for path in paths:
+        try:
+            payload = json.loads(path.read_text())
+        except FileNotFoundError:
+            diag(command, path, "release metadata file exists", str(path), "Pass a Story 4.5 ghcr-release-metadata.json file or a directory containing those files.")
+        except json.JSONDecodeError as exc:
+            diag(command, path, "release metadata is JSON", str(exc), "Use the Story 4.5 release metadata JSON artifact.")
+        if isinstance(payload, list):
+            for index, row in enumerate(payload):
+                if not isinstance(row, dict):
+                    diag(command, path, "release metadata list contains objects", f"index {index}: {type(row).__name__}", "Use release metadata JSON objects.")
+                key, record = normalize_release_record(data, entries, row, command, f"{path}#{index}")
+                if key in records and records[key] != record:
+                    duplicate_release_record_diag(command, key, artifacts[key], f"{path}#{index}", records[key], record)
+                records[key] = record
+                artifacts[key] = f"{path}#{index}"
+        elif isinstance(payload, dict):
+            key, record = normalize_release_record(data, entries, payload, command, str(path))
+            if key in records and records[key] != record:
+                duplicate_release_record_diag(command, key, artifacts[key], str(path), records[key], record)
+            records[key] = record
+            artifacts[key] = str(path)
+        else:
+            diag(command, path, "release metadata is an object or list of objects", type(payload).__name__, "Use Story 4.5 ghcr-release-metadata.json artifacts.")
+    return records
+
+
+def duplicate_release_record_diag(command, key, first_artifact, second_artifact, first, second):
+    diag(
+        command,
+        second_artifact,
+        "one release metadata record per PostgreSQL/Debian entry",
+        {
+            "duplicate_key": f"{key[0]}-{key[1]}",
+            "first_artifact": first_artifact,
+            "second_artifact": second_artifact,
+            "first_release_metadata_record_id": first.get("release_metadata_record_id"),
+            "second_release_metadata_record_id": second.get("release_metadata_record_id"),
+            "first_digest": first.get("digest"),
+            "second_digest": second.get("digest"),
+        },
+        "Keep only one release-complete metadata record for each catalog row before generating catalogs.",
+    )
+
+
+def normalize_release_record(data, entries, payload, command, artifact):
+    image = f"{data['image']['registry']}/{data['image']['repository']}"
+    required = {
+        "image", "release_metadata_record_id", "release_metadata_ref", "published_digest",
+        "final_tags", "scan_result", "sbom_ref", "provenance_ref", "signature_ref",
+        "verified", "index_digest", "platform_digests", "promotion_status",
+        "candidate_digest", "cosign_certificate_identity", "cosign_certificate_issuer",
+    }
+    missing = sorted(required - set(payload))
+    if missing:
+        diag(command, artifact, f"release metadata includes {sorted(required)}", f"missing {missing}", "Use release-complete metadata emitted by the publish job.")
+    if payload.get("image") != image:
+        diag(command, artifact, f"release metadata image is {image}", payload.get("image"), "Do not mix catalogs with another image repository.")
+    published_digest = payload.get("published_digest")
+    index_digest = payload.get("index_digest")
+    if not isinstance(published_digest, str) or not DIGEST_RE.fullmatch(published_digest):
+        diag(command, artifact, "published_digest is sha256:<64 lowercase hex>", repr(published_digest), "Catalogs must pin the manifest-list digest.")
+    candidate_digest = payload.get("candidate_digest")
+    if not isinstance(candidate_digest, str) or not DIGEST_RE.fullmatch(candidate_digest):
+        diag(command, artifact, "candidate_digest is sha256:<64 lowercase hex>", repr(candidate_digest), "Carry candidate digest lineage from Story 4.5 release metadata.")
+    if candidate_digest == published_digest:
+        diag(command, artifact, "candidate_digest is distinct from published index digest", candidate_digest, "Keep platform candidate lineage separate from the manifest-list digest.")
+    if index_digest != published_digest:
+        diag(command, artifact, "published_digest equals index_digest", {"published_digest": published_digest, "index_digest": index_digest}, "Use the published multi-platform manifest-list digest, not a platform digest.")
+    platform_digests = payload.get("platform_digests")
+    if not isinstance(platform_digests, dict) or not platform_digests:
+        diag(command, artifact, "platform_digests is a non-empty object", repr(platform_digests), "Carry every publishable platform digest into release metadata.")
+    if published_digest in set(platform_digests.values()):
+        diag(command, artifact, "published_digest is distinct from per-platform digests", published_digest, "Use the manifest-list digest in catalogs.")
+    if payload.get("scan_result") != "passed" or payload.get("verified") is not True or payload.get("promotion_status") != "validated":
+        diag(command, artifact, "release metadata is scan-passed, verified, and promotion_status validated", {"scan_result": payload.get("scan_result"), "verified": payload.get("verified"), "promotion_status": payload.get("promotion_status")}, "Catalog generation requires release-complete publish metadata.")
+    for key in ["sbom_ref", "provenance_ref", "signature_ref"]:
+        value = payload.get(key)
+        if not isinstance(value, str) or not value.startswith(f"{image}@{published_digest}"):
+            diag(command, artifact, f"{key} is bound to the published digest", value, "Do not catalog unsigned or unprovenanced digests.")
+    identity = payload.get("cosign_certificate_identity")
+    issuer = payload.get("cosign_certificate_issuer")
+    if not isinstance(identity, str) or not re.fullmatch(r"https://github.com/[^/]+/[^/]+/\.github/workflows/build\.yml@refs/(heads|tags)/.+", identity):
+        diag(command, artifact, "cosign_certificate_identity is exact build.yml workflow ref", identity, "Carry signer identity from Story 4.5 release metadata.")
+    if issuer != "https://token.actions.githubusercontent.com":
+        diag(command, artifact, "cosign_certificate_issuer is GitHub Actions OIDC", issuer, "Carry signer issuer from Story 4.5 release metadata.")
+    if payload.get("release_metadata_ref") != f"{image}@{published_digest}":
+        diag(command, artifact, "release_metadata_ref is bound to published digest", payload.get("release_metadata_ref"), "Keep release metadata identity tied to the digest being cataloged.")
+    matches = [entry for entry in entries if release_entry_match(entry, payload, command, artifact)]
+    if len(matches) != 1:
+        diag(command, artifact, "release metadata final_tags match exactly one versions.yaml entry", [row_id(entry) for entry in matches], "Keep final tag policy unambiguous across PostgreSQL and Debian variants.")
+    entry = matches[0]
+    if set(platform_digests) != set(entry["platforms"]):
+        diag(command, artifact, f"platform_digests covers every publishable platform for {row_id(entry)}", {"expected": entry["platforms"], "actual": sorted(platform_digests)}, "Regenerate release metadata only after every publishable platform has completed.")
+    for platform, digest in platform_digests.items():
+        if not isinstance(digest, str) or not DIGEST_RE.fullmatch(digest):
+            diag(command, artifact, f"platform digest for {platform} is sha256:<64 lowercase hex>", repr(digest), "Use immutable platform digests from candidate metadata.")
+    tag = immutable_release_tag(entry, payload["final_tags"], command, artifact)
+    record = {
+        "entry": entry,
+        "image": image,
+        "tag": tag,
+        "digest": published_digest,
+        "image_ref": digest_ref(image, tag, published_digest),
+        "final_tags": payload["final_tags"],
+        "platform_digests": platform_digests,
+        "release_metadata_record_id": payload["release_metadata_record_id"],
+        "release_metadata_ref": payload["release_metadata_ref"],
+    }
+    return (entry["pg_major"], entry["debian_variant"]), record
+
+
+def catalog_summary(data, entries, output_root="cloudnative-pg-timescaledb/catalog", release_metadata=None):
+    release_records = load_release_records(data, entries, release_metadata or [], "generate-catalog")
     catalogs = []
     for debian in ["trixie", "bookworm"]:
-        rows = [entry for entry in entries if entry["debian_variant"] == debian]
+        rows = []
+        for entry in entries:
+            if entry["debian_variant"] != debian or entry["experimental"]:
+                continue
+            record = release_records.get((entry["pg_major"], debian))
+            if record:
+                rows.append(record)
         catalogs.append(
             {
                 "debian_variant": debian,
                 "catalog_path": f"{output_root.rstrip('/')}/catalog-standard-{debian}.yaml",
                 "entries": [
                     {
-                        "pg_major": entry["pg_major"],
-                        "image": image_ref(data, entry),
-                        "digest": entry["cnpg_digest"] if entry["publish"] else "",
-                        "publish": entry["publish"],
-                        "experimental": entry["experimental"],
-                        "latest_eligible": entry["latest_eligible"],
-                        "skip_reason": entry["skip_reason"],
+                        "pg_major": record["entry"]["pg_major"],
+                        "major": int(numeric_pg_major(record["entry"]["pg_major"])),
+                        "debian_variant": debian,
+                        "image": record["image_ref"],
+                        "tag": record["tag"],
+                        "digest": record["digest"],
+                        "source_entry": row_id(record["entry"]),
+                        "platforms": record["entry"]["platforms"],
+                        "release_metadata_record_id": record["release_metadata_record_id"],
                     }
-                    for entry in rows
+                    for record in rows
                 ],
             }
         )
@@ -599,7 +771,7 @@ def render_bake(entries):
     return "\n".join(lines)
 
 
-def render_catalog(data, debian, entries):
+def render_catalog(debian, records):
     lines = [
         "# Generated by cloudnative-pg-timescaledb/scripts/generate-catalog.sh",
         "apiVersion: postgresql.cnpg.io/v1",
@@ -607,21 +779,115 @@ def render_catalog(data, debian, entries):
         "metadata:",
         f"  name: cloudnative-pg-timescaledb-standard-{debian}",
         "spec:",
-        "  images:",
+        "  images:" if records else "  images: []",
     ]
-    for entry in [row for row in entries if row["debian_variant"] == debian]:
+    for record in records:
+        entry = record["entry"]
         lines.extend(
             [
-                f"    - major: {entry['pg_major'].replace('beta1', '')}",
-                f"      image: {image_ref(data, entry)}",
-                f"      sourceEntry: {row_id(entry)}",
-                f"      publish: {str(entry['publish']).lower()}",
-                f"      experimental: {str(entry['experimental']).lower()}",
-                f"      latestEligible: {str(entry['latest_eligible']).lower()}",
-                f"      skipReason: {json.dumps(entry['skip_reason'])}",
+                f"    - major: {numeric_pg_major(entry['pg_major'])}",
+                f"      image: {record['image_ref']}",
             ]
         )
     return "\n".join(lines) + "\n"
+
+
+def parse_catalog_yaml(path, command):
+    try:
+        import yaml
+    except ImportError as exc:
+        diag(command, path, "PyYAML is installed for catalog validation", str(exc), "Install PyYAML or run validation in the project CI image.")
+    try:
+        payload = yaml.safe_load(Path(path).read_text())
+    except FileNotFoundError:
+        diag(command, path, "catalog YAML exists", "missing", "Generate catalogs before validation.")
+    except Exception as exc:
+        diag(command, path, "catalog YAML parses", str(exc), "Keep generated catalog manifests valid YAML.")
+    if not isinstance(payload, dict):
+        diag(command, path, "catalog YAML is a mapping", type(payload).__name__, "Use a CloudNativePG ClusterImageCatalog manifest.")
+    return payload
+
+
+def catalog_variant(payload, path, command):
+    name = payload.get("metadata", {}).get("name") if isinstance(payload.get("metadata"), dict) else ""
+    file_match = re.fullmatch(r"catalog-standard-(trixie|bookworm)\.yaml", Path(path).name)
+    name_match = re.fullmatch(r"cloudnative-pg-timescaledb-standard-(trixie|bookworm)", str(name))
+    if not file_match or not name_match:
+        diag(command, path, "catalog file and metadata.name encode supported matching variants", {"file": Path(path).name, "metadata.name": name}, "Use catalog-standard-<debian>.yaml and cloudnative-pg-timescaledb-standard-<debian>.")
+    if file_match.group(1) != name_match.group(1):
+        diag(command, path, "catalog file variant matches metadata.name variant", {"file_variant": file_match.group(1), "metadata_name_variant": name_match.group(1)}, "Regenerate the catalog so the Kubernetes object identity matches the catalog file.")
+    return file_match.group(1)
+
+
+def split_catalog_image_ref(value, image, release_records):
+    if not isinstance(value, str):
+        return None, None, "catalog image is a string"
+    if "@" not in value:
+        return None, None, "missing digest"
+    left, digest = value.rsplit("@", 1)
+    if not DIGEST_RE.fullmatch(digest):
+        return None, digest, "missing digest"
+    if not left.startswith(f"{image}:"):
+        return None, digest, "wrong image repository"
+    tag = left[len(image) + 1:]
+    if not tag:
+        return None, digest, "missing tag"
+    for record in release_records.values():
+        if digest in set(record["platform_digests"].values()):
+            return tag, digest, "per-platform digest"
+    return tag, digest, ""
+
+
+def validate_catalog_file(data, entries, release_metadata, catalog_path):
+    command = "validate-catalog"
+    release_records = load_release_records(data, entries, release_metadata, command)
+    if not release_records:
+        diag(command, catalog_path, "at least one release metadata record", "none", "Pass --release-metadata from Story 4.5 publish output before validating release catalogs.")
+    image = f"{data['image']['registry']}/{data['image']['repository']}"
+    payload = parse_catalog_yaml(catalog_path, command)
+    if payload.get("apiVersion") != "postgresql.cnpg.io/v1" or payload.get("kind") != "ClusterImageCatalog":
+        diag(command, catalog_path, "CloudNativePG ClusterImageCatalog apiVersion/kind", {"apiVersion": payload.get("apiVersion"), "kind": payload.get("kind")}, "Generate catalogs with generate-catalog.sh.")
+    variant = catalog_variant(payload, catalog_path, command)
+    spec = payload.get("spec")
+    images = spec.get("images") if isinstance(spec, dict) else None
+    if images is None:
+        images = []
+    if not isinstance(images, list):
+        diag(command, catalog_path, "spec.images is a list", type(images).__name__, "Use CloudNativePG catalog image entries.")
+    expected = {
+        key: record for key, record in release_records.items()
+        if key[1] == variant and not record["entry"]["experimental"]
+    }
+    seen = set()
+    for index, row in enumerate(images):
+        artifact = f"{catalog_path}#spec.images[{index}]"
+        if not isinstance(row, dict):
+            diag(command, artifact, "catalog image row is an object", type(row).__name__, "Use major/image mappings.")
+        tag, digest, ref_error = split_catalog_image_ref(row.get("image"), image, release_records)
+        if ref_error == "missing digest":
+            diag(command, artifact, "catalog image uses repo:published-tag@sha256 manifest-list digest", row.get("image"), "Pin every catalog image to a digest.")
+        if ref_error == "per-platform digest":
+            diag(command, artifact, "catalog digest is the published manifest-list digest", row.get("image"), "Do not use per-platform image digests in ClusterImageCatalog.")
+        if ref_error:
+            diag(command, artifact, "catalog image reference is a published repo:tag@digest ref", row.get("image"), "Use a final GHCR tag and published digest from release metadata.")
+        matches = [key for key, record in release_records.items() if record["digest"] == digest and tag in record["final_tags"]]
+        if not matches:
+            diag(command, artifact, "catalog tag is present in release metadata final_tags", {"tag": tag, "digest": digest}, "Do not reference unpublished tags in catalogs.")
+        if len(matches) != 1:
+            diag(command, artifact, "catalog ref maps to exactly one release metadata record", matches, "Keep tag/digest identities unique.")
+        key = matches[0]
+        record = release_records[key]
+        entry = record["entry"]
+        if entry["experimental"]:
+            diag(command, artifact, "stable catalog excludes experimental PostgreSQL entries", entry["pg_major"], "Emit experimental entries only in an explicitly named experimental catalog.")
+        if key[1] != variant:
+            diag(command, artifact, f"catalog entry Debian variant is {variant}", key[1], "Keep trixie and bookworm catalogs separated.")
+        expected_major = int(numeric_pg_major(entry["pg_major"]))
+        if row.get("major") != expected_major:
+            diag(command, artifact, f"catalog major is PostgreSQL numeric major {expected_major}", row.get("major"), "Map catalog major from the release metadata PostgreSQL row.")
+        seen.add(key)
+    if seen != set(expected):
+        diag(command, catalog_path, f"catalog includes every stable release metadata record for {variant} and no extras", {"expected": sorted(f"{k[0]}-{k[1]}" for k in expected), "actual": sorted(f"{k[0]}-{k[1]}" for k in seen)}, "Regenerate the catalog from the complete release metadata set.")
 
 
 def render_docs(entries):
@@ -687,7 +953,7 @@ def remove_or_check_absent(path, check, command):
         path.unlink()
 
 
-def run(kind, metadata, output, check, as_json):
+def run(kind, metadata, output, check, as_json, release_metadata=None, validate_catalog=None):
     command = f"generate-{kind}"
     data = parse_metadata(metadata, command)
     validate_metadata_shape(data, command, metadata)
@@ -728,12 +994,20 @@ def run(kind, metadata, output, check, as_json):
         if not as_json:
             print(f"generated matrix entries: publishable={len(summary['include'])} skipped={len(summary['skipped'])}", file=sys.stderr)
     elif kind == "catalog":
-        summary = catalog_summary(data, entries, output or "cloudnative-pg-timescaledb/catalog")
+        if validate_catalog:
+            for catalog_path in validate_catalog:
+                validate_catalog_file(data, entries, release_metadata or [], catalog_path)
+            summary = {"validated_catalogs": [str(path) for path in validate_catalog]}
+            if not as_json:
+                print(f"PASS validate-catalog files={len(validate_catalog)}", file=sys.stderr)
+        else:
+            summary = catalog_summary(data, entries, output or "cloudnative-pg-timescaledb/catalog", release_metadata or [])
         if check or not as_json:
-            for catalog in summary["catalogs"]:
-                write_or_check(catalog["catalog_path"], render_catalog(data, catalog["debian_variant"], entries), check, command)
-        if not as_json:
-            print(f"generated catalog skeletons: {len(summary['catalogs'])}", file=sys.stderr)
+            for catalog in summary.get("catalogs", []):
+                records = [load_release_records(data, entries, release_metadata or [], command)[(row["pg_major"], catalog["debian_variant"])] for row in catalog["entries"]]
+                write_or_check(catalog["catalog_path"], render_catalog(catalog["debian_variant"], records), check, command)
+        if not as_json and not validate_catalog:
+            print(f"generated release catalogs: {len(summary['catalogs'])}", file=sys.stderr)
     elif kind == "docs":
         doc_path = output or "cloudnative-pg-timescaledb/docs/generated/compatibility.md"
         summary = docs_summary(entries, doc_path)
@@ -768,8 +1042,12 @@ def main():
     parser.add_argument("--output", default="")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--release-metadata", action="append", default=[])
+    parser.add_argument("--validate-catalog", action="append", default=[])
     args = parser.parse_args()
-    run(args.kind, args.metadata, args.output, args.check, args.json)
+    if args.kind != "catalog" and (args.release_metadata or args.validate_catalog):
+        diag(f"generate-{args.kind}", "arguments", "catalog-only options omitted", {"release_metadata": args.release_metadata, "validate_catalog": args.validate_catalog}, "Use --release-metadata and --validate-catalog only with generate-catalog.sh.")
+    run(args.kind, args.metadata, args.output, args.check, args.json, args.release_metadata, args.validate_catalog)
 
 
 if __name__ == "__main__":

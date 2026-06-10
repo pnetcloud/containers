@@ -120,27 +120,16 @@ elif kind == "matrix":
     require_exact_rows(rows, "matrix include plus skipped")
 elif kind == "catalog":
     require_keys(payload, {"catalogs"}, "catalog payload")
-    latest = []
     catalog_variants = []
-    catalog_rows_by_variant = {}
     for catalog in payload["catalogs"]:
         require_keys(catalog, {"debian_variant", "catalog_path", "entries"}, "catalog row")
         catalog_variants.append(catalog["debian_variant"])
-        catalog_rows = []
         for row in catalog["entries"]:
-            require_keys(row, {"pg_major", "image", "digest", "publish", "experimental", "latest_eligible", "skip_reason"}, "catalog entry")
-            catalog_rows.append((row["pg_major"], catalog["debian_variant"]))
-            if row["latest_eligible"]:
-                latest.append((row["pg_major"], catalog["debian_variant"]))
-        catalog_rows_by_variant[catalog["debian_variant"]] = catalog_rows
-    if latest != [("18", "trixie")]:
-        fail("catalog latest_eligible exactly 18-trixie", repr(latest), "Preserve latest eligibility from metadata without recomputing it downstream.")
+            require_keys(row, {"pg_major", "major", "debian_variant", "image", "tag", "digest", "source_entry", "platforms", "release_metadata_record_id"}, "catalog entry")
+            if row["debian_variant"] != catalog["debian_variant"]:
+                fail("catalog row Debian variant matches catalog", repr(row), "Keep trixie and bookworm release catalogs separated.")
     if catalog_variants != ["trixie", "bookworm"]:
-        fail("catalog variants exactly trixie and bookworm", repr(catalog_variants), "Generate one catalog skeleton per supported Debian variant.")
-    for variant, rows in catalog_rows_by_variant.items():
-        expected_catalog_rows = [(pg, variant) for pg in ["17", "18", "19beta1"]]
-        if rows != expected_catalog_rows:
-            fail(f"catalog {variant} rows exactly {expected_catalog_rows}", repr(rows), "Preserve every PostgreSQL row in each Debian catalog skeleton.")
+        fail("catalog variants exactly trixie and bookworm", repr(catalog_variants), "Generate one stable release catalog per supported Debian variant.")
 elif kind == "docs":
     require_keys(payload, {"docs"}, "docs payload")
     if len(payload["docs"]) != 1:
@@ -260,7 +249,7 @@ expect_schema_fail "matrix duplicate row" matrix "${FIXTURE_DIR}/generate-matrix
 expect_schema_fail "matrix wrong latest" matrix "${FIXTURE_DIR}/generate-matrix-wrong-latest-eligible.json" "latest_eligible exactly 18-trixie"
 expect_schema_fail "catalog missing catalog path" catalog "${FIXTURE_DIR}/generate-catalog-missing-catalog-path.json" "missing.*catalog_path"
 expect_schema_fail "catalog missing variant" catalog "${FIXTURE_DIR}/generate-catalog-missing-variant.json" "catalog variants exactly"
-expect_schema_fail "catalog wrong latest" catalog "${FIXTURE_DIR}/generate-catalog-wrong-latest-eligible.json" "latest_eligible exactly 18-trixie"
+expect_schema_fail "catalog missing digest" catalog "${FIXTURE_DIR}/generate-catalog-wrong-latest-eligible.json" "missing.*digest"
 expect_schema_fail "docs missing doc path" docs "${FIXTURE_DIR}/generate-docs-missing-doc-path.json" "missing.*doc_path"
 
 printf 'PASS story-1.5 generator contracts\n'

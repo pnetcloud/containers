@@ -1,0 +1,12 @@
+name: Update Metadata
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  catalog-autocommit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: git add cloudnative-pg-timescaledb/docs/generated/compatibility.md

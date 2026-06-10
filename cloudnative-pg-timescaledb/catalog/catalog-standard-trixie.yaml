@@ -4,25 +4,4 @@ kind: ClusterImageCatalog
 metadata:
   name: cloudnative-pg-timescaledb-standard-trixie
 spec:
-  images:
-    - major: 17
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-00000000
-      sourceEntry: 17-trixie
-      publish: false
-      experimental: false
-      latestEligible: false
-      skipReason: "Publish disabled until release gate enables image builds"
-    - major: 18
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-00000000
-      sourceEntry: 18-trixie
-      publish: false
-      experimental: false
-      latestEligible: true
-      skipReason: "Publish disabled until release gate enables image builds"
-    - major: 19
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:19beta1-pg19beta1-tsunresolved-00000000
-      sourceEntry: 19beta1-trixie
-      publish: false
-      experimental: true
-      latestEligible: false
-      skipReason: "Experimental PostgreSQL 19beta1 pending upstream support"
+  images: []

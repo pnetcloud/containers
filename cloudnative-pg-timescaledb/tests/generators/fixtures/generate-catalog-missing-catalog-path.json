@@ -1,1 +1,1 @@
-{"catalogs":[{"debian_variant":"trixie","entries":[{"digest":"","experimental":false,"image":"ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18-tsunresolved-00000000","latest_eligible":true,"pg_major":"18","publish":false,"skip_reason":"Publish disabled until release gate enables image builds"}]}]}
+{"catalogs":[{"debian_variant":"trixie","entries":[]},{"catalog_path":"cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml","debian_variant":"bookworm","entries":[]}]}

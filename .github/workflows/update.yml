@@ -67,3 +67,70 @@ jobs:
           git config user.email 'pnetcloud-update-bot@users.noreply.github.com'
           TZ=UTC git commit -m 'chore(cnpg-timescaledb): update resolver metadata'
           git push
+
+  catalog-autocommit:
+    name: Generate and autocommit release catalogs
+    needs: autocommit
+    if: "${{ !(github.actor == 'github-actions[bot]' && github.event.head_commit.message == 'chore(cnpg-timescaledb): update release catalogs') }}"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - name: Refresh branch tip after resolver autocommit
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --prune --depth=1 origin "${GITHUB_REF_NAME}"
+          git checkout -B "${GITHUB_REF_NAME}" "origin/${GITHUB_REF_NAME}"
+      - name: Locate release metadata
+        id: catalog_metadata
+        run: |
+          set -Eeuo pipefail
+          release_metadata_dir="cloudnative-pg-timescaledb/release-metadata"
+          if [[ ! -d "${release_metadata_dir}" ]] || [[ -z "$(find "${release_metadata_dir}" -type f -name '*.json' -print -quit)" ]]; then
+            printf 'No release metadata found; release catalog autocommit is a no-op.\n'
+            printf 'available=false\n' >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          printf 'available=true\n' >> "${GITHUB_OUTPUT}"
+          printf 'path=%s\n' "${release_metadata_dir}" >> "${GITHUB_OUTPUT}"
+      - name: Generate release catalogs
+        if: steps.catalog_metadata.outputs.available == 'true'
+        run: |
+          set -Eeuo pipefail
+          make catalog CATALOG_ARGS="--release-metadata ${{ steps.catalog_metadata.outputs.path }}"
+      - name: Validate release catalogs
+        if: steps.catalog_metadata.outputs.available == 'true'
+        run: |
+          set -Eeuo pipefail
+          cloudnative-pg-timescaledb/scripts/generate-catalog.sh \
+            --release-metadata "${{ steps.catalog_metadata.outputs.path }}" \
+            --validate-catalog cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml \
+            --validate-catalog cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
+      - name: Stage release catalog paths
+        if: steps.catalog_metadata.outputs.available == 'true'
+        run: |
+          set -Eeuo pipefail
+          AUTOCOMMIT_ALLOWLIST=cloudnative-pg-timescaledb/config/catalog-autocommit-allowlist.txt \
+            cloudnative-pg-timescaledb/scripts/autocommit-stage.sh
+      - name: Validate release catalog staged paths
+        if: steps.catalog_metadata.outputs.available == 'true'
+        run: |
+          set -Eeuo pipefail
+          AUTOCOMMIT_ALLOWLIST=cloudnative-pg-timescaledb/config/catalog-autocommit-allowlist.txt \
+            cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh
+      - name: Commit release catalogs
+        if: steps.catalog_metadata.outputs.available == 'true'
+        run: |
+          set -Eeuo pipefail
+          if git diff --cached --quiet; then
+            printf 'No release catalog changes to commit.\n'
+            exit 0
+          fi
+          git config user.name 'pnetcloud-catalog-bot'
+          git config user.email 'pnetcloud-catalog-bot@users.noreply.github.com'
+          TZ=UTC git commit -m 'chore(cnpg-timescaledb): update release catalogs'
+          git push

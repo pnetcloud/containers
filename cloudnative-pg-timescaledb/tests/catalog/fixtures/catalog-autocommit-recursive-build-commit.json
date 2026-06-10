@@ -1,0 +1,6 @@
+{
+  "actor": "github-actions[bot]",
+  "head_commit": {
+    "message": "chore(cnpg-timescaledb): update release catalogs"
+  }
+}

@@ -54,8 +54,9 @@ run_make_error() {
 }
 
 run_expect_json() {
-  local description="$1"
-  shift
+  local expected_key="$1"
+  local description="$2"
+  shift 2
   local tmp status
   tmp="$(mktemp)"
   set +e
@@ -67,19 +68,24 @@ run_expect_json() {
     rm -f "${tmp}"
     exit 1
   fi
-  if ! grep -Fq '"include"' "${tmp}" || ! grep -Fq '"skipped"' "${tmp}"; then
+  if [[ "${expected_key}" == "matrix" ]] && (! grep -Fq '"include"' "${tmp}" || ! grep -Fq '"skipped"' "${tmp}"); then
     diag "${*}" "${description}" "matrix JSON contains include and skipped" "$(cat "${tmp}")" "Preserve the Story 4.1 matrix contract."
+    rm -f "${tmp}"
+    exit 1
+  fi
+  if [[ "${expected_key}" == "catalog" ]] && ! grep -Fq '"catalogs"' "${tmp}"; then
+    diag "${*}" "${description}" "catalog JSON contains catalogs" "$(cat "${tmp}")" "Preserve the Story 4.6 catalog contract."
     rm -f "${tmp}"
     exit 1
   fi
   rm -f "${tmp}"
 }
 
-run_expect_json "matrix delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/matrix.sh"
-run_expect_exit 69 "catalog delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/catalog.sh"
+run_expect_json matrix "matrix delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/matrix.sh"
+run_expect_json catalog "catalog delegated script" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/catalog.sh" --json
 
-run_expect_json "matrix Make target" make --no-print-directory -C "${ROOT_DIR}" matrix
-run_make_error 69 "catalog Make target" catalog
+run_expect_json matrix "matrix Make target" make --no-print-directory -C "${ROOT_DIR}" matrix
+run_expect_json catalog "catalog Make target" make --no-print-directory -C "${ROOT_DIR}" catalog CATALOG_ARGS=--json
 
 build_script="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/build.sh"
 run_expect_exit 64 "build script missing parameters" "${build_script}"
