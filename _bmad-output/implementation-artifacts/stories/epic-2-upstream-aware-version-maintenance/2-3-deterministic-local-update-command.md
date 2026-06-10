@@ -3,7 +3,7 @@ storyId: 2.3
 storyKey: 2-3-deterministic-local-update-command
 epic: 2
 title: 'Deterministic Local Update Command'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: d9a21989ff4db47b49ed97cd16a38004d91eb23f
@@ -189,6 +189,7 @@ Every implementation story must finish with a working repository state and must 
 - `--fixtures` is now a complete deterministic upstream root containing `cnpg/`, `packages/`, and `barman-plugin.json`, so update tests and release rehearsal do not depend on live Barman plugin releases.
 - Follow-up review found unsupported upstream CNPG standard tags could be ignored, unresolved CNPG rows could derive package-minor CNPG tags, and named fixture directories needed executable coverage; all were fixed with resolver guards and fixture execution coverage assertions.
 - Acceptance review required named Story 2.3 fixtures to be real committed inputs instead of marker-only directories; each fixture now carries `input/versions.yaml`, a complete `upstream/` root, expected artifacts, and the runner executes every committed fixture before the supplemental dynamic edge-case checks.
+- Final BMAD code-review pass 4 returned `NO ACTIONABLE FINDINGS` from Blind Hunter, Edge Case Hunter, and Acceptance Auditor after the executable fixture materialization commit.
 
 ### Validation Commands
 
@@ -206,6 +207,7 @@ Every implementation story must finish with a working repository state and must 
 - `git diff --check HEAD~1..HEAD` - passed.
 - `git diff --cached --check` - passed.
 - Staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && make validate` - passed.
+- BMAD code-review pass 4 over the staged Story 2.3 fixture/materialization diff - passed with no actionable findings from all three review roles.
 
 ### Completion Notes
 
@@ -261,3 +263,4 @@ Every implementation story must finish with a working repository state and must 
 - Hardened deterministic fixture roots, CNPG resolver-owned skip evidence refresh, exact update JSON keys, failure summary output, generated drift detection, full generated-doc rollback coverage, and release rehearsal/Barman fixture consumers.
 - Rejected unsupported upstream CNPG standard tags, kept unresolved CNPG metadata aligned with CNPG evidence, and added named fixture execution coverage checks.
 - Replaced Story 2.3 marker-only update fixture directories with executable committed fixtures and exact normalized expected diffs.
+- Closed Story 2.3 after final validation and clean repeated BMAD code-review.
