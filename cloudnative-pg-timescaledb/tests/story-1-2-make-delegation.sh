@@ -59,14 +59,118 @@ if grep -Eq 'packagecloud|apt-get|docker buildx|docker build|CREATE EXTENSION|gh
   exit 1
 fi
 
-makefile_without_comments="$(mktemp)"
-sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//' "${MAKEFILE}" >"${makefile_without_comments}"
-if perl -ne 'if (/(?<!\$)\$[\(\{](shell|eval)([[:space:]\)\}]|$)|^[ ]*[^#[:space:]][^:=]*!=|^[^#[:space:]][^:=]*:[^#]*[[:space:]][^#[:space:]][^:=]*!=/) { print; $found = 1 } END { exit($found ? 0 : 1) }' "${makefile_without_comments}"; then
-  rm -f "${makefile_without_comments}"
+scan_makefile_execution() {
+  local makefile_path="$1"
+  perl -ne '
+    BEGIN {
+      $recipe_prefix = "\t";
+      $in_recipe = 0;
+    }
+    chomp;
+    my $raw = $_;
+    my $line = $raw;
+    my $is_recipe = $in_recipe && index($raw, $recipe_prefix) == 0;
+
+    if (!$is_recipe && $raw =~ /^[[:space:]]*#/) {
+      next;
+    }
+    if (!$is_recipe) {
+      $line =~ s/[[:space:]]+#.*$//;
+    }
+
+    my $unsafe_function = 0;
+    while ($line =~ /(\$+)[\(\{](shell|eval)(?=[[:space:]\)\}]|$)/g) {
+      if ((length($1) % 2) == 1) {
+        $unsafe_function = 1;
+        last;
+      }
+    }
+    if (
+      $unsafe_function
+      || $line =~ /^[ ]*[^#[:space:]][^:=]*!=/
+      || $line =~ /^[^#[:space:]][^:=]*:[^#]*[[:space:]][^#[:space:]][^:=]*!=/
+    ) {
+      print $. . ":" . $_ . "\n";
+      $found = 1;
+    }
+
+    if (!$is_recipe && $line =~ /^[[:space:]]*\.RECIPEPREFIX[[:space:]]*[:+?]?=[[:space:]]*(.)/) {
+      $recipe_prefix = $1;
+    }
+    if ($is_recipe || $line =~ /^[[:space:]]*$/ || $raw =~ /^[[:space:]]*#/) {
+      next;
+    }
+    if ($line =~ /^[[:space:]]*[^#[:space:]][^:=]*:/ && $line !~ /^[[:space:]]*[^#[:space:]]+[[:space:]]*[:+?]?=/) {
+      $in_recipe = 1;
+    } else {
+      $in_recipe = 0;
+    }
+    END { exit($found ? 0 : 1) }
+  ' "${makefile_path}"
+}
+
+assert_makefile_scan_passes() {
+  local name="$1"
+  local content="$2"
+  local fixture output_file
+  fixture="$(mktemp)"
+  output_file="$(mktemp)"
+  printf '%b' "${content}" >"${fixture}"
+  if scan_makefile_execution "${fixture}" >"${output_file}"; then
+    local output
+    output="$(cat "${output_file}")"
+    rm -f "${fixture}" "${output_file}"
+    diag "scan Makefile fixture ${name}" "Makefile scanner" "fixture passes" "${output}" "Do not reject safe comments or escaped literal Make function text."
+    exit 1
+  fi
+  rm -f "${fixture}" "${output_file}"
+}
+
+assert_makefile_scan_fails() {
+  local name="$1"
+  local content="$2"
+  local fixture output_file
+  fixture="$(mktemp)"
+  output_file="$(mktemp)"
+  printf '%b' "${content}" >"${fixture}"
+  if ! scan_makefile_execution "${fixture}" >"${output_file}"; then
+    local output
+    output="$(cat "${output_file}")"
+    rm -f "${fixture}" "${output_file}"
+    diag "scan Makefile fixture ${name}" "Makefile scanner" "fixture fails" "${output}" "Reject Makefile make-time shell/eval execution and != assignments."
+    exit 1
+  fi
+  rm -f "${fixture}" "${output_file}"
+}
+
+# The scanner fixtures intentionally include literal Make function syntax.
+# shellcheck disable=SC2016
+assert_makefile_scan_passes "top-level tab comment" '\t# $(shell echo harmless top-level comment)\nall:\n\t@echo ok\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_passes "commented rule semicolon" 'all: # docs; $(shell echo harmless)\n\t@echo ok\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_passes "escaped recipe literal" 'all:\n\t@printf '"'"'$$(shell date)\n'"'"'\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "shell assignment" 'VAR := $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "eval assignment" 'VAR := ${eval GENERATED:=1}\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "recipe comment shell" 'all:\n\t# $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "leading-space target recipe comment shell" ' all:\n\t# $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "recipeprefix comment shell" '.RECIPEPREFIX := >\nall:\n> # $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "leading-space recipeprefix comment shell" ' .RECIPEPREFIX := >\nall:\n> # $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "odd dollar shell" 'all:\n\t@printf '"'"'$$$(shell date)\n'"'"'\n'
+assert_makefile_scan_fails "shell assignment operator" 'VAR != date\n'
+assert_makefile_scan_fails "target-specific shell assignment operator" 'all: VAR != date\n'
+
+if scan_makefile_execution "${MAKEFILE}"; then
   diag "scan Makefile" "Makefile" "no make-time shell/eval execution in command facade" "make-time execution construct found" "Keep root Makefile targets as direct script delegations without hidden expansion-time logic."
   exit 1
 fi
-rm -f "${makefile_without_comments}"
 
 if grep -RIn --exclude-dir=tests --exclude='story-1-2-*' 'vendor/' "${MAKEFILE}" "${SCRIPT_DIR}"; then
   diag "scan command surface" "Makefile and scripts" "no command-surface dependency on reference trees" "reference-tree path found" "Remove command-surface dependency on reference-only inputs."
@@ -248,7 +352,7 @@ if ! grep -Fq 'PASS story-1.2 make params' <<<"${output}"; then
     exit 1
 fi
 if grep -Fq 'STUB validate-metadata' <<<"${output}"; then
-    diag "make validate fail-fast sandbox" "validate target" "later validators do not run after a Story 1.2 failure" "${output}" "Keep scripts/validate.sh fail-fast; avoid `|| true` or equivalent masking around Story 1.2 gates."
+    diag "make validate fail-fast sandbox" "validate target" "later validators do not run after a Story 1.2 failure" "${output}" "Keep scripts/validate.sh fail-fast; avoid '|| true' or equivalent masking around Story 1.2 gates."
     exit 1
 fi
 # END story-1-2 sandbox proof
