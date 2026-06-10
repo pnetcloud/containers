@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts"
+export PYTHONDONTWRITEBYTECODE=1
 # shellcheck source=cloudnative-pg-timescaledb/scripts/lib/common.sh
 source "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/common.sh"
 
