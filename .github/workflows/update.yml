@@ -32,30 +32,57 @@ jobs:
       - name: Validate staged update paths
         run: cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh
       - name: Write update summary
+        if: always()
+        env:
+          SUMMARY_STATUS: ${{ job.status }}
         run: |
           set -Eeuo pipefail
           changed_files="$(mktemp)"
-          classified="$(mktemp)"
           git diff --cached --name-only > "${changed_files}"
-          if [[ -s "${changed_files}" && -x cloudnative-pg-timescaledb/scripts/classify-update-origin.sh ]]; then
-            cloudnative-pg-timescaledb/scripts/classify-update-origin.sh \
-              --rules cloudnative-pg-timescaledb/config/change-origin-rules.json \
-              --changed-files "${changed_files}" > "${classified}"
-          else
-            printf '{"renovate_originated":[],"resolver_originated":[],"unknown":[]}' > "${classified}"
+          changed="$(paste -sd, "${changed_files}" || true)"
+          if [[ -z "${changed}" ]]; then changed="none"; fi
+          export UPSTREAM_COMPONENT="CloudNativePG/TimescaleDB metadata"
+          export OLD_VERSION_DIGEST="unchanged"
+          export NEW_VERSION_DIGEST="unchanged"
+          if [[ -f /tmp/cloudnative-pg-timescaledb-update.json ]]; then
+            eval "$(python3 - /tmp/cloudnative-pg-timescaledb-update.json <<'PY'
+          import json
+          import shlex
+          import sys
+          from pathlib import Path
+          payload = json.loads(Path(sys.argv[1]).read_text())
+          old = payload.get("old") or payload.get("previous") or {}
+          new = payload.get("new") or payload.get("current") or {}
+          def compact(value):
+              if isinstance(value, dict):
+                  parts = []
+                  for key in sorted(value):
+                      item = value[key]
+                      if isinstance(item, (str, int, float, bool)):
+                          parts.append(f"{key}={item}")
+                  return ",".join(parts) or "n/a"
+              return str(value) if value else "n/a"
+          print("OLD_VERSION_DIGEST=" + shlex.quote(compact(old)))
+          print("NEW_VERSION_DIGEST=" + shlex.quote(compact(new)))
+          PY
+            )"
           fi
-          list_origin() {
-            python3 -c 'import json, sys; data=json.load(open(sys.argv[1], encoding="utf-8")); items=data.get(sys.argv[2], []); print("\n".join(f"- {item}" for item in items) if items else sys.argv[3])' "$@"
-          }
-          {
-            printf '## Resolver-originated changes\n\n'
-            list_origin "${classified}" resolver_originated 'No resolver-owned metadata or generated artifact changes.'
-            printf '\n'
-            printf '## Renovate-originated changes\n\n'
-            list_origin "${classified}" renovate_originated 'No Renovate-originated dependency changes.'
-            printf '\n## Unknown-origin changes\n\n'
-            list_origin "${classified}" unknown 'No unknown-origin changes.'
-          } >> "${GITHUB_STEP_SUMMARY}"
+          export CHANGED_FILES="${changed}"
+          export NOOP_STATUS="$([[ "${changed}" == "none" ]] && printf true || printf false)"
+          export CANDIDATE_DIGEST="n/a"
+          export PUBLISHED_DIGEST="n/a"
+          export SCAN_RESULT="n/a"
+          export SBOM_STATUS="n/a"
+          export PROVENANCE_STATUS="n/a"
+          export SIGNATURE_STATUS="n/a"
+          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'update workflow failed; inspect job logs')"
+          export REMEDIATION_COMMAND="make update && make validate"
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/update.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success OLD_VERSION_DIGEST \
+            --require-success NEW_VERSION_DIGEST \
+            --require-failure-reason
       - name: Commit update
         run: |
           set -Eeuo pipefail
@@ -122,6 +149,15 @@ jobs:
           set -Eeuo pipefail
           AUTOCOMMIT_ALLOWLIST=cloudnative-pg-timescaledb/config/catalog-autocommit-allowlist.txt \
             cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh
+      - name: Capture release catalog changes
+        id: catalog_changes
+        if: steps.catalog_metadata.outputs.available == 'true'
+        run: |
+          set -Eeuo pipefail
+          changed="$(git diff --cached --name-only | paste -sd, || true)"
+          if [[ -z "${changed}" ]]; then changed="none"; fi
+          printf 'changed_files=%s\n' "${changed}" >> "${GITHUB_OUTPUT}"
+          printf 'noop=%s\n' "$([[ "${changed}" == "none" ]] && printf true || printf false)" >> "${GITHUB_OUTPUT}"
       - name: Commit release catalogs
         if: steps.catalog_metadata.outputs.available == 'true'
         run: |
@@ -134,3 +170,25 @@ jobs:
           git config user.email 'pnetcloud-catalog-bot@users.noreply.github.com'
           TZ=UTC git commit -m 'chore(cnpg-timescaledb): update release catalogs'
           git push
+      - name: Write catalog summary
+        if: always()
+        env:
+          SUMMARY_STATUS: ${{ job.status }}
+        run: |
+          set -Eeuo pipefail
+          catalog_digests="$(sha256sum cloudnative-pg-timescaledb/catalog/catalog-standard-*.yaml 2>/dev/null | awk '{print $2 "=" $1}' | paste -sd, || true)"
+          if [[ -z "${catalog_digests}" ]]; then catalog_digests="none"; fi
+          export CATALOG_PATHS="cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml,cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml"
+          export CATALOG_DIGESTS="${catalog_digests}"
+          export CHANGED_FILES="${{ steps.catalog_changes.outputs.changed_files || 'none' }}"
+          export NOOP_STATUS="${{ steps.catalog_changes.outputs.noop || 'true' }}"
+          export COMMIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || printf n/a)"
+          export CANDIDATE_DIGEST="n/a"
+          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'catalog autocommit failed; inspect job logs')"
+          export REMEDIATION_COMMAND="make catalog && make validate"
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/catalog.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success CATALOG_PATHS \
+            --require-success CATALOG_DIGESTS \
+            --require-failure-reason

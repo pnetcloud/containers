@@ -1,0 +1,11 @@
+name: Invalid Unpinned Release Action
+on:
+  push:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@v4

@@ -1,0 +1,9 @@
+name: Invalid YAML Extension
+on:
+  push:
+permissions: write-all
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4

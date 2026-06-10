@@ -1,12 +1,12 @@
-name: Valid Allowlisted Permission
+name: Invalid PR Target Write
 on:
-  push:
+  pull_request_target:
 permissions:
   contents: read
 jobs:
-  publish:
+  validate:
     runs-on: ubuntu-latest
     permissions:
-      packages: write
+      contents: write
     steps:
       - run: true

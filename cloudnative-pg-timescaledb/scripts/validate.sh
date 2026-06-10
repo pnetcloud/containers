@@ -54,6 +54,9 @@ fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh"
 fi
+if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/summaries/run.sh" ]]; then
+  "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/summaries/run.sh"
+fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/build-candidates/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/build-candidates/run.sh"
 fi

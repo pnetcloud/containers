@@ -1,10 +1,10 @@
-name: Valid Allowlisted Permission
+name: Invalid Packages Write Job
 on:
   push:
 permissions:
   contents: read
 jobs:
-  publish:
+  docs:
     runs-on: ubuntu-latest
     permissions:
       packages: write

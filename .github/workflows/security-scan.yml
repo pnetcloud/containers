@@ -183,26 +183,51 @@ jobs:
           fi
       - name: Write scan summary
         if: always()
+        env:
+          SUMMARY_STATUS: ${{ job.status }}
+          SUMMARY_PATH: ${{ steps.paths.outputs.summary_path }}
+          SARIF_PATH: ${{ steps.paths.outputs.sarif_path }}
         run: |
           set -Eeuo pipefail
-          summary='${{ steps.paths.outputs.summary_path }}'
-          {
-            printf '## Vulnerability scan\n\n'
-            printf -- '- PostgreSQL: `%s`\n' '${{ inputs.pg_major }}'
-            printf -- '- Debian: `%s`\n' '${{ inputs.debian_variant }}'
-            printf -- '- Bake target: `%s`\n' '${{ inputs.bake_target }}'
-            if [[ -f "${summary}" ]]; then
-              python3 - "${summary}" <<'PY'
+          export IMAGE_REF="n/a" CANDIDATE_DIGEST="n/a" SCAN_RESULT="failed" REPORT_PATH="${SUMMARY_PATH:-n/a}"
+          if [[ -n "${SUMMARY_PATH:-}" && -f "${SUMMARY_PATH}" ]]; then
+            eval "$(python3 - "${SUMMARY_PATH}" <<'PY'
           import json
+          import shlex
           import sys
           from pathlib import Path
-          for row in json.loads(Path(sys.argv[1]).read_text()):
-              print(f"- Result: `{row.get('scan_result')}` candidate `{row.get('candidate_ref')}` digest `{row.get('digest')}` intended tag `{row.get('intended_tag')}` reason `{row.get('failure_reason') or 'none'}`")
+          rows = json.loads(Path(sys.argv[1]).read_text())
+          first = rows[0] if rows else {}
+          values = {
+              "IMAGE_REF": first.get("candidate_ref", "n/a"),
+              "CANDIDATE_DIGEST": first.get("digest", "n/a"),
+              "SCAN_RESULT": "failed" if any(row.get("scan_result") != "passed" for row in rows) else "passed",
+          }
+          for key, value in values.items():
+              print(f"{key}={shlex.quote(str(value))}")
           PY
-            else
-              printf -- '- Result: `failed` reason `missing scan summary`\n'
-            fi
-          } >> "${GITHUB_STEP_SUMMARY}"
+            )"
+          fi
+          export SCANNER="trivy"
+          export VULNERABILITY_THRESHOLD="HIGH,CRITICAL"
+          export PUBLISHED_DIGEST="n/a"
+          export SBOM_STATUS="n/a"
+          export PROVENANCE_STATUS="n/a"
+          export SIGNATURE_STATUS="n/a"
+          if [[ '${{ steps.evaluate.outputs.failed }}' == 'true' ]]; then
+            export SUMMARY_STATUS="failure"
+            export FAILURE_REASON="vulnerability scan failed policy gate"
+          else
+            export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'vulnerability scan failed or summary missing')"
+          fi
+          export REMEDIATION_COMMAND="cloudnative-pg-timescaledb/scripts/evaluate-vulnerability-scan.py --help"
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/vulnerability.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success IMAGE_REF \
+            --require-success CANDIDATE_DIGEST \
+            --require-success SCAN_RESULT \
+            --require-failure-reason
       # actions/upload-artifact v4.6.2
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
@@ -245,12 +270,53 @@ jobs:
       contents: read
       security-events: write
     steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       # actions/download-artifact v4.3.0
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: vulnerability-scan-sarif-${{ inputs.bake_target }}
           path: sarif
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: vulnerability-scan-summary-${{ inputs.bake_target }}
+          path: sarif-summary
       # github/codeql-action/upload-sarif v3.36.2
       - uses: github/codeql-action/upload-sarif@8272c299f21ca24af15dfe9ac0971ba969e5e0d5
         with:
           sarif_file: sarif/vulnerability-scan.sarif
+      - name: Write SARIF upload summary
+        if: always()
+        env:
+          SUMMARY_STATUS: ${{ job.status }}
+        run: |
+          set -Eeuo pipefail
+          export IMAGE_REF="n/a" CANDIDATE_DIGEST="n/a"
+          summary="sarif-summary/vulnerability-scan-summary.json"
+          if [[ -f "${summary}" ]]; then
+            eval "$(python3 - "${summary}" <<'PY'
+          import json
+          import shlex
+          import sys
+          from pathlib import Path
+          rows = json.loads(Path(sys.argv[1]).read_text())
+          first = rows[0] if rows else {}
+          print("IMAGE_REF=" + shlex.quote(first.get("candidate_ref", "n/a")))
+          print("CANDIDATE_DIGEST=" + shlex.quote(first.get("digest", "n/a")))
+          PY
+            )"
+          fi
+          export SARIF_PATH="sarif/vulnerability-scan.sarif"
+          export UPLOAD_STATUS="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf uploaded || printf failed)"
+          export SCAN_RESULT="${{ needs.scan.outputs.scan_result }}"
+          export PUBLISHED_DIGEST="n/a"
+          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'SARIF upload failed; inspect job logs')"
+          export REMEDIATION_COMMAND="check security-scan output artifact and SARIF upload permissions"
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/scan-sarif.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success IMAGE_REF \
+            --require-success CANDIDATE_DIGEST \
+            --require-success SARIF_PATH \
+            --require-failure-reason

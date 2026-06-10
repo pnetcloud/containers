@@ -17,6 +17,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       build_matrix: ${{ steps.matrix.outputs.build_matrix }}
       has_include: ${{ steps.matrix.outputs.has_include }}
+      skipped_summary: ${{ steps.matrix.outputs.skipped_summary }}
     steps:
       # actions/checkout v4.2.2
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -28,10 +29,12 @@ jobs:
           cloudnative-pg-timescaledb/scripts/validate-matrix-json.py --json "${matrix_json}"
           has_include="$(python3 -c 'import json,sys; print("true" if json.loads(sys.argv[1]).get("include") else "false")' "${matrix_json}")"
           build_matrix="$(python3 -c 'import json,sys; payload=json.loads(sys.argv[1]); print(json.dumps({"include": payload.get("include", [])}, separators=(",", ":"), sort_keys=True))' "${matrix_json}")"
+          skipped_summary="$(python3 -c 'import json,sys; payload=json.loads(sys.argv[1]); rows=payload.get("skipped", []); print("none" if not rows else "; ".join(f"{row.get('pg_major')}-{row.get('debian_variant')}: {row.get('skip_reason')}" for row in rows))' "${matrix_json}")"
           {
             printf 'matrix=%s\n' "${matrix_json}"
             printf 'build_matrix=%s\n' "${build_matrix}"
             printf 'has_include=%s\n' "${has_include}"
+            printf 'skipped_summary=%s\n' "${skipped_summary}"
           } >> "${GITHUB_OUTPUT}"
 
   candidate:
@@ -218,6 +221,56 @@ jobs:
           output_path.write_text(json.dumps(records, indent=2, sort_keys=True) + "\n")
           PY
           cloudnative-pg-timescaledb/scripts/validate-candidate-metadata.py --file "candidate-metadata/${BAKE_TARGET}/release-candidate.json"
+      - name: Write candidate build summary
+        if: always()
+        env:
+          SUMMARY_STATUS: ${{ job.status }}
+          PG_MAJOR: ${{ matrix.pg_major }}
+          PG_VERSION: ${{ matrix.pg_version }}
+          DEBIAN_VARIANT: ${{ matrix.debian_variant }}
+          BAKE_TARGET: ${{ matrix.bake_target }}
+          PLATFORMS_JSON: ${{ toJSON(matrix.platforms) }}
+          INTENDED_TAGS_JSON: ${{ toJSON(matrix.intended_tags) }}
+          SKIPPED_COMBINATIONS: ${{ needs.matrix.outputs.skipped_summary }}
+        run: |
+          set -Eeuo pipefail
+          metadata="candidate-metadata/${BAKE_TARGET}/release-candidate.json"
+          export PLATFORMS="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["PLATFORMS_JSON"])))')"
+          export FINAL_TAGS="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["INTENDED_TAGS_JSON"])))')"
+          export CANDIDATE_TAG="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BAKE_TARGET}-index"
+          export CANDIDATE_DIGEST="n/a"
+          export PLATFORM_DIGESTS="n/a"
+          if [[ -f "${metadata}" ]]; then
+            eval "$(python3 - "${metadata}" <<'PY'
+          import json
+          import shlex
+          import sys
+          from pathlib import Path
+          records = json.loads(Path(sys.argv[1]).read_text())
+          if records:
+              first = records[0]
+              print("CANDIDATE_DIGEST=" + shlex.quote(first.get("index_digest", "n/a")))
+              print("PLATFORM_DIGESTS=" + shlex.quote(",".join(f"{k}={v}" for k, v in sorted(first.get("platform_digests", {}).items())) or "n/a"))
+          PY
+            )"
+          fi
+          export CONTAINER_SMOKE_RESULT="$([[ -f "${metadata}" ]] && printf passed || printf unknown)"
+          export SQL_SMOKE_RESULT="$([[ -f "${metadata}" ]] && printf passed || printf unknown)"
+          export PLATFORM="${PLATFORMS}"
+          export SKIPPED_COMBINATIONS="${SKIPPED_COMBINATIONS:-none}"
+          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'candidate build or smoke failed; inspect job logs')"
+          export REMEDIATION_COMMAND="make build PG=${PG_MAJOR} DEBIAN=${DEBIAN_VARIANT} && CHECKS=container make smoke PG=${PG_MAJOR} DEBIAN=${DEBIAN_VARIANT} && CHECKS=sql make smoke PG=${PG_MAJOR} DEBIAN=${DEBIAN_VARIANT}"
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/build.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success CANDIDATE_DIGEST \
+            --require-success PLATFORM_DIGESTS \
+            --require-failure-reason
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/smoke.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success CANDIDATE_DIGEST \
+            --require-failure-reason
       # actions/upload-artifact v4.6.2
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -372,29 +425,75 @@ jobs:
             --cosign-certificate-issuer "${COSIGN_CERTIFICATE_ISSUER}"
           printf 'evidence_path=%s\n' "${EVIDENCE_DIR}/release-evidence.json" >> "${GITHUB_OUTPUT}"
       - name: Write release evidence summary
+        if: always()
         env:
           EVIDENCE_PATH: ${{ steps.evidence.outputs.evidence_path }}
+          SUMMARY_STATUS: ${{ job.status }}
         run: |
           set -Eeuo pipefail
-          {
-            printf '## Release evidence\n\n'
-            python3 - "${EVIDENCE_PATH}" <<'PY'
+          export CANDIDATE_DIGEST="n/a" INDEX_DIGEST="n/a" PLATFORM_DIGESTS="n/a" SBOM_STATUS="n/a" SBOM_REF="n/a" PROVENANCE_STATUS="n/a" PROVENANCE_REF="n/a" SIGNATURE_STATUS="n/a" SIGNATURE_REF="n/a" SCAN_RESULT="n/a" IMAGE_REF="n/a" OIDC_ISSUER="n/a" OIDC_IDENTITY="n/a"
+          if [[ -n "${EVIDENCE_PATH}" && -f "${EVIDENCE_PATH}" ]]; then
+            eval "$(python3 - "${EVIDENCE_PATH}" <<'PY'
           import json
+          import shlex
           import sys
           from pathlib import Path
           evidence = json.loads(Path(sys.argv[1]).read_text())
-          print(f"- Image: `{evidence['image']}`")
-          print(f"- Candidate digest: `{evidence['candidate_digest']}`")
-          print(f"- Index digest: `{evidence['index_digest']}`")
-          print(f"- Scan result: `{evidence['scan_result']}`")
-          print(f"- Certificate identity: `{evidence['expected_certificate_identity']}`")
-          print(f"- OIDC issuer: `{evidence['cosign_certificate_issuer']}`")
-          for platform, digest in evidence["platform_digests"].items():
-              print(f"- Platform `{platform}` digest: `{digest}`")
-          for record in evidence["per_digest_evidence"]:
-              print(f"- Evidence `{record['digest']}`: SBOM `{record['sbom_ref']}`, provenance `{record['provenance_ref']}`, signature `{record['signature_ref']}`, verification `{record['verification_ref']}`, verified `{record['verified']}`")
+          index = evidence.get("per_digest_evidence", [{}])[0]
+          values = {
+              "IMAGE_REF": evidence.get("image", "n/a"),
+              "CANDIDATE_DIGEST": evidence.get("candidate_digest", "n/a"),
+              "INDEX_DIGEST": evidence.get("index_digest", "n/a"),
+              "PLATFORM_DIGESTS": ",".join(f"{k}={v}" for k, v in sorted(evidence.get("platform_digests", {}).items())) or "n/a",
+              "SBOM_STATUS": "present" if index.get("sbom_ref") else "missing",
+              "SBOM_REF": index.get("sbom_ref", "n/a"),
+              "PROVENANCE_STATUS": "present" if index.get("provenance_ref") else "missing",
+              "PROVENANCE_REF": index.get("provenance_ref", "n/a"),
+              "SIGNATURE_STATUS": "verified" if index.get("signature_ref") and evidence.get("verified") else "missing",
+              "SIGNATURE_REF": index.get("signature_ref", "n/a"),
+              "SCAN_RESULT": evidence.get("scan_result", "n/a"),
+              "OIDC_ISSUER": evidence.get("cosign_certificate_issuer", "n/a"),
+              "OIDC_IDENTITY": evidence.get("expected_certificate_identity", "n/a"),
+          }
+          for key, value in values.items():
+              print(f"{key}={shlex.quote(str(value))}")
           PY
-          } >> "${GITHUB_STEP_SUMMARY}"
+            )"
+          fi
+          export EVIDENCE_PATH="${EVIDENCE_PATH:-n/a}"
+          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'release evidence or signing failed; inspect job logs')"
+          export REMEDIATION_COMMAND="cloudnative-pg-timescaledb/scripts/validate-release-evidence.py --file ${EVIDENCE_PATH:-release-evidence.json}"
+          # Summary covers SBOM, provenance, signature, and verification refs.
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/evidence.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success CANDIDATE_DIGEST \
+            --require-success INDEX_DIGEST \
+            --require-success SBOM_STATUS \
+            --require-success PROVENANCE_STATUS \
+            --require-success SIGNATURE_STATUS \
+            --require-failure-reason
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/sbom.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success CANDIDATE_DIGEST \
+            --require-success INDEX_DIGEST \
+            --require-success SBOM_STATUS \
+            --require-failure-reason
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/provenance.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success CANDIDATE_DIGEST \
+            --require-success INDEX_DIGEST \
+            --require-success PROVENANCE_STATUS \
+            --require-failure-reason
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/signing.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success CANDIDATE_DIGEST \
+            --require-success INDEX_DIGEST \
+            --require-success SIGNATURE_STATUS \
+            --require-failure-reason
       # actions/upload-artifact v4.6.2
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -549,33 +648,52 @@ jobs:
           print("final_tags=" + ",".join(metadata["final_tags"]))
           PY
       - name: Write publish summary
+        if: always()
         env:
           METADATA_PATH: publish/output/${{ matrix.bake_target }}/ghcr-release-metadata.json
+          SUMMARY_STATUS: ${{ job.status }}
+          SKIPPED_COMBINATIONS: ${{ needs.matrix.outputs.skipped_summary }}
         run: |
           set -Eeuo pipefail
-          {
-            printf '## GHCR publish\n\n'
-            python3 - "${METADATA_PATH}" <<'PY'
+          export FINAL_TAGS="n/a" LATEST_TARGET="n/a" CANDIDATE_DIGEST="n/a" PUBLISHED_DIGEST="n/a" PLATFORM_DIGESTS="n/a" SCAN_RESULT="n/a" SBOM_STATUS="n/a" PROVENANCE_STATUS="n/a" SIGNATURE_STATUS="n/a" SKIPPED_COMBINATIONS="${SKIPPED_COMBINATIONS:-none}"
+          if [[ -f "${METADATA_PATH}" ]]; then
+            eval "$(python3 - "${METADATA_PATH}" <<'PY'
           import json
+          import shlex
           import sys
           from pathlib import Path
 
           metadata = json.loads(Path(sys.argv[1]).read_text())
-          print(f"- Image: `{metadata['image']}`")
-          print(f"- Published digest: `{metadata['published_digest']}`")
-          print(f"- Release metadata record: `{metadata['release_metadata_record_id']}`")
-          print(f"- Promotion status: `{metadata['promotion_status']}`")
-          print(f"- Scan result: `{metadata['scan_result']}`")
-          print(f"- Verified: `{metadata['verified']}`")
-          print(f"- Certificate identity: `{metadata['cosign_certificate_identity']}`")
-          print(f"- OIDC issuer: `{metadata['cosign_certificate_issuer']}`")
-          for tag in metadata["final_tags"]:
-              print(f"- Tag: `{metadata['image']}:{tag}`")
-          print(f"- SBOM: `{metadata['sbom_ref']}`")
-          print(f"- Provenance: `{metadata['provenance_ref']}`")
-          print(f"- Signature: `{metadata['signature_ref']}`")
+          tags = metadata.get("final_tags", [])
+          values = {
+              "FINAL_TAGS": ",".join(tags) or "n/a",
+              "LATEST_TARGET": "latest" if "latest" in tags else "none",
+              "CANDIDATE_DIGEST": metadata.get("candidate_digest", "n/a"),
+              "PUBLISHED_DIGEST": metadata.get("published_digest", "n/a"),
+              "PLATFORM_DIGESTS": ",".join(f"{k}={v}" for k, v in sorted(metadata.get("platform_digests", {}).items())) or "n/a",
+              "SCAN_RESULT": metadata.get("scan_result", "n/a"),
+              "SBOM_STATUS": "present" if metadata.get("sbom_ref") else "missing",
+              "PROVENANCE_STATUS": "present" if metadata.get("provenance_ref") else "missing",
+              "SIGNATURE_STATUS": "verified" if metadata.get("signature_ref") and metadata.get("verified") else "missing",
+          }
+          for key, value in values.items():
+              print(f"{key}={shlex.quote(str(value))}")
           PY
-          } >> "${GITHUB_STEP_SUMMARY}"
+            )"
+          fi
+          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'publish failed; inspect job logs')"
+          export REMEDIATION_COMMAND="cloudnative-pg-timescaledb/scripts/validate-publish-gates.sh --help"
+          cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
+            --template cloudnative-pg-timescaledb/templates/summaries/publish.md \
+            --output "${GITHUB_STEP_SUMMARY}" \
+            --require-success FINAL_TAGS \
+            --require-success CANDIDATE_DIGEST \
+            --require-success PUBLISHED_DIGEST \
+            --require-success SCAN_RESULT \
+            --require-success SBOM_STATUS \
+            --require-success PROVENANCE_STATUS \
+            --require-success SIGNATURE_STATUS \
+            --require-failure-reason
       # actions/upload-artifact v4.6.2
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

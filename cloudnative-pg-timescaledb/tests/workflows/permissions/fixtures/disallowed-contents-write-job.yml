@@ -1,12 +1,12 @@
-name: Valid Allowlisted Permission
+name: Invalid Contents Write Job
 on:
   push:
 permissions:
   contents: read
 jobs:
-  publish:
+  docs:
     runs-on: ubuntu-latest
     permissions:
-      packages: write
+      contents: write
     steps:
       - run: true

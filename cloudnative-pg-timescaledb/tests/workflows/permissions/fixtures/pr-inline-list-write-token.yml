@@ -1,12 +1,11 @@
-name: Valid Allowlisted Permission
-on:
-  push:
+name: Invalid PR Inline List Write
+on: [pull_request]
 permissions:
   contents: read
 jobs:
-  publish:
+  validate:
     runs-on: ubuntu-latest
     permissions:
-      packages: write
+      contents: write
     steps:
       - run: true

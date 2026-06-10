@@ -1,0 +1,10 @@
+name: Invalid Commented Write Permissions
+on:
+  push:
+permissions:
+  contents: write # invalid even with comment
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: true

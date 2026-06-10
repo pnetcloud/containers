@@ -18,7 +18,7 @@ run_optional_tool() {
   fi
 }
 
-mapfile -d '' workflow_files < <(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f -name '*.yml' -print0 2>/dev/null | sort -z)
+mapfile -d '' workflow_files < <(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 2>/dev/null | sort -z)
 if ((${#workflow_files[@]})); then
   run_optional_tool actionlint "${workflow_files[@]}"
 fi
@@ -32,6 +32,7 @@ python3 - "${ROOT_DIR}" "${POLICY_FILE}" <<'PY'
 from pathlib import Path
 import re
 import sys
+import yaml
 
 root = Path(sys.argv[1])
 policy_path = Path(sys.argv[2])
@@ -116,22 +117,25 @@ def line_value(line):
     return line.split(":", 1)[1].strip().strip('"')
 
 
-def workflow_triggers(text):
-    triggers = set()
-    in_on = False
-    for raw in text.splitlines():
-        stripped = raw.strip()
-        if re.match(r"^on:\s*$", stripped):
-            in_on = True
-            continue
-        if in_on:
-            indent = len(raw) - len(raw.lstrip(" "))
-            if indent == 0 and stripped and not stripped.startswith("#"):
-                break
-            match = re.match(r"^\s{2}([A-Za-z_]+):", raw)
-            if match:
-                triggers.add(match.group(1))
-    return triggers
+def load_workflow(path):
+    try:
+        payload = yaml.safe_load(path.read_text())
+    except Exception as exc:
+        diag(path, "workflow YAML parses", str(exc), "Keep workflow files valid YAML.")
+    if not isinstance(payload, dict):
+        diag(path, "workflow YAML is a mapping", type(payload).__name__, "Use a standard GitHub Actions workflow mapping.")
+    return payload
+
+
+def workflow_triggers(payload):
+    raw = payload.get(True, payload.get("on", {}))
+    if isinstance(raw, str):
+        return {raw}
+    if isinstance(raw, list):
+        return {str(item) for item in raw}
+    if isinstance(raw, dict):
+        return {str(key) for key in raw}
+    return set()
 
 
 def top_level_block(lines, key):
@@ -168,6 +172,20 @@ def job_blocks(lines):
             elif current:
                 jobs[current].append(raw)
     return jobs
+
+
+def permissions_from_value(value):
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        if value == "write-all":
+            return {"*": "write-all"}
+        if value == "read-all":
+            return {"*": "read-all"}
+        diag("permissions", "permissions value is {}, read-all, write-all, or mapping", value, "Use explicit least-privilege permissions.")
+    if isinstance(value, dict):
+        return {str(key): str(level).strip('"\'') for key, level in value.items()}
+    diag("permissions", "permissions value is mapping or scalar", type(value).__name__, "Use explicit least-privilege permissions.")
 
 
 def permissions_from_block(block):
@@ -213,30 +231,37 @@ def strict_allowed(policy, path):
 def readable_version_comment(lines, idx):
     candidates = []
     if idx > 0:
-        candidates.append(lines[idx - 1].strip())
-    candidates.append(lines[idx].split("#", 1)[1].strip() if "#" in lines[idx] else "")
-    return any(re.search(r"\bv?[0-9]+(?:\.[0-9]+){1,2}\b", candidate) for candidate in candidates if candidate.startswith("#") or candidate)
+        previous = lines[idx - 1].strip()
+        if previous.startswith("#"):
+            candidates.append(previous[1:].strip())
+    if "#" in lines[idx]:
+        candidates.append(lines[idx].split("#", 1)[1].strip())
+    return any(re.search(r"\bv?[0-9]+(?:\.[0-9]+){1,2}\b", candidate) for candidate in candidates)
 
 
 def validate_workflow(path, policy):
     text = path.read_text()
     rel = path.relative_to(root).as_posix()
     lines = text.splitlines()
+    payload = load_workflow(path)
     if path.name == "validate.yml":
         required = {"pull_request", "push", "workflow_dispatch"}
-        actual = workflow_triggers(text)
+        actual = workflow_triggers(payload)
         if not required.issubset(actual):
             diag(path, f"validate.yml triggers include {sorted(required)}", sorted(actual), "Add pull_request, push, and workflow_dispatch triggers.")
         if "make validate" not in text:
             diag(path, "validate workflow runs make validate", "missing", "Call make validate from validate.yml.")
-    top_permissions = permissions_from_block(top_level_block(lines, "permissions"))
+    if "permissions" not in payload:
+        diag(path, "workflow declares explicit top-level permissions", "missing", "Set top-level permissions to contents: read or {} to avoid repository default token scope.")
+    top_permissions = permissions_from_value(payload.get("permissions"))
     if top_permissions.get("*") == "write-all":
         diag(path, "no write-all permissions", "write-all", "Use explicit least-privilege permissions.")
     for permission, value in top_permissions.items():
         if value == "write":
             diag(path, "no top-level write permissions", f"{permission}: write", "Move write permissions to named allowlisted jobs only.")
-    triggers = workflow_triggers(text)
+    triggers = workflow_triggers(payload)
     jobs = job_blocks(lines)
+    yaml_jobs = payload.get("jobs", {}) if isinstance(payload.get("jobs"), dict) else {}
     current_job = "<top-level>"
     for idx, raw in enumerate(lines):
         job_match = re.match(r"^\s{2}([A-Za-z0-9_-]+):\s*$", raw)
@@ -253,13 +278,14 @@ def validate_workflow(path, policy):
         if PINNED_RE.fullmatch(action) and not readable_version_comment(lines, idx):
             diag(path, "pinned actions include readable version comments", action, "Add a nearby version comment such as '# actions/checkout v4.2.2'.")
     for job, block in jobs.items():
-        perms = permissions_from_block([line[4:] if line.startswith("    ") else line for line in block if re.match(r"^\s{4}permissions:", line) or re.match(r"^\s{6}[A-Za-z0-9_-]+:", line)])
+        job_payload = yaml_jobs.get(job, {}) if isinstance(yaml_jobs.get(job, {}), dict) else {}
+        perms = permissions_from_value(job_payload.get("permissions"))
         if perms.get("*") == "write-all":
             diag(path, "no job write-all permissions", f"job={job} write-all", "Use explicit least-privilege job permissions.")
         for permission, value in perms.items():
             if value != "write":
                 continue
-            if "pull_request" in triggers:
+            if {"pull_request", "pull_request_target"} & triggers:
                 diag(path, "pull_request workflows do not receive write tokens", f"job={job} {permission}: write", "Do not grant write permissions to pull_request workflows.")
             if permission not in RELEASE_WRITE_PERMISSIONS or not permission_allowed(policy, rel, job, permission, value):
                 diag(path, "write permissions are explicitly allowlisted for named jobs", f"job={job} {permission}: write", "Add a justified workflow-policy permission_allowlist entry in the owning story.")
@@ -281,7 +307,7 @@ workflow_dir = root / ".github/workflows"
 validate_yml = workflow_dir / "validate.yml"
 if not validate_yml.exists():
     diag(validate_yml, "validate workflow exists", "missing", "Create .github/workflows/validate.yml.")
-for path in sorted(workflow_dir.glob("*.yml")):
+for path in sorted(list(workflow_dir.glob("*.yml")) + list(workflow_dir.glob("*.yaml"))):
     if path.name in {"validate.yml", "update.yml", "build.yml", "security-scan.yml"} or path.exists():
         validate_workflow(path, policy)
 validate_strict_mode(policy)

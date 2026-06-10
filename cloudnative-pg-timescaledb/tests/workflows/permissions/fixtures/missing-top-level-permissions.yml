@@ -1,0 +1,8 @@
+name: Invalid Missing Top Permissions
+on:
+  push:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: true

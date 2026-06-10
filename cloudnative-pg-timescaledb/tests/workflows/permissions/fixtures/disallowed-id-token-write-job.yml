@@ -1,12 +1,12 @@
-name: Valid Allowlisted Permission
+name: Invalid ID Token Write Job
 on:
   push:
 permissions:
   contents: read
 jobs:
-  publish:
+  docs:
     runs-on: ubuntu-latest
     permissions:
-      packages: write
+      id-token: write
     steps:
       - run: true

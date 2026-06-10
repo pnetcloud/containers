@@ -1,6 +1,8 @@
 name: Invalid Release Permission
 on:
   push:
+permissions:
+  contents: read
 jobs:
   publish:
     runs-on: ubuntu-latest

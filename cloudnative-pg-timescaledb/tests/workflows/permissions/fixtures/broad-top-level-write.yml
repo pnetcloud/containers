@@ -1,0 +1,10 @@
+name: Invalid Top Level Write
+on:
+  push:
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: true
