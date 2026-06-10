@@ -67,6 +67,7 @@ scan_makefile_execution() {
       $in_recipe = 0;
       $recipe_continuation = 0;
       $make_continuation = 0;
+      $make_continuation_from_rule = 0;
     }
     sub continues_line {
       my ($value) = @_;
@@ -86,24 +87,32 @@ scan_makefile_execution() {
       return 0 if substr($value, $colon, 2) eq ":=";
       return 1;
     }
+    sub has_inline_recipe {
+      my ($value) = @_;
+      $value =~ s/(?<!\\)#.*$//;
+      return $value =~ /;/;
+    }
     chomp;
     my $raw = $_;
     my $line = $raw;
     my $is_recipe = $recipe_continuation || ($in_recipe && index($raw, $recipe_prefix) == 0);
     my $is_make_continuation = $make_continuation && !$is_recipe;
+    my $current_make_continuation_from_rule = $make_continuation_from_rule;
     my $inline_recipe = "";
 
     if (!$is_recipe && $raw =~ /^[[:space:]]*#/) {
       $recipe_continuation = 0;
       $make_continuation = 0;
+      $make_continuation_from_rule = 0;
       next;
     }
     if (!$is_recipe) {
-      $line =~ s/(?<!\\)#.*$// unless $is_make_continuation;
-      if (is_rule_line($line) && $line =~ /;/) {
+      my $can_have_inline_recipe = (!$is_make_continuation && is_rule_line($line)) || ($is_make_continuation && $current_make_continuation_from_rule);
+      if ($can_have_inline_recipe && has_inline_recipe($line)) {
         ($inline_recipe = $raw) =~ s/^[^;]*;//;
         $line =~ s/;.*$//;
       }
+      $line =~ s/(?<!\\)#.*$//;
     }
     my $scan_line = $is_recipe ? $line : "${line}\n${inline_recipe}";
 
@@ -127,13 +136,18 @@ scan_makefile_execution() {
       $recipe_prefix = $1;
     }
     $recipe_continuation = ($is_recipe && continues_line($raw)) || ($inline_recipe ne "" && continues_line($inline_recipe));
-    $make_continuation = !$is_recipe && $inline_recipe eq "" && continues_line($line);
+    my $next_make_continuation = !$is_recipe && $inline_recipe eq "" && continues_line($line);
+    my $next_make_continuation_from_rule = $next_make_continuation && (is_rule_line($line) || ($is_make_continuation && $current_make_continuation_from_rule));
+    $make_continuation = $next_make_continuation;
+    $make_continuation_from_rule = $next_make_continuation_from_rule;
     if ($is_recipe || $line =~ /^[[:space:]]*$/ || $raw =~ /^[[:space:]]*#/) {
       next;
     }
-    if (is_rule_line($line)) {
+    if ($is_make_continuation && $current_make_continuation_from_rule) {
       $in_recipe = 1;
-    } elsif ($is_make_continuation && $in_recipe) {
+    } elsif ($is_make_continuation) {
+      $in_recipe = $in_recipe ? 1 : 0;
+    } elsif (is_rule_line($line)) {
       $in_recipe = 1;
     } else {
       $in_recipe = 0;
@@ -192,6 +206,10 @@ assert_makefile_scan_passes "semicolon assignment is not an inline recipe" 'URL 
 # shellcheck disable=SC2016
 assert_makefile_scan_passes "continued assignment comment" 'VAR := ok \\\n# $(shell echo harmless top-level comment)\nall:\n\t@echo ok\n'
 # shellcheck disable=SC2016
+assert_makefile_scan_passes "continued assignment trailing comment" 'VAR := \\\nvalue # $(shell echo harmless top-level comment)\nall:\n\t@echo ok\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_passes "continued assignment url is not rule" 'VAR := foo \\\nhttp://example\n\t# $(shell echo harmless top-level comment)\nall:\n\t@echo ok\n'
+# shellcheck disable=SC2016
 assert_makefile_scan_passes "continued rule header comment" 'all: \\\n# $(shell echo harmless top-level comment)\n\t@echo ok\n'
 # shellcheck disable=SC2016
 assert_makefile_scan_passes "vpath directive is not a rule" 'vpath %.c src:lib\n\t# $(shell echo harmless top-level comment)\nall:\n\t@echo ok\n'
@@ -211,6 +229,8 @@ assert_makefile_scan_fails "continued rule header recipe comment shell" 'all: de
 assert_makefile_scan_fails "inline recipe comment shell" 'all: ; # $(shell date)\n'
 # shellcheck disable=SC2016
 assert_makefile_scan_fails "continued inline recipe comment shell" 'all: ; @: \\\n# $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "continued rule header inline recipe comment shell" 'all: \\\n; # $(shell date)\n'
 # shellcheck disable=SC2016
 assert_makefile_scan_fails "leading-space target recipe comment shell" ' all:\n\t# $(shell date)\n'
 # shellcheck disable=SC2016
