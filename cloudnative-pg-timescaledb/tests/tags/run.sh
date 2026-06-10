@@ -117,12 +117,47 @@ Path(output).write_text("\n".join(result) + "\n")
 PY
 }
 
+skipped_latest_fixture() {
+  local output="$1"
+  python3 - "${FIXTURE_DIR}/valid-tags.yaml" "${output}" <<'PY'
+from pathlib import Path
+import sys
+
+source, output = sys.argv[1:]
+lines = Path(source).read_text().splitlines()
+result = []
+in_latest = False
+changed_publish = False
+removed_tags = False
+for line in lines:
+    if line.startswith("  - "):
+        in_latest = False
+    if 'pg_major: "18"' in line:
+        in_latest = True
+    if in_latest and "debian_variant: trixie" in line:
+        in_latest = True
+    if in_latest and line.strip() == "publish: true" and not changed_publish:
+        result.append("    publish: false")
+        changed_publish = True
+        continue
+    if in_latest and line.strip().startswith("tags:") and changed_publish and not removed_tags:
+        removed_tags = True
+        continue
+    result.append(line)
+if not changed_publish or not removed_tags:
+    raise SystemExit("failed to make latest row skipped without tags")
+Path(output).write_text("\n".join(result) + "\n")
+PY
+}
+
 skipped_with_tags_fixture="$(mktemp)"
+skipped_latest_fixture="$(mktemp)"
 missing_latest_owner_fixture="$(mktemp)"
 invalid_metadata_dir="$(mktemp -d)"
 invalid_utf8_fixture="$(mktemp)"
-trap 'rm -rf "${skipped_with_tags_fixture}" "${missing_latest_owner_fixture}" "${invalid_metadata_dir}" "${invalid_utf8_fixture}"' EXIT
+trap 'rm -rf "${skipped_with_tags_fixture}" "${skipped_latest_fixture}" "${missing_latest_owner_fixture}" "${invalid_metadata_dir}" "${invalid_utf8_fixture}"' EXIT
 replace_line_fixture "${skipped_with_tags_fixture}" "    publish: true" "    publish: false"
+skipped_latest_fixture "${skipped_latest_fixture}"
 remove_latest_row_fixture "${missing_latest_owner_fixture}"
 printf '\377\n' >"${invalid_utf8_fixture}"
 
@@ -146,6 +181,7 @@ expect_fail "CNPG tag Debian mismatch" "cnpg_tag matches pg_version and debian_v
 expect_fail "duplicate generated tag ownership" "exactly one image row owner" "${FIXTURE_DIR}/duplicate-tag-assignment.yaml"
 expect_fail "invalid Docker tag character" "valid tag grammar" "${FIXTURE_DIR}/invalid-docker-tag-character.yaml"
 expect_fail "skipped row with tags" "tags only present on publishable rows" "${skipped_with_tags_fixture}"
+expect_fail "skipped latest row" "latest_eligible row is publishable" "${skipped_latest_fixture}"
 expect_fail "metadata path is directory" "metadata file is a regular UTF-8 YAML file" "${invalid_metadata_dir}"
 expect_fail "metadata path is invalid UTF-8" "metadata file is UTF-8 text" "${invalid_utf8_fixture}"
 expect_fail "Alpine unsupported" "debian_variant is trixie or bookworm" "${FIXTURE_DIR}/invalid-debian-variant-alpine.yaml"

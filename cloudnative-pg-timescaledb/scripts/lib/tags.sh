@@ -189,6 +189,8 @@ for idx, entry in enumerate(entries):
         latest_rows.append((entry["pg_major"], entry["debian_variant"]))
         if entry["pg_major"] != "18" or entry["debian_variant"] != "trixie" or entry["experimental"]:
             fail("latest only for non-experimental 18 trixie", f"row={(entry['pg_major'], entry['debian_variant'])}, experimental={entry['experimental']}", "Move latest_eligible to PostgreSQL 18 trixie only.")
+        if entry["publish"] is not True:
+            fail("latest_eligible row is publishable", f"row={(entry['pg_major'], entry['debian_variant'])}, publish={entry['publish']}", "Enable publish and materialize tags before assigning latest eligibility.")
     if entry["pg_major"] == "18" and entry["debian_variant"] == "trixie" and entry["experimental"] is False and entry["latest_eligible"] is not True:
         fail("PostgreSQL 18 trixie has latest_eligible true", repr(entry["latest_eligible"]), "Set latest_eligible: true so latest is emitted exactly for the current primary line.")
     if entry["publish"] or "tags" in entry:
@@ -210,6 +212,8 @@ for idx, entry in enumerate(entries):
                 fail("each generated tag has exactly one image row owner", f"{tag!r} owned by {owner} and entries[{idx}] {entry['pg_major']}/{entry['debian_variant']}", "Do not assign rolling, immutable, or latest tags to multiple metadata rows.")
         if "tags" in entry and entry["tags"] != actual:
             fail(f"entries[{idx}].tags exactly generated policy tags", repr(entry["tags"]), f"Use deterministic tags {actual!r} for this PG/Debian/date combination.")
+        if entry["latest_eligible"] and "latest" not in actual:
+            fail("latest_eligible publishable row emits latest tag", repr(actual), "Keep latest in the generated tag set for the current primary line.")
 
 if latest_rows != [("18", "trixie")]:
     fail("latest emitted exactly for PostgreSQL 18 trixie", repr(latest_rows), "Only the current primary PostgreSQL line may receive latest.")

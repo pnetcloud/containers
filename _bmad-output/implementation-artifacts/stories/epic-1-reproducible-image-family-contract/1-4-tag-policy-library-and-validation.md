@@ -156,6 +156,7 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Addressed BMad review findings: added controlled `validate-tags.sh` diagnostics for missing option values, rejected `tags` on `publish: false` rows, converted directory and invalid UTF-8 metadata paths into deterministic diagnostics, removed the fixed `/tmp` positive-output path, and kept the `DATE` fallback assertion aligned with `validate.sh`.
 - 2026-06-10: Addressed BMad review round 2 findings: made missing `18-trixie` latest ownership fail unconditionally, moved tag date resolution/calendar validation into shared tag policy, and proved generated matrix tags/candidate refs honor `TAG_VALIDATION_DATE -> DATE -> 20260609`.
 - 2026-06-10: Addressed BMad review round 3 findings: moved Docker tag grammar validation into shared Python tag policy and matrix JSON validation, added generator/matrix regressions for invalid tag characters, and corrected stale `versions.yaml` completion notes.
+- 2026-06-10: Addressed BMad review round 4 findings: required the `latest_eligible` owner to be publishable and emit `latest`, rejected digest-form candidate refs in matrix validation, and added `validate-matrix-json.py` to the File List.
 
 ### Completion Notes
 
@@ -165,8 +166,10 @@ Every implementation story must finish with a working repository state and must 
 - Current `versions.yaml` has publishable PostgreSQL 17/18 `trixie` and `bookworm` rows with deterministic materialized tags, while PostgreSQL `19beta1` rows remain `publish: false`; fixture coverage also proves skipped and invalid tag cases.
 - Publishable rows cannot bypass tag validation by omitting `tags`; every generated tag is checked for deterministic ownership and Docker tag grammar before later publish stories consume it.
 - Skipped rows cannot carry materialized publish tags, so disabled image rows cannot accidentally retain rolling, immutable, or `latest` references.
+- The only `latest_eligible` owner must be publishable and emit `latest`; skipped rows cannot reserve `latest` without producing the tag.
 - Tag validation reports invalid CLI arguments and non-file/non-UTF-8 metadata inputs with the same deterministic diagnostic shape used by other validators.
 - Generated tag consumers now use the same shared release-date resolution and calendar validation as tag validation, so matrix/candidate refs cannot silently drift to `20260609` or accept impossible dates.
+- Matrix validation requires candidate refs to equal `image:<immutable-intended-tag>` and rejects digest-form candidate refs.
 - Story 1.4 intentionally does not add GHCR publish, tag promotion, catalog references, or public tag docs; those remain owned by later stories.
 
 ### Latest Validation
@@ -182,6 +185,7 @@ Every implementation story must finish with a working repository state and must 
 - `cloudnative-pg-timescaledb/scripts/lib/tag_policy.py`
 - `cloudnative-pg-timescaledb/scripts/lib/generator_contract.py`
 - `cloudnative-pg-timescaledb/scripts/validate-tags.sh`
+- `cloudnative-pg-timescaledb/scripts/validate-matrix-json.py`
 - `cloudnative-pg-timescaledb/scripts/validate.sh`
 - `cloudnative-pg-timescaledb/tests/tags/run.sh`
 - `cloudnative-pg-timescaledb/tests/matrix/run.sh`
@@ -212,3 +216,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Resolved BMad review findings for tag CLI argument diagnostics, skipped-row tag rejection, metadata read diagnostics, test temp output, and review artifact self-consistency.
 - 2026-06-10: Resolved BMad review round 2 findings for required latest ownership and shared generated tag-date validation.
 - 2026-06-10: Resolved BMad review round 3 findings for shared Docker tag grammar enforcement and stale completion notes.
+- 2026-06-10: Resolved BMad review round 4 findings for skipped latest ownership, digest candidate refs, and File List completeness.

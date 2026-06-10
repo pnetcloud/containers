@@ -234,6 +234,19 @@ Path(output).write_text(json.dumps(payload, separators=(",", ":")))
 PY
 expect_command_fail "shared workflow validator rejects invalid Docker tags" "Docker tag grammar" "${VALIDATE_MATRIX_JSON}" --file "${invalid_tag_matrix}"
 rm -f "${invalid_tag_matrix}"
+digest_candidate_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${digest_candidate_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["candidate_ref"] = f"{payload['include'][0]['image']}@sha256:{'a' * 64}"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects digest candidate refs" "candidate_ref equals image:immutable-tag" "${VALIDATE_MATRIX_JSON}" --file "${digest_candidate_matrix}"
+rm -f "${digest_candidate_matrix}"
 expect_matrix_fail "missing required key" "missing .*digest" "${FIXTURE_DIR}/missing-required-key.json"
 expect_matrix_fail "19beta1 must be experimental" "19beta1 .*experimental" "${FIXTURE_DIR}/pg19beta1-not-experimental.json"
 expect_matrix_fail "bookworm cannot be latest" "latest_eligible only" "${FIXTURE_DIR}/bookworm-latest-eligible.json"

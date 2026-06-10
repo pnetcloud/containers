@@ -55,10 +55,13 @@ def validate(payload, artifact):
             if not isinstance(tag, str) or not DOCKER_TAG_RE.fullmatch(tag):
                 fail(artifact, f"include[{idx}].intended_tags use Docker tag grammar", repr(tag), "Regenerate matrix tags from validated tag policy output.")
         candidate_ref = row["candidate_ref"]
-        if not isinstance(candidate_ref, str) or ":" not in candidate_ref.rsplit("/", 1)[-1]:
-            fail(artifact, f"include[{idx}].candidate_ref has tagged image reference", repr(candidate_ref), "Use image:immutable-tag candidate references.")
-        candidate_tag = candidate_ref.rsplit(":", 1)[-1]
-        if not DOCKER_TAG_RE.fullmatch(candidate_tag):
+        immutable_tags = [tag for tag in intended_tags if "-pg" in tag and "-ts" in tag]
+        if len(immutable_tags) != 1:
+            fail(artifact, f"include[{idx}].intended_tags include exactly one immutable tag", repr(intended_tags), "Emit one immutable candidate tag per matrix row.")
+        expected_candidate_ref = f"{row['image']}:{immutable_tags[0]}"
+        if not isinstance(candidate_ref, str) or "@" in candidate_ref or candidate_ref != expected_candidate_ref:
+            fail(artifact, f"include[{idx}].candidate_ref equals image:immutable-tag", repr(candidate_ref), f"Use {expected_candidate_ref!r}; digest refs and recomputed tags are not valid candidate refs.")
+        if not DOCKER_TAG_RE.fullmatch(immutable_tags[0]):
             fail(artifact, f"include[{idx}].candidate_ref tag uses Docker tag grammar", repr(candidate_ref), "Use a Docker tag-safe immutable candidate reference.")
 
 
