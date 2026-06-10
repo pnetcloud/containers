@@ -1,116 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-tags_validate_date() {
-  local release_date="$1"
-  [[ "${release_date}" =~ ^[0-9]{8}$ ]] || {
-    printf 'invalid release_date %q; expected UTC YYYYMMDD\n' "${release_date}" >&2
-    return 1
-  }
-  python3 - "${release_date}" <<'PY'
-from datetime import datetime
-import sys
-
-value = sys.argv[1]
-try:
-    datetime.strptime(value, "%Y%m%d")
-except ValueError:
-    raise SystemExit(f"invalid release_date {value!r}; expected valid UTC calendar date")
-PY
-}
-
-tags_json_array() {
-  python3 - "$@" <<'PY'
-import json
-import sys
-
-print(json.dumps(sys.argv[1:]))
-PY
-}
-
-tags_generate_from_fields() {
-  local release_date="$1"
-  local pg_major="$2"
-  local pg_version="$3"
-  local debian_variant="$4"
-  local timescaledb_version="$5"
-  local experimental="$6"
-  local latest_eligible="$7"
-  local suffix immutable rolling
-  local tags=()
-
-  tags_validate_date "${release_date}" >/dev/null
-  case "${pg_major}" in
-    17|18|19beta1) ;;
-    *) printf 'unsupported PostgreSQL tag policy row %q\n' "${pg_major}" >&2; return 1 ;;
-  esac
-  case "${debian_variant}" in
-    trixie|bookworm) ;;
-    *) printf 'unsupported Debian tag policy row %q\n' "${debian_variant}" >&2; return 1 ;;
-  esac
-  if [[ "${pg_major}" == "19beta1" && "${experimental}" != "true" ]] || [[ "${pg_major}" != "19beta1" && "${experimental}" == "true" ]]; then
-    printf 'experimental flag mismatch for PostgreSQL tag policy row %q\n' "${pg_major}" >&2
-    return 1
-  fi
-  if [[ "${latest_eligible}" == "true" && ( "${pg_major}" != "18" || "${debian_variant}" != "trixie" || "${experimental}" == "true" ) ]]; then
-    printf 'latest is only allowed for non-experimental PostgreSQL 18 trixie\n' >&2
-    return 1
-  fi
-
-  suffix=""
-  if [[ "${debian_variant}" != "trixie" ]]; then
-    suffix="-${debian_variant}"
-  fi
-  immutable="${pg_major}-pg${pg_version}-ts${timescaledb_version}-${release_date}${suffix}"
-  if [[ "${experimental}" == "true" ]]; then
-    tags=("${immutable}")
-  else
-    rolling="${pg_major}"
-    if [[ "${debian_variant}" != "trixie" ]]; then
-      rolling="${pg_major}-${debian_variant}"
-    fi
-    tags=("${rolling}" "${immutable}")
-    if [[ "${latest_eligible}" == "true" ]]; then
-      tags+=("latest")
-    fi
-  fi
-
-  for tag in "${tags[@]}"; do
-    [[ "${tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || {
-      printf 'invalid Docker tag %q; expected [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\n' "${tag}" >&2
-      return 1
-    }
-  done
-  tags_json_array "${tags[@]}"
-}
-
-tags_generate_json() {
-  local release_date="$1"
-  local entry_json="$2"
-  local fields=()
-  mapfile -t fields < <(
-    python3 - "${entry_json}" <<'PY'
-import json
-import sys
-
-try:
-    entry = json.loads(sys.argv[1])
-    for field in ("pg_major", "pg_version", "debian_variant", "timescaledb_version", "experimental", "latest_eligible"):
-        value = entry[field]
-        if isinstance(value, bool):
-            value = "true" if value else "false"
-        print(value)
-except (json.JSONDecodeError, KeyError, TypeError) as exc:
-    raise SystemExit(str(exc))
-PY
-  )
-  [[ "${#fields[@]}" -eq 6 ]] || {
-    printf 'invalid tag policy entry JSON\n' >&2
-    return 1
-  }
-  tags_generate_from_fields "${release_date}" "${fields[@]}"
-}
-
 tags_validate_file() {
   local metadata_file="$1"
   local release_date="$2"
@@ -119,14 +9,14 @@ tags_validate_file() {
   python3 - "$metadata_file" "$release_date" "$lib_dir" <<'PY'
 from datetime import datetime
 from pathlib import Path
-import json
 import re
-import subprocess
 import sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, sys.argv[3])
+from tag_policy import generated_tags
 
 path = Path(sys.argv[1])
 release_date = sys.argv[2]
-tags_script = Path(sys.argv[3]) / "tags.sh"
 command = f"validate-tags --metadata {path} --date {release_date}"
 
 def fail(expected, actual, remediation):
@@ -137,23 +27,6 @@ def fail(expected, actual, remediation):
         f"actual: {actual}\n"
         f"remediation: {remediation}"
     )
-
-def generated_tags(entry, date_value):
-    args = [
-        str(tags_script),
-        "--generate-fields",
-        date_value,
-        entry["pg_major"],
-        entry["pg_version"],
-        entry["debian_variant"],
-        entry["timescaledb_version"],
-        "true" if entry["experimental"] else "false",
-        "true" if entry["latest_eligible"] else "false",
-    ]
-    result = subprocess.run(args, text=True, capture_output=True, check=False)
-    if result.returncode != 0:
-        raise ValueError((result.stderr or result.stdout).strip())
-    return json.loads(result.stdout)
 
 def parse_scalar(raw):
     value = raw.strip()
@@ -346,33 +219,3 @@ if latest_rows != [("18", "trixie")]:
     fail("latest emitted exactly for PostgreSQL 18 trixie", repr(latest_rows), "Only the current primary PostgreSQL line may receive latest.")
 PY
 }
-
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  case "${1:-}" in
-    --generate-fields)
-      if [[ $# -ne 8 ]]; then
-        printf 'usage: %s --generate-fields YYYYMMDD PG_MAJOR PG_VERSION DEBIAN_VARIANT TIMESCALEDB_VERSION EXPERIMENTAL LATEST_ELIGIBLE\n' "$0" >&2
-        exit 2
-      fi
-      tags_generate_from_fields "${@:2}"
-      ;;
-    --generate-json)
-      if [[ $# -ne 3 ]]; then
-        printf 'usage: %s --generate-json YYYYMMDD ENTRY_JSON\n' "$0" >&2
-        exit 2
-      fi
-      tags_generate_json "$2" "$3"
-      ;;
-    --validate-date)
-      if [[ $# -ne 2 ]]; then
-        printf 'usage: %s --validate-date YYYYMMDD\n' "$0" >&2
-        exit 2
-      fi
-      tags_validate_date "$2"
-      ;;
-    *)
-      printf 'usage: %s --generate-json YYYYMMDD ENTRY_JSON\n' "$0" >&2
-      exit 2
-      ;;
-  esac
-fi
