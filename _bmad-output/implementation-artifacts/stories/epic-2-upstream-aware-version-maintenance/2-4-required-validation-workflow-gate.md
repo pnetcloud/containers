@@ -183,6 +183,14 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for masked-failure gates, `shellcheck-doc` only installs, dashed heredoc delimiters, and shell `if` conditional gate bodies.
 - Addressed BMAD code-review pass 5 findings by supporting one-line shell conditionals before real gates, preserving commands after closing shell block tokens, ignoring here-strings when detecting heredocs, supporting version-pinned `shellcheck=<version>` apt package tokens, and rejecting any `||` failure masking after required gate commands.
 - Added regression fixtures for valid inline shell conditionals, valid here-strings before gates, valid version-pinned `shellcheck` installs, and masked failures using `|| echo`.
+- Addressed BMAD code-review pass 6 findings by allowing ordinary stdout/stderr redirections after required gate commands while rejecting backgrounded gates, piped gates, `|&` gates, quoted-only gate text, and block-close failure masking.
+- Added regression fixtures for valid gate redirections, heredoc suffix control flow before gates, shellcheck apt selectors, backgrounded gates, piped `|&` gates, quoted-only gates, and block-close masking.
+- Addressed BMAD code-review pass 6 findings by preserving semicolons inside quoted shell text, avoiding heredoc detection on here-strings, supporting heredoc delimiters followed by control suffixes, rejecting backgrounded or piped required gate suffixes, preserving block-close control suffixes as executable text, and accepting apt selectors such as `shellcheck:amd64`.
+- Added regression fixtures for quoted text containing gate-like commands, heredoc control suffixes before real gates, block-close masking, backgrounded gates, and valid apt selectors.
+- Addressed BMAD code-review pass 7 preparation findings by preserving shell semicolon splitting with quote awareness, treating unsafe block-close suffixes as executable text that stops later gate recognition, and rejecting required gate lines with background or single-pipe suffixes.
+- Added regression fixtures for valid heredoc control suffixes before gates, invalid backgrounded gates, and invalid quoted text containing gate-like command strings.
+- Addressed BMAD code-review pass 7 findings by rejecting Bash `|&` suffixes on required gates while allowing common blocking redirection suffixes such as `2>&1`, `&>file`, `>file`, and `2>file`.
+- Added regression fixtures for valid gate redirections and invalid `|&` required gate pipelines.
 
 ### Validation Commands
 
@@ -204,6 +212,10 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: shellcheck installation evidence now requires `apt-get install` to install `shellcheck`, and readable version comment enforcement covers quoted pinned `uses:` values.
 - Review follow-up: required gates now remain blocking because masked-failure suffixes are not accepted, heredoc payload variants are ignored, and shell conditional block bodies do not satisfy unconditional gate checks.
 - Review follow-up: the shell text filter now avoids false failures for valid one-line conditionals, commands after block closers, here-strings, and version-pinned shellcheck packages while continuing to reject non-blocking required gate lines.
+- Review follow-up: required gate matching now treats redirections as valid but rejects backgrounding, pipes, pipe-ampersand, and quoted-only gate text as non-blocking or non-executed evidence.
+- Review follow-up: required gates now reject `||`, backgrounding, and non-pipeline trailing control operators after a matched gate line; gate-like commands inside quoted text do not satisfy execution requirements.
+- Review follow-up: block-close suffixes such as `fi || exit 0` no longer allow later commands to satisfy the required gate checks.
+- Review follow-up: required gate suffix validation now distinguishes blocking redirection syntax from non-blocking/backgrounding and pipe operators, including Bash `|&`.
 
 ## File List
 
@@ -226,3 +238,7 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Hardened workflow validation for heredoc/short-circuit gate bypasses, explicit shellcheck installation, and quoted pinned action version comments.
 - 2026-06-10: Hardened workflow validation for masked failures, exact shellcheck package matching, dashed heredoc delimiters, and shell conditional bodies.
 - 2026-06-10: Hardened workflow validation for inline shell block parsing, here-strings, version-pinned shellcheck package tokens, generalized `||` masking, and matching positive fixtures.
+- 2026-06-10: Hardened workflow validation for gate redirections versus backgrounded, piped, pipe-ampersand, and quoted-only gate lines.
+- 2026-06-10: Hardened workflow validation for quoted shell text, heredoc control suffixes, block-close masking, backgrounded gates, and apt package selectors.
+- 2026-06-10: Hardened workflow validation for shell quote-aware segmentation, unsafe block-close suffixes, and background/single-pipe required gate suffixes.
+- 2026-06-10: Hardened required gate suffix validation for Bash `|&` pipelines while preserving valid redirection suffixes.

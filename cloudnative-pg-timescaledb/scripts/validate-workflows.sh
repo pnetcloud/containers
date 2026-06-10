@@ -152,22 +152,63 @@ def workflow_jobs(payload, path):
     return {str(job): job_payload for job, job_payload in jobs.items()}
 
 
+def shell_semicolon_segments(line):
+    segments = []
+    current = []
+    quote = None
+    escaped = False
+    for char in line:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            current.append(char)
+            escaped = True
+            continue
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            current.append(char)
+            quote = char
+            continue
+        if char == ";":
+            segments.append("".join(current))
+            current = []
+            continue
+        current.append(char)
+    segments.append("".join(current))
+    return segments
+
+
 def executable_run_text(run):
     executable = []
     heredoc_end = None
     shell_block_depth = 0
+    stop_after_unsafe_control = False
     for line in run.splitlines():
+        if stop_after_unsafe_control:
+            break
         if heredoc_end:
             if line.strip() == heredoc_end:
                 heredoc_end = None
             continue
         uncommented = line.split("#", 1)[0]
-        for segment in uncommented.split(";"):
+        for segment in shell_semicolon_segments(uncommented):
             stripped = segment.strip()
             if not stripped:
                 continue
             if re.match(r"^(fi|done|esac)\b", stripped):
                 shell_block_depth = max(shell_block_depth - 1, 0)
+                trailing = re.sub(r"^(fi|done|esac)\b", "", stripped, count=1).strip()
+                if trailing:
+                    executable.append(trailing)
+                    if trailing.startswith(("||", "&&")):
+                        stop_after_unsafe_control = True
+                        break
                 continue
             if shell_block_depth:
                 if re.match(r"^(if|while|until|case|for|select)\b", stripped):
@@ -178,7 +219,7 @@ def executable_run_text(run):
             if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                 shell_block_depth += 1
                 continue
-            heredoc_match = re.search(r"(?<!<)<<(?!<)-?\s*(['\"]?)([^'\"\s;]+)\1", stripped)
+            heredoc_match = re.search(r"(?<!<)<<(?!<)-?\s*(['\"]?)([^'\"\s;|&()<>]+)\1", stripped)
             if heredoc_match:
                 heredoc_end = heredoc_match.group(2).lstrip("\\")
             executable.append(stripped)
@@ -339,7 +380,10 @@ def command_present(run_text, pattern):
         if not match:
             continue
         suffix = line[match.end():]
-        if "||" in suffix:
+        if "||" in suffix or "|&" in suffix:
+            continue
+        without_redirects = re.sub(r"\d?>&\d|\d?>[^\s;|&]+|&>[^\s;|&]+", "", suffix)
+        if re.search(r"(?<![|&])&(?!=|>)|(?<![|])\|(?![|&])", without_redirects):
             continue
         return True
     return False
@@ -363,7 +407,7 @@ def validate_workflow(path, policy):
             diag(path, "validate workflow runs actionlint through deterministic workflow discovery", "missing", "Use find .github/workflows -type f ... -print0 | sort -z | xargs -0 actionlint.")
         if not command_present(run_text, r"^\s*git\s+ls-files\s+'cloudnative-pg-timescaledb/scripts/\*\.sh'\s+'cloudnative-pg-timescaledb/scripts/\*\*/\*\.sh'\s+\|\s+sort\s+\|\s+xargs\s+shellcheck\b"):
             diag(path, "validate workflow runs shellcheck against git-tracked script list", "missing", "Use git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck.")
-        if not command_present(run_text, r"^\s*(sudo\s+)?apt-get\s+install\b[^\n]*(^|\s)shellcheck(=[^\s;|&]+)?(?=\s|[;|&]|$)"):
+        if not command_present(run_text, r"^\s*(sudo\s+)?apt-get\s+install\b[^\n]*(^|\s)shellcheck([:=/][^\s;|&]+)?(?=\s|[;|&]|$)"):
             diag(path, "validate workflow installs or provides real shellcheck", "missing", "Install shellcheck before make validate; bash -n is not a sufficient CI gate.")
         if re.search(r"bash\s+-n", run_text) and "shellcheck" not in run_text:
             diag(path, "bash -n is not the CI shell validation gate", "bash -n only", "Run real shellcheck in CI.")

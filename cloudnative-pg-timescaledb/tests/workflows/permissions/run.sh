@@ -199,7 +199,10 @@ for fixture in \
   valid-least-privilege.yml \
   valid-inline-shell-conditional.yml \
   valid-here-string-before-gates.yml \
+  valid-heredoc-control-suffix-before-gates.yml \
   valid-shellcheck-version-package.yml \
+  valid-shellcheck-apt-selectors.yml \
+  valid-gate-redirections.yml \
   valid-release-allowlisted-permissions.yml \
   write-all.yml \
   top-level-write.yml \
@@ -242,6 +245,10 @@ for fixture in \
   validate-masked-failure-gates.yml \
   validate-shellcheck-doc-only.yml \
   validate-shell-conditional-gates.yml \
+  validate-block-close-mask-gates.yml \
+  validate-backgrounded-gates.yml \
+  validate-quoted-text-gates.yml \
+  validate-pipe-ampersand-gates.yml \
   valid-update-autocommit-contents-write.yml \
   invalid-update-nonautocommit-contents-write.yml; do
   [[ -f "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -f" "${FIXTURE_DIR}/${fixture}" "fixture exists" "missing" "Restore Story 2.4 workflow policy fixtures."; exit 1; }
@@ -263,10 +270,25 @@ prepare_root "${here_string_root}"
 cp "${FIXTURE_DIR}/valid-here-string-before-gates.yml" "${here_string_root}/.github/workflows/validate.yml"
 expect_pass "valid here string before gates" "${here_string_root}"
 
+heredoc_control_root="${tmp_root}/valid-heredoc-control-suffix-before-gates"
+prepare_root "${heredoc_control_root}"
+cp "${FIXTURE_DIR}/valid-heredoc-control-suffix-before-gates.yml" "${heredoc_control_root}/.github/workflows/validate.yml"
+expect_pass "valid heredoc control suffix before gates" "${heredoc_control_root}"
+
 shellcheck_version_root="${tmp_root}/valid-shellcheck-version-package"
 prepare_root "${shellcheck_version_root}"
 cp "${FIXTURE_DIR}/valid-shellcheck-version-package.yml" "${shellcheck_version_root}/.github/workflows/validate.yml"
 expect_pass "valid shellcheck version package" "${shellcheck_version_root}"
+
+shellcheck_selector_root="${tmp_root}/valid-shellcheck-apt-selectors"
+prepare_root "${shellcheck_selector_root}"
+cp "${FIXTURE_DIR}/valid-shellcheck-apt-selectors.yml" "${shellcheck_selector_root}/.github/workflows/validate.yml"
+expect_pass "valid shellcheck apt selectors" "${shellcheck_selector_root}"
+
+gate_redirections_root="${tmp_root}/valid-gate-redirections"
+prepare_root "${gate_redirections_root}"
+cp "${FIXTURE_DIR}/valid-gate-redirections.yml" "${gate_redirections_root}/.github/workflows/validate.yml"
+expect_pass "valid gate redirections" "${gate_redirections_root}"
 
 allow_root="${tmp_root}/allowlisted"
 prepare_root "${allow_root}"
@@ -416,6 +438,26 @@ validate_shell_conditional_root="${tmp_root}/validate-shell-conditional-gates"
 prepare_root "${validate_shell_conditional_root}"
 cp "${FIXTURE_DIR}/validate-shell-conditional-gates.yml" "${validate_shell_conditional_root}/.github/workflows/validate.yml"
 expect_fail "validate shell conditional gates" "validate workflow runs make validate" "${validate_shell_conditional_root}"
+
+validate_block_close_mask_root="${tmp_root}/validate-block-close-mask-gates"
+prepare_root "${validate_block_close_mask_root}"
+cp "${FIXTURE_DIR}/validate-block-close-mask-gates.yml" "${validate_block_close_mask_root}/.github/workflows/validate.yml"
+expect_fail "validate block close mask gates" "validate workflow runs make validate" "${validate_block_close_mask_root}"
+
+validate_backgrounded_root="${tmp_root}/validate-backgrounded-gates"
+prepare_root "${validate_backgrounded_root}"
+cp "${FIXTURE_DIR}/validate-backgrounded-gates.yml" "${validate_backgrounded_root}/.github/workflows/validate.yml"
+expect_fail "validate backgrounded gates" "validate workflow runs make validate" "${validate_backgrounded_root}"
+
+validate_quoted_text_root="${tmp_root}/validate-quoted-text-gates"
+prepare_root "${validate_quoted_text_root}"
+cp "${FIXTURE_DIR}/validate-quoted-text-gates.yml" "${validate_quoted_text_root}/.github/workflows/validate.yml"
+expect_fail "validate quoted text gates" "validate workflow runs make validate" "${validate_quoted_text_root}"
+
+validate_pipe_ampersand_root="${tmp_root}/validate-pipe-ampersand-gates"
+prepare_root "${validate_pipe_ampersand_root}"
+cp "${FIXTURE_DIR}/validate-pipe-ampersand-gates.yml" "${validate_pipe_ampersand_root}/.github/workflows/validate.yml"
+expect_fail "validate pipe ampersand gates" "validate workflow runs make validate" "${validate_pipe_ampersand_root}"
 
 rm -rf "${tmp_root}"
 printf 'PASS story-2.4 workflow permission fixtures\n'
