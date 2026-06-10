@@ -3,7 +3,7 @@ storyId: 2.1
 storyKey: 2-1-cnpg-base-image-resolution
 epic: 2
 title: 'CNPG Base Image Resolution'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: bee7f60
@@ -153,6 +153,8 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Required validation passed: `resolve-versions.sh --check-cnpg --fixtures ...`, `tests/cnpg-resolver/run.sh`, shell syntax checks, `make validate`, and `git diff --cached --check`.
 - 2026-06-09: Addressed subagent review findings: partial-platform manifests no longer emit `cnpg_digest`, fixture references must resolve from `ghcr.io/cloudnative-pg/postgresql`, and CLI parser errors now use deterministic diagnostics.
 - 2026-06-09: Re-ran `tests/cnpg-resolver/run.sh`, `make validate`, shell syntax checks, and `git diff --cached --check` successfully after review fixes.
+- 2026-06-10: Refreshed positive CNPG resolver fixtures and expectations to current metadata-pinned upstream references: PostgreSQL `17.10`, PostgreSQL `18.4`, PostgreSQL `19beta1`, Debian `trixie`, Debian `bookworm`, and their current `versions.yaml` CNPG digests.
+- 2026-06-10: Re-ran targeted resolver and generated-drift gates successfully after fixture refresh: `bash cloudnative-pg-timescaledb/tests/cnpg-resolver/run.sh`, `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh`, and `git diff --check`.
 
 ### Completion Notes
 
@@ -161,6 +163,13 @@ Every implementation story must finish with a working repository state and must 
 - JSON output follows the Story 2.1 contract and returns resolved versioned CNPG tags/digests while leaving metadata file mutation to later update orchestration.
 - Publishable unavailable rows fail with diagnostics containing command, PostgreSQL major, Debian variant, platform, expected upstream reference, actual result, and remediation.
 - Non-publish unavailable rows require a `skip_reason` containing the upstream reference and missing dimension; partial platform manifests keep `cnpg_digest` empty.
+- Positive fixture data now matches the current repository metadata for CNPG `standard-*` base image tags and digests, preventing stale resolver evidence from diverging from the release matrix.
+
+### Validation Commands
+
+- `bash cloudnative-pg-timescaledb/tests/cnpg-resolver/run.sh` PASS
+- `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh` PASS
+- `git diff --check` PASS
 
 ## File List
 
@@ -180,3 +189,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Implemented Story 2.1 CNPG base image resolver and fixture suite.
 - 2026-06-09: Wired CNPG resolver tests into `make validate`.
 - 2026-06-09: Hardened resolver after subagent review for partial platform digest emission, upstream repository validation, and deterministic option diagnostics.
+- 2026-06-10: Refreshed CNPG positive fixtures to current `versions.yaml` PostgreSQL `17.10`/`18.4`/`19beta1` standard image digests and closed Story 2.1.

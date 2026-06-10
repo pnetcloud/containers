@@ -67,9 +67,9 @@ allowed:
   platforms: ["linux/amd64", "linux/arm64"]
 entries:
   - pg_major: "17"
-    pg_version: "17.6"
+    pg_version: "17.10"
     debian_variant: trixie
-    cnpg_tag: "17.6-standard-trixie"
+    cnpg_tag: "17.10-standard-trixie"
     cnpg_digest: ""
     timescaledb_version: ""
     timescaledb_package_version: ""
@@ -177,7 +177,7 @@ for entry in entries:
     if not entry["cnpg_digest"].startswith("sha256:"):
         raise SystemExit(f"missing resolved digest in JSON: {entry}")
 expected_versions = {
-    ("17", "trixie"): ("17.6", "17.6-standard-trixie"),
+    ("17", "trixie"): ("17.10", "17.10-standard-trixie"),
     ("18", "trixie"): ("18.4", "18.4-standard-trixie"),
     ("19beta1", "trixie"): ("19beta1", "19beta1-standard-trixie"),
     ("17", "bookworm"): ("17.10", "17.10-standard-bookworm"),

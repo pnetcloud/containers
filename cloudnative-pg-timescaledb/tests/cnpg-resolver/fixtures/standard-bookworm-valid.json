@@ -2,17 +2,17 @@
   "manifests": [
     {
       "tag": "17.10-standard-bookworm",
-      "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "digest": "sha256:1273ed2ff3c3777541a010f98b805f139810f89ea240b8caeaee3efaca7bb2b8",
       "platforms": ["linux/amd64", "linux/arm64"]
     },
     {
       "tag": "18.4-standard-bookworm",
-      "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "digest": "sha256:6d1090d7ae1ea1cf2ba35959ba0fea38a78df91cf99e02e94a28b8e1f6df3de5",
       "platforms": ["linux/amd64", "linux/arm64"]
     },
     {
       "tag": "19beta1-standard-bookworm",
-      "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "digest": "sha256:5622736e77f38a017b0ed8ea64a8d690808235492344f831a9863f38779f2a71",
       "platforms": ["linux/amd64", "linux/arm64"]
     }
   ]
