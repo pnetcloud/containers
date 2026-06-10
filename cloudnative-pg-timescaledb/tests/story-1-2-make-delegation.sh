@@ -65,21 +65,50 @@ scan_makefile_execution() {
     BEGIN {
       $recipe_prefix = "\t";
       $in_recipe = 0;
+      $recipe_continuation = 0;
+      $make_continuation = 0;
+    }
+    sub continues_line {
+      my ($value) = @_;
+      return $value =~ /(\\+)$/ && (length($1) % 2) == 1;
+    }
+    sub is_assignment_line {
+      my ($value) = @_;
+      return $value =~ /^[[:space:]]*[^#:=[:space:]][^#:=]*[[:space:]]*(:=|::=|:::=|\+=|\?=|!=|=)/;
+    }
+    sub is_rule_line {
+      my ($value) = @_;
+      return 0 unless $value =~ /^[[:space:]]*[^#[:space:]]/;
+      return 0 if is_assignment_line($value);
+      return 0 if $value =~ /^[[:space:]]*(vpath|include|sinclude|-include|export|unexport|override|private|define|endef|undefine)\b/;
+      my $colon = index($value, ":");
+      return 0 if $colon < 0;
+      return 0 if substr($value, $colon, 2) eq ":=";
+      return 1;
     }
     chomp;
     my $raw = $_;
     my $line = $raw;
-    my $is_recipe = $in_recipe && index($raw, $recipe_prefix) == 0;
+    my $is_recipe = $recipe_continuation || ($in_recipe && index($raw, $recipe_prefix) == 0);
+    my $is_make_continuation = $make_continuation && !$is_recipe;
+    my $inline_recipe = "";
 
     if (!$is_recipe && $raw =~ /^[[:space:]]*#/) {
+      $recipe_continuation = 0;
+      $make_continuation = 0;
       next;
     }
     if (!$is_recipe) {
-      $line =~ s/[[:space:]]+#.*$//;
+      $line =~ s/(?<!\\)#.*$// unless $is_make_continuation;
+      if (is_rule_line($line) && $line =~ /;/) {
+        ($inline_recipe = $raw) =~ s/^[^;]*;//;
+        $line =~ s/;.*$//;
+      }
     }
+    my $scan_line = $is_recipe ? $line : "${line}\n${inline_recipe}";
 
     my $unsafe_function = 0;
-    while ($line =~ /(\$+)[\(\{](shell|eval)(?=[[:space:]\)\}]|$)/g) {
+    while ($scan_line =~ /(\$+)[\(\{](shell|eval)(?=[[:space:]\)\}]|$)/g) {
       if ((length($1) % 2) == 1) {
         $unsafe_function = 1;
         last;
@@ -88,7 +117,7 @@ scan_makefile_execution() {
     if (
       $unsafe_function
       || $line =~ /^[ ]*[^#[:space:]][^:=]*!=/
-      || $line =~ /^[^#[:space:]][^:=]*:[^#]*[[:space:]][^#[:space:]][^:=]*!=/
+      || $line =~ /^[[:space:]]*[^#[:space:]][^:=]*:[^#]*[[:space:]][^#[:space:]][^:=]*!=/
     ) {
       print $. . ":" . $_ . "\n";
       $found = 1;
@@ -97,10 +126,14 @@ scan_makefile_execution() {
     if (!$is_recipe && $line =~ /^[[:space:]]*\.RECIPEPREFIX[[:space:]]*[:+?]?=[[:space:]]*(.)/) {
       $recipe_prefix = $1;
     }
+    $recipe_continuation = ($is_recipe && continues_line($raw)) || ($inline_recipe ne "" && continues_line($inline_recipe));
+    $make_continuation = !$is_recipe && $inline_recipe eq "" && continues_line($line);
     if ($is_recipe || $line =~ /^[[:space:]]*$/ || $raw =~ /^[[:space:]]*#/) {
       next;
     }
-    if ($line =~ /^[[:space:]]*[^#[:space:]][^:=]*:/ && $line !~ /^[[:space:]]*[^#[:space:]]+[[:space:]]*[:+?]?=/) {
+    if (is_rule_line($line)) {
+      $in_recipe = 1;
+    } elsif ($is_make_continuation && $in_recipe) {
       $in_recipe = 1;
     } else {
       $in_recipe = 0;
@@ -149,13 +182,35 @@ assert_makefile_scan_passes "top-level tab comment" '\t# $(shell echo harmless t
 # shellcheck disable=SC2016
 assert_makefile_scan_passes "commented rule semicolon" 'all: # docs; $(shell echo harmless)\n\t@echo ok\n'
 # shellcheck disable=SC2016
+assert_makefile_scan_passes "commented rule semicolon without space" 'all:# docs; $(shell echo harmless)\n\t@echo ok\n'
+# shellcheck disable=SC2016
 assert_makefile_scan_passes "escaped recipe literal" 'all:\n\t@printf '"'"'$$(shell date)\n'"'"'\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_passes "escaped inline recipe literal" 'all: ; @printf '"'"'$$(shell date)\n'"'"'\n'
+assert_makefile_scan_passes "url assignment is not a rule" 'URL = https://example.com\n\t# $(shell echo harmless top-level comment)\n'
+assert_makefile_scan_passes "semicolon assignment is not an inline recipe" 'URL = http://host/path;v=1\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_passes "continued assignment comment" 'VAR := ok \\\n# $(shell echo harmless top-level comment)\nall:\n\t@echo ok\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_passes "continued rule header comment" 'all: \\\n# $(shell echo harmless top-level comment)\n\t@echo ok\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_passes "vpath directive is not a rule" 'vpath %.c src:lib\n\t# $(shell echo harmless top-level comment)\nall:\n\t@echo ok\n'
 # shellcheck disable=SC2016
 assert_makefile_scan_fails "shell assignment" 'VAR := $(shell date)\n'
 # shellcheck disable=SC2016
 assert_makefile_scan_fails "eval assignment" 'VAR := ${eval GENERATED:=1}\n'
 # shellcheck disable=SC2016
+assert_makefile_scan_fails "continued assignment shell" 'VAR := \\\n$(shell date)\n'
+# shellcheck disable=SC2016
 assert_makefile_scan_fails "recipe comment shell" 'all:\n\t# $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "continued recipe comment shell" 'all:\n\t@: \\\n# $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "continued rule header recipe comment shell" 'all: dep1 \\\ndep2\n\t# $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "inline recipe comment shell" 'all: ; # $(shell date)\n'
+# shellcheck disable=SC2016
+assert_makefile_scan_fails "continued inline recipe comment shell" 'all: ; @: \\\n# $(shell date)\n'
 # shellcheck disable=SC2016
 assert_makefile_scan_fails "leading-space target recipe comment shell" ' all:\n\t# $(shell date)\n'
 # shellcheck disable=SC2016
@@ -166,6 +221,7 @@ assert_makefile_scan_fails "leading-space recipeprefix comment shell" ' .RECIPEP
 assert_makefile_scan_fails "odd dollar shell" 'all:\n\t@printf '"'"'$$$(shell date)\n'"'"'\n'
 assert_makefile_scan_fails "shell assignment operator" 'VAR != date\n'
 assert_makefile_scan_fails "target-specific shell assignment operator" 'all: VAR != date\n'
+assert_makefile_scan_fails "leading-space target-specific shell assignment operator" ' all: VAR != date\n'
 
 if scan_makefile_execution "${MAKEFILE}"; then
   diag "scan Makefile" "Makefile" "no make-time shell/eval execution in command facade" "make-time execution construct found" "Keep root Makefile targets as direct script delegations without hidden expansion-time logic."

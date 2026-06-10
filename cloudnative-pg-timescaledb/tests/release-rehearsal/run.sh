@@ -144,6 +144,7 @@ expect_fail missing-workflow-dispatch-evidence.json 'workflow_dispatch.url|actua
 
 "${SCRIPT}" --dry-run --date 20260609 --fixture "${FIXTURE_DIR}/valid-full-matrix.json" --report "${REPORT}" >/tmp/story-5-9-report.out
 
+# shellcheck disable=SC2016
 for token in \
   '# Release Rehearsal Report' \
   'UTC date: `20260609`' \
@@ -159,5 +160,95 @@ for token in \
     exit 1
   fi
 done
+
+prepare_orchestration_project() {
+  local project="$1"
+  mkdir -p "${project}/cloudnative-pg-timescaledb/scripts"
+  printf 'SHELL := /usr/bin/env bash\n' > "${project}/Makefile"
+  # shellcheck disable=SC2016
+  printf '#!/usr/bin/env bash\nset -Eeuo pipefail\nprintf "validate-docs\\n" >> "${RELEASE_REHEARSAL_CAPTURE:?}"\n' > "${project}/cloudnative-pg-timescaledb/scripts/validate-docs.sh"
+  chmod +x "${project}/cloudnative-pg-timescaledb/scripts/validate-docs.sh"
+  (cd "${project}" && git init -q && git config user.email test@example.invalid && git config user.name test && git add . && git commit -qm baseline)
+}
+
+prepare_orchestration_shims() {
+  local bin_dir="$1"
+  mkdir -p "${bin_dir}"
+  cat > "${bin_dir}/make" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+args=()
+for arg in "$@"; do
+  [[ "${arg}" == "--no-print-directory" ]] && continue
+  args+=("${arg}")
+done
+target="${args[0]:-}"
+pg="${PG:-}"
+debian="${DEBIAN:-}"
+for arg in "${args[@]:1}"; do
+  case "${arg}" in
+    PG=*) pg="${arg#PG=}" ;;
+    DEBIAN=*) debian="${arg#DEBIAN=}" ;;
+  esac
+done
+printf 'make %s PG=%s DEBIAN=%s PLATFORM=%s CHECKS=%s\n' "${target}" "${pg}" "${debian}" "${PLATFORM:-}" "${CHECKS:-}" >> "${RELEASE_REHEARSAL_CAPTURE:?}"
+if [[ "${target}" == "matrix" ]]; then
+  printf '{"include":[{"pg_major":"18","debian_variant":"trixie","publish":true,"platforms":["linux/amd64","linux/arm64"]}],"skipped":[]}\n'
+fi
+if [[ "${target}" == "build" && "${RELEASE_REHEARSAL_FAIL_BUILD:-0}" == "1" ]]; then
+  exit 42
+fi
+SH
+  chmod +x "${bin_dir}/make"
+}
+
+orchestration_tmp="$(mktemp -d)"
+orchestration_project="${orchestration_tmp}/project"
+orchestration_bin="${orchestration_tmp}/bin"
+orchestration_capture="${orchestration_tmp}/commands.log"
+prepare_orchestration_project "${orchestration_project}"
+prepare_orchestration_shims "${orchestration_bin}"
+
+RELEASE_REHEARSAL_CAPTURE="${orchestration_capture}" PATH="${orchestration_bin}:${PATH}" \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" --no-report >/tmp/story-5-9-orchestration.out
+
+for token in \
+  'make update' \
+  'make generate' \
+  'make validate' \
+  'make matrix' \
+  'make bake-print' \
+  'make build PG=18 DEBIAN=trixie PLATFORM=linux/amd64' \
+  'make smoke PG=18 DEBIAN=trixie PLATFORM=linux/amd64 CHECKS=container' \
+  'make smoke PG=18 DEBIAN=trixie PLATFORM=linux/amd64 CHECKS=sql' \
+  'make build PG=18 DEBIAN=trixie PLATFORM=linux/arm64' \
+  'make smoke PG=18 DEBIAN=trixie PLATFORM=linux/arm64 CHECKS=container' \
+  'make smoke PG=18 DEBIAN=trixie PLATFORM=linux/arm64 CHECKS=sql' \
+  'make catalog' \
+  'validate-docs'; do
+  if ! grep -Fq "${token}" "${orchestration_capture}"; then
+    diag "release rehearsal orchestration" "${orchestration_capture}" "orchestration runs ${token}" "$(cat "${orchestration_capture}")" "Default release rehearsal must execute commands, not only validate fixture evidence."
+    exit 1
+  fi
+done
+
+fail_capture="${orchestration_tmp}/fail-commands.log"
+set +e
+RELEASE_REHEARSAL_CAPTURE="${fail_capture}" RELEASE_REHEARSAL_FAIL_BUILD=1 PATH="${orchestration_bin}:${PATH}" \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" --no-report >/tmp/story-5-9-orchestration-fail.out 2>&1
+fail_status="$?"
+set -e
+if [[ "${fail_status}" == "0" ]]; then
+  diag "release rehearsal orchestration fail-fast" "build step" "non-zero exit" "exit 0" "Fail the release rehearsal when any required command fails."
+  exit 1
+fi
+if grep -Fq 'make smoke' "${fail_capture}"; then
+  diag "release rehearsal orchestration fail-fast" "${fail_capture}" "no smoke after failed build" "$(cat "${fail_capture}")" "Stop after the first failed release gate."
+  exit 1
+fi
+if ! grep -Fq 'command exits 0' /tmp/story-5-9-orchestration-fail.out; then
+  diag "release rehearsal orchestration diagnostics" "/tmp/story-5-9-orchestration-fail.out" "structured failure diagnostic" "$(cat /tmp/story-5-9-orchestration-fail.out)" "Keep orchestration failures actionable."
+  exit 1
+fi
 
 printf 'PASS story-5.9 release rehearsal fixtures\n'

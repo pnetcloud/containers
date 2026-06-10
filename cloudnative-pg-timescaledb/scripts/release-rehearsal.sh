@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONFIG_FILE="${ROOT_DIR}/cloudnative-pg-timescaledb/config/release-rehearsal.yaml"
 FIXTURE_FILE=""
 REPORT_FILE=""
+CHECKOUT_ROOT=""
 DATE_VALUE="${DATE:-}"
 DRY_RUN_VALUE="${DRY_RUN:-}"
 STAGING_NAMESPACE_VALUE="${STAGING_NAMESPACE:-}"
@@ -41,6 +42,11 @@ while [[ "$#" -gt 0 ]]; do
       REPORT_FILE="$2"
       shift 2
       ;;
+    --checkout-root)
+      require_value "$1" "${2:-}"
+      CHECKOUT_ROOT="$2"
+      shift 2
+      ;;
     --date)
       require_value "$1" "${2:-}"
       DATE_VALUE="$2"
@@ -65,11 +71,193 @@ while [[ "$#" -gt 0 ]]; do
       shift
       ;;
     *)
-      diag "release-rehearsal" "arguments" "known option" "$1" "Use --dry-run, --date, --fixture, --report, --config, --staging-namespace, --expect-failure, or --no-report."
+      diag "release-rehearsal" "arguments" "known option" "$1" "Use --dry-run, --date, --fixture, --report, --config, --checkout-root, --staging-namespace, --expect-failure, or --no-report."
       exit 64
       ;;
   esac
 done
+
+config_value() {
+  local key="$1"
+  python3 - "${CONFIG_FILE}" "${key}" <<'PY'
+import sys
+from pathlib import Path
+import yaml
+
+payload = yaml.safe_load(Path(sys.argv[1]).read_text()) or {}
+value = payload
+for part in sys.argv[2].split('.'):
+    value = value.get(part, "") if isinstance(value, dict) else ""
+print(value if value is not None else "")
+PY
+}
+
+slug() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9_.-' '-'
+}
+
+run_orchestration() {
+  local date_value="${DATE_VALUE:-}"
+  local dry_run="${DRY_RUN_VALUE:-}"
+  local staging_namespace="${STAGING_NAMESPACE_VALUE:-}"
+  local checkout=""
+  local tmp_dir=""
+  local logs_dir=""
+  local report_path=""
+  local source_sha=""
+  local matrix_json=""
+  local step_index=0
+
+  if [[ -z "${date_value}" ]]; then
+    date_value="$(config_value default_date_utc)"
+  fi
+  if [[ -z "${staging_namespace}" ]]; then
+    staging_namespace="$(config_value default_staging_namespace)"
+  fi
+  if [[ -z "${REPORT_FILE}" ]]; then
+    REPORT_FILE="$(config_value fixtures.report)"
+  fi
+  report_path="${REPORT_FILE}"
+  if [[ "${report_path}" != /* ]]; then
+    report_path="${ROOT_DIR}/${report_path}"
+  fi
+
+  [[ "${date_value}" =~ ^[0-9]{8}$ ]] || { diag "release-rehearsal" "release date" "UTC release date formatted as YYYYMMDD" "${date_value:-missing}" "Pass --date 20260609 or set DATE=20260609."; exit 64; }
+  if [[ "${dry_run}" != "1" && "${dry_run}" != "true" && "${dry_run}" != "True" && ! "${staging_namespace}" =~ ^ghcr\.io/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+    diag "release-rehearsal" "publish rehearsal mode" "dry-run or valid GHCR staging namespace" "dry_run=${dry_run:-0} staging_namespace=${staging_namespace:-missing}" "Use --dry-run for local runs or pass --staging-namespace ghcr.io/<owner>/<repo>."
+    exit 64
+  fi
+
+  if [[ -n "${CHECKOUT_ROOT}" ]]; then
+    checkout="${CHECKOUT_ROOT}"
+  else
+    if [[ -n "$(git -C "${ROOT_DIR}" status --porcelain --untracked-files=all)" ]]; then
+      diag "release-rehearsal" "source checkout" "clean git status before cloning release rehearsal worktree" "dirty" "Commit or stash local changes, then rerun the release rehearsal from a reproducible HEAD."
+      exit 65
+    fi
+    source_sha="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
+    tmp_dir="$(mktemp -d)"
+    checkout="${tmp_dir}/checkout"
+    git clone --quiet --no-local --no-hardlinks "${ROOT_DIR}" "${checkout}"
+    git -C "${checkout}" checkout --quiet "${source_sha}"
+  fi
+
+  if [[ ! -d "${checkout}/.git" ]]; then
+    diag "release-rehearsal" "${checkout}" "clean git checkout exists" "missing .git" "Run release rehearsal from a Git checkout or pass --checkout-root to a temporary Git project in tests."
+    exit 65
+  fi
+  if [[ -n "$(git -C "${checkout}" status --porcelain --untracked-files=all)" ]]; then
+    diag "release-rehearsal" "${checkout}" "release rehearsal checkout starts clean" "dirty" "Use a clean checkout before running update, generate, validate, build, smoke, scan, publish, and catalog gates."
+    exit 65
+  fi
+
+  if [[ -z "${tmp_dir}" ]]; then
+    tmp_dir="$(mktemp -d)"
+  fi
+  logs_dir="${tmp_dir}/release-rehearsal-logs"
+  mkdir -p "${logs_dir}"
+  local commands_file="${logs_dir}/commands.tsv"
+  : > "${commands_file}"
+
+  run_step() {
+    local label="$1"
+    shift
+    step_index=$((step_index + 1))
+    local log_slug log
+    log_slug="$(slug "${label}")"
+    log="${logs_dir}/$(printf '%02d-%s.log' "${step_index}" "${log_slug}")"
+    local start end status
+    start="$(date -u +%s)"
+    set +e
+    (cd "${checkout}" && "$@") >"${log}" 2>&1
+    status="$?"
+    set -e
+    end="$(date -u +%s)"
+    printf '%s\t%s\t%s\t%s\t%s\n' "${step_index}" "${label}" "${status}" "$((end - start))" "${log}" >> "${commands_file}"
+    if [[ "${status}" != "0" ]]; then
+      diag "release-rehearsal" "${label}" "command exits 0" "exit ${status}; log=${log}" "Inspect the command log, fix the release gate, and rerun from a clean checkout."
+      exit "${status}"
+    fi
+  }
+
+  capture_step() {
+    local label="$1"
+    shift
+    step_index=$((step_index + 1))
+    local log_slug log out
+    log_slug="$(slug "${label}")"
+    log="${logs_dir}/$(printf '%02d-%s.log' "${step_index}" "${log_slug}")"
+    out="${logs_dir}/$(printf '%02d-%s.out' "${step_index}" "${log_slug}")"
+    local start end status
+    start="$(date -u +%s)"
+    set +e
+    (cd "${checkout}" && "$@") >"${out}" 2>"${log}"
+    status="$?"
+    set -e
+    end="$(date -u +%s)"
+    printf '%s\t%s\t%s\t%s\t%s\n' "${step_index}" "${label}" "${status}" "$((end - start))" "${out},${log}" >> "${commands_file}"
+    if [[ "${status}" != "0" ]]; then
+      diag "release-rehearsal" "${label}" "command exits 0" "exit ${status}; stdout=${out}; stderr=${log}" "Inspect the command output, fix the release gate, and rerun from a clean checkout."
+      exit "${status}"
+    fi
+    cat "${out}"
+  }
+
+  run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" make --no-print-directory update UPDATE_ARGS=--json
+  run_step "make generate" env DATE="${date_value}" make --no-print-directory generate
+  run_step "make validate" env DATE="${date_value}" make --no-print-directory validate
+  matrix_json="$(capture_step "make matrix" make --no-print-directory matrix)"
+  run_step "make bake-print" make --no-print-directory bake-print
+
+  while IFS=$'\t' read -r pg debian platform; do
+    [[ -n "${pg}" ]] || continue
+    run_step "make build PG=${pg} DEBIAN=${debian} PLATFORM=${platform}" env PLATFORM="${platform}" make --no-print-directory build PG="${pg}" DEBIAN="${debian}"
+    run_step "container smoke PG=${pg} DEBIAN=${debian} PLATFORM=${platform}" env PLATFORM="${platform}" SMOKE_EXPECTED_PLATFORM="${platform}" CHECKS=container make --no-print-directory smoke PG="${pg}" DEBIAN="${debian}"
+    run_step "SQL smoke PG=${pg} DEBIAN=${debian} PLATFORM=${platform}" env PLATFORM="${platform}" SMOKE_EXPECTED_PLATFORM="${platform}" CHECKS=sql make --no-print-directory smoke PG="${pg}" DEBIAN="${debian}"
+  done < <(python3 - "${matrix_json}" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+for row in payload.get("include", []):
+    if row.get("publish") is True:
+        for platform in row.get("platforms", []):
+            print(f"{row['pg_major']}\t{row['debian_variant']}\t{platform}")
+PY
+  )
+
+  run_step "make catalog" make --no-print-directory catalog
+  run_step "validate docs" bash cloudnative-pg-timescaledb/scripts/validate-docs.sh
+
+  if [[ "${WRITE_REPORT}" == "1" ]]; then
+    mkdir -p "$(dirname "${report_path}")"
+    local checked_out_sha report_mode report_display_path
+    checked_out_sha="${source_sha:-$(git -C "${checkout}" rev-parse HEAD)}"
+    report_mode="$([[ "${dry_run}" == "1" || "${dry_run}" == "true" || "${dry_run}" == "True" ]] && printf dry-run || printf staging)"
+    {
+      printf '# Release Rehearsal Report\n\n'
+      printf '<!-- Generated by cloudnative-pg-timescaledb/scripts/release-rehearsal.sh from executed clean-checkout commands. -->\n\n'
+      printf "UTC date: \`%s\`\n" "${date_value}"
+      printf "Source SHA: \`%s\`\n" "${checked_out_sha}"
+      printf "Mode: \`%s\`\n" "${report_mode}"
+      printf "Staging namespace: \`%s\`\n\n" "${staging_namespace:-n/a}"
+      printf '## Commands Run\n\n'
+      awk -F '\t' '{printf "- `%s` exit `%s` duration `%ss` log `%s`\n", $2, $3, $4, $5}' "${commands_file}"
+      printf '\n## Workflow Dispatch Evidence\n\n'
+      printf -- "- URL: \`%s\`\n" "${WORKFLOW_RUN_URL:-external gh run view required}"
+      printf -- "- Status: \`external gh run view required after completion\`\n"
+      printf -- "- Conclusion: \`external gh run view required after completion\`\n"
+    } > "${report_path}"
+  fi
+
+  report_display_path="${report_path#"${ROOT_DIR}"/}"
+  printf 'PASS release-rehearsal orchestration date=%s dry_run=%s checkout=%s report=%s\n' "${date_value}" "${dry_run:-0}" "${checkout}" "${report_display_path}"
+}
+
+if [[ -z "${FIXTURE_FILE}" ]]; then
+  run_orchestration
+  exit 0
+fi
 
 python3 - "${ROOT_DIR}" "${CONFIG_FILE}" "${FIXTURE_FILE}" "${REPORT_FILE}" "${DATE_VALUE}" "${DRY_RUN_VALUE}" "${STAGING_NAMESPACE_VALUE}" "${EXPECT_FAILURE}" "${WRITE_REPORT}" <<'PY'
 from __future__ import annotations

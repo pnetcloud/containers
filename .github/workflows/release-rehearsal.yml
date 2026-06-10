@@ -40,8 +40,6 @@ jobs:
           DATE: ${{ inputs.date }}
           STAGING_NAMESPACE: ${{ inputs.staging_namespace }}
           WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          WORKFLOW_RUN_STATUS: completed
-          WORKFLOW_RUN_CONCLUSION: success
         run: |
           set -Eeuo pipefail
           if [[ ! "${DATE}" =~ ^[0-9]{8}$ ]]; then
