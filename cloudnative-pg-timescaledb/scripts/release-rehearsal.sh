@@ -183,9 +183,8 @@ run_orchestration() {
     fi
   }
 
-  capture_step() {
-    local label="$1"
-    shift
+  run_matrix_step() {
+    local label="make matrix"
     step_index=$((step_index + 1))
     local log_slug log out
     log_slug="$(slug "${label}")"
@@ -194,7 +193,7 @@ run_orchestration() {
     local start end status
     start="$(date -u +%s)"
     set +e
-    (cd "${checkout}" && "$@") >"${out}" 2>"${log}"
+    (cd "${checkout}" && make --no-print-directory matrix) >"${out}" 2>"${log}"
     status="$?"
     set -e
     end="$(date -u +%s)"
@@ -213,7 +212,7 @@ run_orchestration() {
   run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" make --no-print-directory update UPDATE_ARGS=--json
   run_step "make generate" env DATE="${date_value}" make --no-print-directory generate
   run_step "make validate" env DATE="${date_value}" make --no-print-directory validate
-  capture_step "make matrix" make --no-print-directory matrix
+  run_matrix_step
   matrix_json="$(cat "${capture_output_file}")"
   run_step "make bake-print" make --no-print-directory bake-print
 
