@@ -34,6 +34,12 @@ jobs:
     steps:
       # actions/checkout v4.2.2
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Prepare arm64 emulation
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends binfmt-support qemu-user-static
+          sudo update-binfmts --enable qemu-aarch64 || true
       - name: Run release rehearsal
         env:
           DRY_RUN_INPUT: ${{ inputs.dry_run }}

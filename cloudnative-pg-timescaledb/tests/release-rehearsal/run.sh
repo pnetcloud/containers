@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCRIPT="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/release-rehearsal.sh"
 FIXTURE_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures"
 REPORT="${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md"
+WORKFLOW="${ROOT_DIR}/.github/workflows/release-rehearsal.yml"
 
 diag() {
   printf 'command: %s\nartifact: %s\nexpected: %s\nactual: %s\nremediation: %s\n' "$@" >&2
@@ -14,6 +15,31 @@ require_fixture() {
   local name="$1"
   if [[ ! -f "${FIXTURE_DIR}/${name}" ]]; then
     diag "test -f" "${FIXTURE_DIR}/${name}" "fixture exists" "missing" "Restore the Story 5.9 release rehearsal fixture."
+    exit 1
+  fi
+}
+
+require_workflow_arm64_emulation() {
+  local workflow="$1"
+  local qemu_line rehearsal_line
+  if [[ ! -f "${workflow}" ]]; then
+    diag "test -f" "${workflow}" "release rehearsal workflow exists" "missing" "Restore .github/workflows/release-rehearsal.yml."
+    exit 1
+  fi
+  for token in \
+    'binfmt-support' \
+    'qemu-user-static' \
+    'update-binfmts --enable qemu-aarch64' \
+    'make release-rehearsal'; do
+    if ! grep -Fq "${token}" "${workflow}"; then
+      diag "grep ${token}" "${workflow}" "workflow prepares arm64 emulation before release rehearsal" "missing ${token}" "Enable qemu-aarch64 before release rehearsal builds linux/arm64 candidates on ubuntu-latest."
+      exit 1
+    fi
+  done
+  qemu_line="$(grep -nF 'update-binfmts --enable qemu-aarch64' "${workflow}" | head -n1 | cut -d: -f1)"
+  rehearsal_line="$(grep -nF 'make release-rehearsal' "${workflow}" | head -n1 | cut -d: -f1)"
+  if [[ -z "${qemu_line}" || -z "${rehearsal_line}" || "${qemu_line}" -ge "${rehearsal_line}" ]]; then
+    diag "workflow step order" "${workflow}" "qemu-aarch64 is enabled before make release-rehearsal" "qemu line ${qemu_line:-missing}, rehearsal line ${rehearsal_line:-missing}" "Keep arm64 emulation setup before the release rehearsal build/smoke orchestration."
     exit 1
   fi
 }
@@ -109,6 +135,8 @@ negative_fixtures=(
 for fixture in "${positive_fixtures[@]}" "${negative_fixtures[@]}"; do
   require_fixture "${fixture}"
 done
+
+require_workflow_arm64_emulation "${WORKFLOW}"
 
 for fixture in "${positive_fixtures[@]}"; do
   expect_pass "${fixture}"

@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tag_policy import generated_tags, resolve_release_date
 
 
