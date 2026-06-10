@@ -295,7 +295,8 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Addressed final acceptance review finding by updating the standalone matrix validator and Story 4.1 matrix tests to reject skipped rows missing `dockerfile`/`bake_target` and to evaluate latest eligibility across `include[] + skipped[]`.
 - 2026-06-10: Tightened the shared matrix validator further so `skipped` is a required top-level array and no skipped row, including `18-trixie`, may carry `latest_eligible: true`.
 - 2026-06-10: Preserved later Story 3.1 behavior where `publish:false` rows emit deterministic `Dockerfile.skipped.json` markers instead of buildable Dockerfiles, and later Story 4.6 behavior where stable catalogs render only release-complete digest-pinned PG17/PG18 records from release metadata.
-- 2026-06-10: Addressed final BMAD review findings for release catalog safety: partial release metadata now fails before catalog generation or validation, stable catalog YAML keeps existing digest-pinned entries when release metadata exists, and release rehearsal report writes use a same-directory temporary file plus atomic rename after path containment checks.
+- 2026-06-10: Addressed final BMAD review findings for release catalog safety: partial release metadata now fails before catalog generation or validation, empty or malformed `release_metadata_record_id` fails before YAML rendering, stable catalog YAML keeps existing digest-pinned entries when release metadata exists, and release rehearsal report writes use a same-directory temporary file plus atomic rename after path containment checks.
+- 2026-06-10: Addressed final BMAD release rehearsal review findings: every orchestration report write is contained under the checkout/root output base, symlinked or escaping report paths fail before write, and executed-command reports omit elapsed durations and temporary log paths so same inputs generate byte-identical report content.
 - 2026-06-10: Validation passed: `bash cloudnative-pg-timescaledb/tests/catalog/run.sh`, `bash cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh`, `shellcheck -x cloudnative-pg-timescaledb/scripts/release-rehearsal.sh cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh cloudnative-pg-timescaledb/tests/catalog/run.sh`, `make generate GENERATE_ARGS=--check`, `git diff --check`, and full `make validate`.
 
 ### Completion Notes
@@ -312,7 +313,8 @@ Every implementation story must finish with a working repository state and must 
 - `validate-generated` exact-checks `docs/generator-contracts.md` and release rehearsal report contents, while `make generate --check` also fails stale release rehearsal reports.
 - Final repo behavior intentionally reflects later story supersession: `publish:false` PG19beta1 rows use `Dockerfile.skipped.json` markers, and stable catalogs remain digest-aware, rendering only release-complete PG17/PG18 records when release metadata exists.
 - Release metadata directories must be complete for every publishable stable PostgreSQL/Debian row before catalog generation or validation can succeed; partial catalog output is rejected.
-- Release rehearsal report generation rejects explicit checkout escape paths and symlink report files, then writes via atomic replacement to avoid following a changed report target at write time.
+- Release metadata records must carry a non-empty digest-shaped `release_metadata_record_id`; catalog writers include release-backed rows by key presence, not by truthiness.
+- Release rehearsal report generation rejects explicit checkout/root escape paths and symlink report files, writes via atomic replacement, and renders deterministic command rows without elapsed time or temporary log paths.
 
 ## File List
 
@@ -376,3 +378,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Enabled `make generate` now that generator entrypoints exist.
 - 2026-06-09: Hardened generator contract validation after code review for check-json drift, custom output JSON paths, exact row coverage, duplicate rows, and missing catalog variants.
 - 2026-06-10: Hardened Story 1.5 closure after repeated BMAD review rounds: structured metadata diagnostics, skipped matrix path/target fields, deterministic docs generation, release rehearsal report drift checks, exact contract docs validation, and read-only generator schema tests.
+- 2026-06-10: Completed an additional BMAD review/remediation cycle for release metadata completeness, `release_metadata_record_id` validation, release rehearsal report containment, and deterministic executed-command report rows.
