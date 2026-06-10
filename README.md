@@ -27,4 +27,37 @@ spec:
 
 See [docs/image-tags.md](docs/image-tags.md) for CloudNativePG image examples and tag selection guidance.
 
+## ClusterImageCatalog
+
+CloudNativePG operators should consume generated catalog resources instead of using `latest` as the primary operator path. Apply `cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml` as the primary Debian `trixie` catalog:
+
+```bash
+kubectl apply -f cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
+```
+
+Apply `cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml` only when you need the secondary Debian `bookworm` variant:
+
+```bash
+kubectl apply -f cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
+```
+
+The generated `ClusterImageCatalog` names are `cloudnative-pg-timescaledb-standard-trixie` and `cloudnative-pg-timescaledb-standard-bookworm`. PostgreSQL `17` maps to catalog `major: 17`; PostgreSQL `18` maps to catalog `major: 18`.
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: app-db
+spec:
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ClusterImageCatalog
+    name: cloudnative-pg-timescaledb-standard-trixie
+    major: 18
+```
+
+Release catalogs are generated from release-complete published images and prefer published multi-platform index digest references, for example `ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`. Catalogs must not reference unpublished images, unsigned digests, missing digests, wrong PostgreSQL majors, or wrong Debian variants. PostgreSQL `19beta1` is experimental and regular catalog examples omit it unless explicitly marked experimental.
+
+See [docs/catalog.md](docs/catalog.md) for full CloudNativePG `ClusterImageCatalog` usage guidance.
+
 See [cloudnative-pg-timescaledb/README.md](cloudnative-pg-timescaledb/README.md) for the package overview and [cloudnative-pg-timescaledb/docs/generated/compatibility-table.md](cloudnative-pg-timescaledb/docs/generated/compatibility-table.md) for the generated compatibility table.

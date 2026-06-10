@@ -31,6 +31,39 @@ spec:
 
 See `docs/image-tags.md` in the repository root for detailed tag policy and CloudNativePG examples.
 
+## ClusterImageCatalog
+
+The generated CloudNativePG `ClusterImageCatalog` manifests live in `cloudnative-pg-timescaledb/catalog/`. Apply `cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml` as the primary Debian `trixie` catalog:
+
+```bash
+kubectl apply -f cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
+```
+
+Apply `cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml` only for the secondary Debian `bookworm` variant:
+
+```bash
+kubectl apply -f cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
+```
+
+The generated `ClusterImageCatalog` resource names are `cloudnative-pg-timescaledb-standard-trixie` and `cloudnative-pg-timescaledb-standard-bookworm`. PostgreSQL `17` maps to catalog `major: 17`; PostgreSQL `18` maps to catalog `major: 18`.
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: app-db
+spec:
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ClusterImageCatalog
+    name: cloudnative-pg-timescaledb-standard-trixie
+    major: 18
+```
+
+Release catalogs are generated from release-complete published images. When release metadata provides a digest, catalog entries prefer the published multi-platform index or manifest-list digest, for example `ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`. Catalogs must not reference unpublished images, unsigned digests, missing digests, wrong PostgreSQL majors, or wrong Debian variants. Do not use `latest` as the primary CloudNativePG catalog path. PostgreSQL `19beta1` is experimental and regular catalog examples omit it unless explicitly marked experimental.
+
+See the root `docs/catalog.md` for full catalog usage guidance.
+
 The compatibility overview is generated from `cloudnative-pg-timescaledb/versions.yaml`:
 
 - `cloudnative-pg-timescaledb/docs/generated/compatibility.md`
