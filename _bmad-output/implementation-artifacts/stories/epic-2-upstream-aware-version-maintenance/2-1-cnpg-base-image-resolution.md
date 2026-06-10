@@ -155,6 +155,8 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Re-ran `tests/cnpg-resolver/run.sh`, `make validate`, shell syntax checks, and `git diff --cached --check` successfully after review fixes.
 - 2026-06-10: Refreshed positive CNPG resolver fixtures and expectations to current metadata-pinned upstream references: PostgreSQL `17.10`, PostgreSQL `18.4`, PostgreSQL `19beta1`, Debian `trixie`, Debian `bookworm`, and their current `versions.yaml` CNPG digests.
 - 2026-06-10: Re-ran targeted resolver and generated-drift gates successfully after fixture refresh: `bash cloudnative-pg-timescaledb/tests/cnpg-resolver/run.sh`, `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh`, and `git diff --check`.
+- 2026-06-10: Hardened negative CNPG fixture inventories and assertions to use current metadata-aligned digests and exact structured diagnostic tokens instead of broad regex alternation.
+- 2026-06-10: Verified the live CNPG resolver path through GHCR tag inventory plus Docker manifest inspection; it returned all six supported PostgreSQL/Debian metadata rows with current `standard-*` digests.
 
 ### Completion Notes
 
@@ -164,11 +166,16 @@ Every implementation story must finish with a working repository state and must 
 - Publishable unavailable rows fail with diagnostics containing command, PostgreSQL major, Debian variant, platform, expected upstream reference, actual result, and remediation.
 - Non-publish unavailable rows require a `skip_reason` containing the upstream reference and missing dimension; partial platform manifests keep `cnpg_digest` empty.
 - Positive fixture data now matches the current repository metadata for CNPG `standard-*` base image tags and digests, preventing stale resolver evidence from diverging from the release matrix.
+- Negative fixture diagnostics now assert the command, artifact, expected upstream reference, actual failure class, and remediation as separate required tokens.
+- Live CNPG resolution can discover current `standard-*` tags from the GHCR registry tag API before inspecting matching manifests, while fixture mode remains deterministic for CI and tests.
 
 ### Validation Commands
 
 - `bash cloudnative-pg-timescaledb/tests/cnpg-resolver/run.sh` PASS
 - `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh` PASS
+- `PYTHONDONTWRITEBYTECODE=1 cloudnative-pg-timescaledb/scripts/resolve-versions.sh --check-cnpg --metadata cloudnative-pg-timescaledb/versions.yaml --json` PASS
+- `shellcheck cloudnative-pg-timescaledb/tests/cnpg-resolver/run.sh` PASS
+- `bash -n cloudnative-pg-timescaledb/scripts/lib/cnpg.sh cloudnative-pg-timescaledb/scripts/release-rehearsal.sh cloudnative-pg-timescaledb/tests/cnpg-resolver/run.sh` PASS
 - `git diff --check` PASS
 
 ## File List
@@ -190,3 +197,5 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Wired CNPG resolver tests into `make validate`.
 - 2026-06-09: Hardened resolver after subagent review for partial platform digest emission, upstream repository validation, and deterministic option diagnostics.
 - 2026-06-10: Refreshed CNPG positive fixtures to current `versions.yaml` PostgreSQL `17.10`/`18.4`/`19beta1` standard image digests and closed Story 2.1.
+- 2026-06-10: Tightened CNPG negative fixture diagnostics to exact token checks while preserving deterministic resolver behavior.
+- 2026-06-10: Added and verified live GHCR tag inventory discovery for CNPG `standard-*` resolver fallback.

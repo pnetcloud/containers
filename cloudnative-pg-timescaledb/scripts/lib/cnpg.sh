@@ -12,6 +12,9 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 
 
 ROOT = Path(os.environ["CNPG_RESOLVER_ROOT"])
@@ -205,6 +208,79 @@ def inspect_remote(tag, command, artifact):
     return {"tag": tag, "reference": reference, "digest": digest_match.group(1), "platforms": platforms, "source": "docker buildx imagetools inspect"}, ""
 
 
+def registry_request_json(url, command, artifact, token=None):
+    headers = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode()), response.headers
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401 and token is None:
+            auth = exc.headers.get("WWW-Authenticate", "")
+            realm = re.search(r'realm="([^"]+)"', auth)
+            service = re.search(r'service="([^"]+)"', auth)
+            scope = re.search(r'scope="([^"]+)"', auth)
+            if realm and service:
+                query = {"service": service.group(1)}
+                if scope:
+                    query["scope"] = scope.group(1)
+                token_url = f"{realm.group(1)}?{urllib.parse.urlencode(query)}"
+                token_payload, _ = registry_request_json(token_url, command, artifact, "")
+                bearer = token_payload.get("token") or token_payload.get("access_token")
+                if bearer:
+                    return registry_request_json(url, command, artifact, bearer)
+        diag(command, artifact, "GHCR tag inventory request succeeds", f"HTTP {exc.code}: {exc.reason}", "Pass --fixtures in tests or allow anonymous pull access to ghcr.io/cloudnative-pg/postgresql.")
+    except Exception as exc:
+        diag(command, artifact, "GHCR tag inventory request succeeds", str(exc), "Pass --fixtures in tests or ensure network access to ghcr.io.")
+
+
+def response_next_url(headers):
+    link = headers.get("Link", "")
+    match = re.search(r'<([^>]+)>;\s*rel="next"', link)
+    if not match:
+        return None
+    next_url = match.group(1)
+    if next_url.startswith("http"):
+        return next_url
+    return f"https://ghcr.io{next_url}"
+
+
+def list_remote_tags(command, artifact):
+    tags = []
+    url = "https://ghcr.io/v2/cloudnative-pg/postgresql/tags/list?n=1000"
+    while url:
+        payload, headers = registry_request_json(url, command, artifact)
+        batch = payload.get("tags")
+        if not isinstance(batch, list):
+            diag(command, artifact, "GHCR tags/list returns tags[]", repr(payload), "Use a registry endpoint compatible with Docker Registry HTTP API V2.")
+        tags.extend(tag for tag in batch if isinstance(tag, str))
+        url = response_next_url(headers)
+    return sorted(set(tags))
+
+
+def live_inventory(data, command, artifact):
+    if not shutil_which("docker"):
+        diag(command, artifact, "Docker CLI for live CNPG manifest inspection", "docker missing", "Pass --fixtures in tests or install Docker for live registry resolution.")
+    wanted = {
+        (entry["pg_major"], entry["debian_variant"])
+        for entry in data["entries"]
+    }
+    inventory = {}
+    for tag in list_remote_tags(command, artifact):
+        parsed = parse_standard_tag(tag)
+        if not parsed:
+            continue
+        if (parsed["pg_major"], parsed["debian_variant"]) not in wanted:
+            continue
+        manifest, actual = inspect_remote(tag, command, artifact)
+        if manifest is None:
+            diag(command, artifact, f"live CNPG manifest inspect succeeds for {UPSTREAM_IMAGE}:{tag}", actual, "Verify upstream tag availability or use deterministic fixtures.")
+        inventory[tag] = manifest
+    return inventory
+
+
 def shutil_which(command):
     for directory in os.environ.get("PATH", "").split(os.pathsep):
         path = Path(directory) / command
@@ -381,8 +457,9 @@ def main(argv):
     data = parse_metadata(metadata_path, command)
     validate_resolver_metadata(data, command, metadata_path)
     inventory = load_fixture_inventory(args.fixtures, args.fixture_file, command)
-    use_remote = not inventory and not args.fixtures and not args.fixture_file
-    entries = resolve_entries(data, inventory, use_remote, command, metadata_path, args.allow_digest_drift)
+    if not inventory and not args.fixtures and not args.fixture_file:
+        inventory = live_inventory(data, command, metadata_path)
+    entries = resolve_entries(data, inventory, False, command, metadata_path, args.allow_digest_drift)
     payload = {"entries": entries}
     if args.json:
         print(json.dumps(payload, separators=(",", ":"), sort_keys=True))

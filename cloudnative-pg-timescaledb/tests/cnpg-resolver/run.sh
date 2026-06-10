@@ -19,8 +19,17 @@ expect_file() {
 
 expect_fail() {
   local description="$1"
-  local pattern="$2"
-  shift 2
+  shift
+  local patterns=()
+  while [[ "$#" -gt 0 && "$1" != "--" ]]; do
+    patterns+=("$1")
+    shift
+  done
+  if [[ "$#" -eq 0 ]]; then
+    diag "expect_fail" "${description}" "pattern list is followed by -- and command" "missing --" "Keep CNPG negative test calls explicit."
+    exit 1
+  fi
+  shift
   local tmp status
   tmp="$(mktemp)"
   set +e
@@ -32,11 +41,14 @@ expect_fail() {
     rm -f "${tmp}"
     exit 1
   fi
-  if ! grep -E -q "${pattern}" "${tmp}"; then
-    diag "${*}" "${description}" "diagnostic matches ${pattern}" "$(tr '\n' ' ' <"${tmp}")" "Report command, artifact, expected upstream reference, actual result, and remediation."
-    rm -f "${tmp}"
-    exit 1
-  fi
+  local pattern
+  for pattern in "${patterns[@]}"; do
+    if ! grep -F -q "${pattern}" "${tmp}"; then
+      diag "${*}" "${description}" "diagnostic contains ${pattern}" "$(tr '\n' ' ' <"${tmp}")" "Report command, artifact, expected upstream reference, actual result, and remediation."
+      rm -f "${tmp}"
+      exit 1
+    fi
+  done
   rm -f "${tmp}"
 }
 
@@ -193,12 +205,23 @@ rm -f "${json_output}" "${fixture_metadata}"
 
 expect_fail \
   "deprecated system flavor" \
-  "deprecated system flavor|system-\*|expected upstream reference=ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie|remediation:" \
+  "command: resolve-versions --check-cnpg" \
+  "artifact:" \
+  "expected: pg_major=18 debian_variant=trixie platform=all expected upstream reference=ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie" \
+  "actual: deprecated system flavor available instead" \
+  "18.4-system-trixie" \
+  "remediation: Reject system-*" \
+  -- \
   "${RESOLVER}" --check-cnpg --fixture-file "${FIXTURE_DIR}/system-flavor-deprecated.json"
 
 expect_fail \
   "missing arm64 platform" \
-  "pg_major=18 debian_variant=trixie platform=linux/arm64|missing platform linux/arm64|expected upstream reference=ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie|remediation:" \
+  "command: resolve-versions --check-cnpg" \
+  "artifact:" \
+  "expected: pg_major=18 debian_variant=trixie platform=linux/arm64 expected upstream reference=ghcr.io/cloudnative-pg/postgresql:18.4-standard-trixie" \
+  "actual: missing platform linux/arm64" \
+  "remediation: Publishable rows require all metadata platforms" \
+  -- \
   "${RESOLVER}" --check-cnpg --fixture-file "${FIXTURE_DIR}/missing-platform-arm64.json"
 
 partial_nonpublish_metadata="$(mktemp)"
@@ -289,7 +312,12 @@ Path(sys.argv[1]).write_text('{"manifests": []}\n')
 PY
 expect_fail \
   "unavailable publishable base" \
-  "pg_major=18 debian_variant=trixie|expected upstream reference=ghcr.io/cloudnative-pg/postgresql:18-standard-trixie|missing tag|Publishable rows require" \
+  "command: resolve-versions --check-cnpg" \
+  "artifact:" \
+  "expected: pg_major=18 debian_variant=trixie platform=all expected upstream reference=ghcr.io/cloudnative-pg/postgresql:18-standard-trixie" \
+  "actual: missing tag" \
+  "remediation: Publishable rows require an available standard-* CNPG base image tag." \
+  -- \
   "${RESOLVER}" --check-cnpg --metadata "${FIXTURE_DIR}/unavailable-publishable.yaml" --fixture-file "${empty_inventory}"
 rm -f "${empty_inventory}"
 
@@ -301,13 +329,21 @@ Path(sys.argv[1]).write_text('{"manifests": [{"reference": "ghcr.io/other/postgr
 PY
 expect_fail \
   "wrong upstream repository" \
-  "fixture manifest reference starts with ghcr.io/cloudnative-pg/postgresql:|ghcr.io/other/postgresql:18.4-standard-trixie|Resolve only ghcr.io/cloudnative-pg/postgresql" \
+  "command: resolve-versions --check-cnpg" \
+  "expected: fixture manifest reference starts with ghcr.io/cloudnative-pg/postgresql:" \
+  "actual: ghcr.io/other/postgresql:18.4-standard-trixie" \
+  "remediation: Resolve only ghcr.io/cloudnative-pg/postgresql base images." \
+  -- \
   "${RESOLVER}" --check-cnpg --fixture-file "${wrong_repo_inventory}"
 rm -f "${wrong_repo_inventory}"
 
 expect_fail \
   "missing option value" \
-  "command: resolve-versions --check-cnpg|artifact: arguments|expected: valid resolver arguments|remediation:" \
+  "command: resolve-versions --check-cnpg" \
+  "artifact: arguments" \
+  "expected: valid resolver arguments" \
+  "remediation: Pass required option values" \
+  -- \
   "${RESOLVER}" --check-cnpg --metadata
 
 printf 'PASS story-2.1 CNPG resolver fixtures\n'

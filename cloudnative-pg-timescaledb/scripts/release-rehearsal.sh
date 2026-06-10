@@ -110,6 +110,8 @@ run_orchestration() {
   local report_lstat_path=""
   local source_sha=""
   local matrix_json=""
+  local update_fixture_root=""
+  local barman_plugin_fixture=""
   local step_index=0
 
   if [[ -z "${date_value}" ]]; then
@@ -185,6 +187,11 @@ run_orchestration() {
   fi
   logs_dir="${tmp_dir}/release-rehearsal-logs"
   mkdir -p "${logs_dir}"
+  update_fixture_root="${tmp_dir}/update-fixtures"
+  mkdir -p "${update_fixture_root}"
+  ln -s "${checkout}/cloudnative-pg-timescaledb/tests/cnpg-resolver/fixtures" "${update_fixture_root}/cnpg"
+  ln -s "${checkout}/cloudnative-pg-timescaledb/tests/packagecloud/fixtures" "${update_fixture_root}/packages"
+  barman_plugin_fixture="${checkout}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json"
   local commands_file="${logs_dir}/commands.tsv"
   local last_log_file=""
   : > "${commands_file}"
@@ -222,7 +229,7 @@ run_orchestration() {
     fi
   }
 
-  run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" make --no-print-directory update UPDATE_ARGS=--json
+  run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" BARMAN_PLUGIN_FIXTURE="${barman_plugin_fixture}" make --no-print-directory update "UPDATE_ARGS=--fixtures ${update_fixture_root} --json"
   run_step "make generate" env DATE="${date_value}" make --no-print-directory generate
   run_step "make validate" env DATE="${date_value}" make --no-print-directory validate
   run_step "make matrix" make --no-print-directory matrix
