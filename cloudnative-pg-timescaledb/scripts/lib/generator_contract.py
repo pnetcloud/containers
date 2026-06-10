@@ -768,6 +768,7 @@ def docs_summary(entries, doc_path="cloudnative-pg-timescaledb/docs/generated/co
         ((docs_dir / "release-candidate-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "4.2", "static generated schema documentation"),
         ((docs_dir / "release-evidence-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "4.4", "static generated schema documentation"),
         ((docs_dir / "failure-reason-catalog.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "5.8", "static generated failure reason catalog"),
+        ((docs_dir / "release-rehearsal-report.md").as_posix(), "cloudnative-pg-timescaledb/scripts/release-rehearsal.sh", "5.9", "dry-run release rehearsal report"),
         ((docs_dir / "matrix-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-matrix.sh", "4.1", "static generated matrix schema documentation"),
     ]
     metadata_path = "cloudnative-pg-timescaledb/versions.yaml"

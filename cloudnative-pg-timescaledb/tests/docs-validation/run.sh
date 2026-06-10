@@ -229,7 +229,7 @@ cat >"${workflow_tmp}/cloudnative-pg-timescaledb/scripts/valid.sh" <<'EOF'
 set -Eeuo pipefail
 printf ok\n
 EOF
-expect_workflow_fail "invalid workflow syntax/action pinning" "actionlint|pinned|workflow YAML" env VALIDATE_WORKFLOWS_ROOT="${workflow_tmp}" "${VALIDATE_WORKFLOWS}"
+expect_workflow_fail "invalid workflow syntax/action pinning" "actionlint|pinned|workflow YAML|top-level permissions" env VALIDATE_WORKFLOWS_ROOT="${workflow_tmp}" "${VALIDATE_WORKFLOWS}"
 rm -rf "${workflow_tmp}"
 
 printf 'PASS story-5.7 docs validation fixtures\n'

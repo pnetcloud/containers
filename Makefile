@@ -2,8 +2,9 @@ SHELL := /usr/bin/env bash
 
 PROJECT_DIR := cloudnative-pg-timescaledb
 SCRIPT_DIR := $(PROJECT_DIR)/scripts
+export DRY_RUN DATE STAGING_NAMESPACE
 
-.PHONY: help update generate validate matrix bake-print catalog build smoke
+.PHONY: help update generate validate matrix bake-print catalog build smoke release-rehearsal
 
 help:
 	@$(SCRIPT_DIR)/make-help.sh
@@ -31,3 +32,6 @@ build:
 
 smoke:
 	@CHECKS="$(CHECKS)" $(SCRIPT_DIR)/smoke.sh "$(PG)" "$(DEBIAN)" $(SMOKE_ARGS)
+
+release-rehearsal:
+	@$(SCRIPT_DIR)/release-rehearsal.sh $(RELEASE_REHEARSAL_ARGS)

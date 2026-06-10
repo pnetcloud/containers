@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"missing-publishable-pg-debian-platform","expected_failure":"matrix enumerates every supported PostgreSQL/Debian combination"}

@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"unpublished-catalog-reference","expected_failure":"referenced in its catalog"}

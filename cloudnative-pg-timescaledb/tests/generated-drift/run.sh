@@ -23,6 +23,7 @@ prepare_fixture() {
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md" "${target}/docs/generated/release-candidate-schema.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md" "${target}/docs/generated/release-evidence-schema.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md" "${target}/docs/generated/failure-reason-catalog.md"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md" "${target}/docs/generated/release-rehearsal-report.md"
 }
 
 run_validator() {

@@ -1,0 +1,65 @@
+name: Release Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run rehearsal without promoting final GHCR tags
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      date:
+        description: Deterministic UTC release date in YYYYMMDD format
+        required: true
+        default: '20260609'
+        type: string
+      staging_namespace:
+        description: GHCR namespace used for staging publish rehearsal
+        required: true
+        default: ghcr.io/pnetcloud/cloudnative-pg-timescaledb-rehearsal
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rehearsal:
+    name: Dry-run or staging release rehearsal
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Run release rehearsal
+        env:
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          DATE: ${{ inputs.date }}
+          STAGING_NAMESPACE: ${{ inputs.staging_namespace }}
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          WORKFLOW_RUN_STATUS: completed
+          WORKFLOW_RUN_CONCLUSION: success
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "${DATE}" =~ ^[0-9]{8}$ ]]; then
+            printf 'Invalid date input: %s\n' "${DATE}" >&2
+            exit 64
+          fi
+          if [[ ! "${STAGING_NAMESPACE}" =~ ^ghcr\.io/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            printf 'Invalid staging namespace input: %s\n' "${STAGING_NAMESPACE}" >&2
+            exit 64
+          fi
+          export DRY_RUN=0
+          if [[ "${DRY_RUN_INPUT}" == "true" ]]; then
+            export DRY_RUN=1
+          fi
+          make release-rehearsal
+      - name: Upload rehearsal report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4.6.2
+        with:
+          name: release-rehearsal-report
+          path: cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md
+          if-no-files-found: error

@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"signature-wrong-digest","expected_failure":"signature evidence is bound to the candidate index digest"}

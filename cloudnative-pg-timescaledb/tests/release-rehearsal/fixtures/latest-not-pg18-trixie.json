@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"latest-not-pg18-trixie","expected_failure":"latest resolves to 18-trixie"}

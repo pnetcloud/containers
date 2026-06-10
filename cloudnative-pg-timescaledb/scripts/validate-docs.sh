@@ -157,6 +157,7 @@ try:
         "cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md",
         "cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md",
         "cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md",
+        "cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md",
         "cloudnative-pg-timescaledb/docs/generated/matrix-schema.md",
         "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md",
     }

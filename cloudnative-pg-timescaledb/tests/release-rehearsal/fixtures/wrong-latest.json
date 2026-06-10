@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"wrong-latest","expected_failure":"latest resolves to 18-trixie"}

@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"vendor-dot-build-context","expected_failure":"build context excludes reference-only tree"}

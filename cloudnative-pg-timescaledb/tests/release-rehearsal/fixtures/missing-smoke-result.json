@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"missing-smoke-result","expected_failure":"smoke_sql"}

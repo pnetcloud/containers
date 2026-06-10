@@ -1,0 +1,20 @@
+schema_version: "1"
+default_date_utc: "20260609"
+default_staging_namespace: ghcr.io/pnetcloud/cloudnative-pg-timescaledb-rehearsal
+latest:
+  expected_target: 18-trixie
+  postgres_major: "18"
+  debian_variant: trixie
+supported:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: [trixie, bookworm]
+  platforms: [linux/amd64, linux/arm64]
+publishable_stable_primary:
+  - 17-trixie
+  - 18-trixie
+experimental:
+  - 19beta1-trixie
+  - 19beta1-bookworm
+fixtures:
+  default: cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures/valid-full-matrix.json
+report: cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md

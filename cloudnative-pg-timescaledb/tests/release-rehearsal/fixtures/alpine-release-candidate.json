@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"alpine-release-candidate","expected_failure":"Alpine release candidates are blocked"}

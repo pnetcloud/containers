@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"unsupported-debian-variant","expected_failure":"Debian variant is trixie or bookworm"}

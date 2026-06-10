@@ -1,0 +1,1 @@
+{"extends":"valid-full-matrix.json","case":"sbom-wrong-digest","expected_failure":"sbom evidence is bound to the candidate index digest"}

@@ -16,11 +16,14 @@ Targets:
                                Build one PostgreSQL/Debian image line.
   smoke PG=<major> DEBIAN=<variant>
                                Run smoke checks for one image line.
+  release-rehearsal            Run dry-run/staging release pipeline rehearsal.
 
 Supported parameters:
   PG:     17, 18, 19beta1
   DEBIAN: trixie, bookworm
   CHECKS: container, sql
+  DATE:   UTC date for release tags, for example 20260609
+  DRY_RUN: 1 for dry-run release rehearsal
 
 Controlled exit codes:
   64 missing required PG/DEBIAN parameters

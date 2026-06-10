@@ -1,0 +1,210 @@
+{
+  "case": "valid-full-matrix",
+  "date": "20260609",
+  "commands_run": [
+    "make update --fixture no-op",
+    "make update --fixture changed-autocommit",
+    "make generate",
+    "make validate",
+    "docker buildx bake release --print",
+    "container smoke for every publishable platform",
+    "SQL smoke for every publishable platform",
+    "vulnerability scan threshold evaluation",
+    "SBOM generation for exact digest",
+    "provenance generation for exact digest",
+    "cosign sign dry-run and verify policy",
+    "publish rehearsal to staging namespace",
+    "generate-catalog trixie and bookworm",
+    "validate-docs public documentation set"
+  ],
+  "update": {
+    "no_op_passed": true,
+    "changed_autocommit_passed": true,
+    "generated_drift_detected": true
+  },
+  "generated_files": {
+    "status": "fresh"
+  },
+  "workflow_dispatch": {
+    "url": "https://github.com/pnetcloud/containers/actions/runs/1234567890",
+    "status": "completed",
+    "conclusion": "success"
+  },
+  "publish_rehearsal": {
+    "final_tags_promoted": false,
+    "gates_block_on_failure": true
+  },
+  "secret_scan": {
+    "passed": true,
+    "summaries": [
+      "Release rehearsal completed in dry-run mode without credentials."
+    ]
+  },
+  "latest": {
+    "expected_target": "18-trixie",
+    "actual_target": "18-trixie",
+    "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "catalogs": {
+    "paths": [
+      "cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml",
+      "cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml"
+    ]
+  },
+  "candidates": [
+    {
+      "row_id": "17-trixie",
+      "pg_major": "17",
+      "pg_version": "17.10",
+      "debian_variant": "trixie",
+      "timescaledb_version": "2.27.2",
+      "publish": true,
+      "experimental": false,
+      "latest_eligible": false,
+      "platforms": ["linux/amd64", "linux/arm64"],
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb-rehearsal:17-pg17.10-ts2.27.2-20260609",
+      "index_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "platform_digests": {
+        "linux/amd64": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "linux/arm64": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "final_tags": ["17", "17-pg17.10-ts2.27.2-20260609"],
+      "build_context": ".",
+      "runtime_inputs": ["cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile"],
+      "build_evidence": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "smoke_container": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "smoke_sql": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "vulnerability_scan": {"status": "passed", "summary_ref": "artifacts/17-trixie/vulnerability-scan-summary.json", "subject_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
+      "supply_chain": {
+        "sbom": {"path": "artifacts/17-trixie/sbom.spdx.json", "subject_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
+        "provenance": {"path": "artifacts/17-trixie/provenance.intoto.jsonl", "subject_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
+        "signature": {"verified": true, "subject_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"}
+      },
+      "publish_rehearsal": "passed",
+      "catalog_ref": {"present": true, "path": "cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml"}
+    },
+    {
+      "row_id": "18-trixie",
+      "pg_major": "18",
+      "pg_version": "18.4",
+      "debian_variant": "trixie",
+      "timescaledb_version": "2.27.2",
+      "publish": true,
+      "experimental": false,
+      "latest_eligible": true,
+      "platforms": ["linux/amd64", "linux/arm64"],
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb-rehearsal:18-pg18.4-ts2.27.2-20260609",
+      "index_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "platform_digests": {
+        "linux/amd64": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "linux/arm64": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "final_tags": ["18", "latest", "18-pg18.4-ts2.27.2-20260609"],
+      "build_context": ".",
+      "runtime_inputs": ["cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile"],
+      "build_evidence": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "smoke_container": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "smoke_sql": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "vulnerability_scan": {"status": "passed", "summary_ref": "artifacts/18-trixie/vulnerability-scan-summary.json", "subject_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"},
+      "supply_chain": {
+        "sbom": {"path": "artifacts/18-trixie/sbom.spdx.json", "subject_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"},
+        "provenance": {"path": "artifacts/18-trixie/provenance.intoto.jsonl", "subject_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"},
+        "signature": {"verified": true, "subject_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"}
+      },
+      "publish_rehearsal": "passed",
+      "catalog_ref": {"present": true, "path": "cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml"}
+    },
+    {
+      "row_id": "17-bookworm",
+      "pg_major": "17",
+      "pg_version": "17.10",
+      "debian_variant": "bookworm",
+      "timescaledb_version": "2.27.2",
+      "publish": true,
+      "experimental": false,
+      "latest_eligible": false,
+      "platforms": ["linux/amd64", "linux/arm64"],
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb-rehearsal:17-pg17.10-ts2.27.2-20260609-bookworm",
+      "index_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      "platform_digests": {
+        "linux/amd64": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "linux/arm64": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "final_tags": ["17-bookworm", "17-pg17.10-ts2.27.2-20260609-bookworm"],
+      "build_context": ".",
+      "runtime_inputs": ["cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile"],
+      "build_evidence": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "smoke_container": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "smoke_sql": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "vulnerability_scan": {"status": "passed", "summary_ref": "artifacts/17-bookworm/vulnerability-scan-summary.json", "subject_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"},
+      "supply_chain": {
+        "sbom": {"path": "artifacts/17-bookworm/sbom.spdx.json", "subject_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"},
+        "provenance": {"path": "artifacts/17-bookworm/provenance.intoto.jsonl", "subject_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"},
+        "signature": {"verified": true, "subject_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"}
+      },
+      "publish_rehearsal": "passed",
+      "catalog_ref": {"present": true, "path": "cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml"}
+    },
+    {
+      "row_id": "18-bookworm",
+      "pg_major": "18",
+      "pg_version": "18.4",
+      "debian_variant": "bookworm",
+      "timescaledb_version": "2.27.2",
+      "publish": true,
+      "experimental": false,
+      "latest_eligible": false,
+      "platforms": ["linux/amd64", "linux/arm64"],
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb-rehearsal:18-pg18.4-ts2.27.2-20260609-bookworm",
+      "index_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "platform_digests": {
+        "linux/amd64": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "linux/arm64": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "final_tags": ["18-bookworm", "18-pg18.4-ts2.27.2-20260609-bookworm"],
+      "build_context": ".",
+      "runtime_inputs": ["cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile"],
+      "build_evidence": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "smoke_container": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "smoke_sql": {"linux/amd64": "passed", "linux/arm64": "passed"},
+      "vulnerability_scan": {"status": "passed", "summary_ref": "artifacts/18-bookworm/vulnerability-scan-summary.json", "subject_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+      "supply_chain": {
+        "sbom": {"path": "artifacts/18-bookworm/sbom.spdx.json", "subject_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        "provenance": {"path": "artifacts/18-bookworm/provenance.intoto.jsonl", "subject_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        "signature": {"verified": true, "subject_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+      },
+      "publish_rehearsal": "passed",
+      "catalog_ref": {"present": true, "path": "cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml"}
+    },
+    {
+      "row_id": "19beta1-trixie",
+      "pg_major": "19beta1",
+      "pg_version": "19beta1",
+      "debian_variant": "trixie",
+      "timescaledb_version": "",
+      "publish": false,
+      "experimental": true,
+      "latest_eligible": false,
+      "platforms": ["linux/amd64", "linux/arm64"],
+      "final_tags": [],
+      "build_context": ".",
+      "runtime_inputs": [],
+      "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream TimescaleDB support"
+    },
+    {
+      "row_id": "19beta1-bookworm",
+      "pg_major": "19beta1",
+      "pg_version": "19beta1",
+      "debian_variant": "bookworm",
+      "timescaledb_version": "",
+      "publish": false,
+      "experimental": true,
+      "latest_eligible": false,
+      "platforms": ["linux/amd64", "linux/arm64"],
+      "final_tags": [],
+      "build_context": ".",
+      "runtime_inputs": [],
+      "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream TimescaleDB support"
+    }
+  ]
+}
