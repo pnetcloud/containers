@@ -234,8 +234,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           metadata="candidate-metadata/${BAKE_TARGET}/release-candidate.json"
-          export PLATFORMS="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["PLATFORMS_JSON"])))')"
-          export FINAL_TAGS="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["INTENDED_TAGS_JSON"])))')"
+          PLATFORMS="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["PLATFORMS_JSON"])))')"
+          FINAL_TAGS="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["INTENDED_TAGS_JSON"])))')"
+          export PLATFORMS
+          export FINAL_TAGS
           export CANDIDATE_TAG="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BAKE_TARGET}-index"
           export CANDIDATE_DIGEST="n/a"
           export PLATFORM_DIGESTS="n/a"
@@ -253,11 +255,23 @@ jobs:
           PY
             )"
           fi
-          export CONTAINER_SMOKE_RESULT="$([[ -f "${metadata}" ]] && printf passed || printf unknown)"
-          export SQL_SMOKE_RESULT="$([[ -f "${metadata}" ]] && printf passed || printf unknown)"
+          if [[ -f "${metadata}" ]]; then
+            CONTAINER_SMOKE_RESULT="passed"
+            SQL_SMOKE_RESULT="passed"
+          else
+            CONTAINER_SMOKE_RESULT="unknown"
+            SQL_SMOKE_RESULT="unknown"
+          fi
+          export CONTAINER_SMOKE_RESULT
+          export SQL_SMOKE_RESULT
           export PLATFORM="${PLATFORMS}"
           export SKIPPED_COMBINATIONS="${SKIPPED_COMBINATIONS:-none}"
-          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'candidate build or smoke failed; inspect job logs')"
+          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+            FAILURE_REASON="none"
+          else
+            FAILURE_REASON="candidate build or smoke failed; inspect job logs"
+          fi
+          export FAILURE_REASON
           export REMEDIATION_COMMAND="make build PG=${PG_MAJOR} DEBIAN=${DEBIAN_VARIANT} && CHECKS=container make smoke PG=${PG_MAJOR} DEBIAN=${DEBIAN_VARIANT} && CHECKS=sql make smoke PG=${PG_MAJOR} DEBIAN=${DEBIAN_VARIANT}"
           cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
             --template cloudnative-pg-timescaledb/templates/summaries/build.md \
@@ -460,7 +474,12 @@ jobs:
             )"
           fi
           export EVIDENCE_PATH="${EVIDENCE_PATH:-n/a}"
-          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'release evidence or signing failed; inspect job logs')"
+          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+            FAILURE_REASON="none"
+          else
+            FAILURE_REASON="release evidence or signing failed; inspect job logs"
+          fi
+          export FAILURE_REASON
           export REMEDIATION_COMMAND="cloudnative-pg-timescaledb/scripts/validate-release-evidence.py --file ${EVIDENCE_PATH:-release-evidence.json}"
           # Summary covers SBOM, provenance, signature, and verification refs.
           cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
@@ -699,7 +718,12 @@ jobs:
           PY
             )"
           fi
-          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'publish failed; inspect job logs')"
+          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+            FAILURE_REASON="none"
+          else
+            FAILURE_REASON="publish failed; inspect job logs"
+          fi
+          export FAILURE_REASON
           export REMEDIATION_COMMAND="cloudnative-pg-timescaledb/scripts/validate-publish-gates.sh --help"
           cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
             --template cloudnative-pg-timescaledb/templates/summaries/publish.md \

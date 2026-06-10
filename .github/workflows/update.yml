@@ -68,14 +68,24 @@ jobs:
             )"
           fi
           export CHANGED_FILES="${changed}"
-          export NOOP_STATUS="$([[ "${changed}" == "none" ]] && printf true || printf false)"
+          if [[ "${changed}" == "none" ]]; then
+            NOOP_STATUS="true"
+          else
+            NOOP_STATUS="false"
+          fi
+          export NOOP_STATUS
           export CANDIDATE_DIGEST="n/a"
           export PUBLISHED_DIGEST="n/a"
           export SCAN_RESULT="n/a"
           export SBOM_STATUS="n/a"
           export PROVENANCE_STATUS="n/a"
           export SIGNATURE_STATUS="n/a"
-          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'update workflow failed; inspect job logs')"
+          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+            FAILURE_REASON="none"
+          else
+            FAILURE_REASON="update workflow failed; inspect job logs"
+          fi
+          export FAILURE_REASON
           export REMEDIATION_COMMAND="make update && make validate"
           cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
             --template cloudnative-pg-timescaledb/templates/summaries/update.md \
@@ -182,9 +192,15 @@ jobs:
           export CATALOG_DIGESTS="${catalog_digests}"
           export CHANGED_FILES="${{ steps.catalog_changes.outputs.changed_files || 'none' }}"
           export NOOP_STATUS="${{ steps.catalog_changes.outputs.noop || 'true' }}"
-          export COMMIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || printf n/a)"
+          COMMIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || printf n/a)"
+          export COMMIT_SHA
           export CANDIDATE_DIGEST="n/a"
-          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'catalog autocommit failed; inspect job logs')"
+          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+            FAILURE_REASON="none"
+          else
+            FAILURE_REASON="catalog autocommit failed; inspect job logs"
+          fi
+          export FAILURE_REASON
           export REMEDIATION_COMMAND="make catalog && make validate"
           cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
             --template cloudnative-pg-timescaledb/templates/summaries/catalog.md \

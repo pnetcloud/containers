@@ -16,8 +16,8 @@ fi
 pathspecs=()
 while IFS= read -r raw || [[ -n "${raw}" ]]; do
   line="${raw%%#*}"
-  line="${line#${line%%[![:space:]]*}}"
-  line="${line%${line##*[![:space:]]}}"
+  line="${line#"${line%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
   [[ -z "${line}" ]] && continue
   pathspecs+=(":(glob)${line}")
 done <"${ALLOWLIST_FILE}"

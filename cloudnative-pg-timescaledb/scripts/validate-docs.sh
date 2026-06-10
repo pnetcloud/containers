@@ -2,7 +2,6 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SCRIPT_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts"
 DOCS_ROOT="${ROOT_DIR}"
 
 diag() {

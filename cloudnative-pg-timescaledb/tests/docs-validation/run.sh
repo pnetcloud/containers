@@ -227,7 +227,7 @@ cp "${FIXTURE_DIR}/actionlint-invalid-workflow.yml" "${workflow_tmp}/.github/wor
 cat >"${workflow_tmp}/cloudnative-pg-timescaledb/scripts/valid.sh" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf ok\n
+printf '%s\n' ok
 EOF
 expect_workflow_fail "invalid workflow syntax/action pinning" "actionlint|pinned|workflow YAML|top-level permissions" env VALIDATE_WORKFLOWS_ROOT="${workflow_tmp}" "${VALIDATE_WORKFLOWS}"
 rm -rf "${workflow_tmp}"

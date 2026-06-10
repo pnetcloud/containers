@@ -52,10 +52,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p security-scan/output
-          printf 'candidate_metadata=%s\n' "security-scan/input/release-candidate.json" >> "${GITHUB_OUTPUT}"
-          printf 'json_dir=%s\n' "security-scan/output/json" >> "${GITHUB_OUTPUT}"
-          printf 'sarif_path=%s\n' "security-scan/output/sarif/vulnerability-scan.sarif" >> "${GITHUB_OUTPUT}"
-          printf 'summary_path=%s\n' "security-scan/output/summary/vulnerability-scan-summary.json" >> "${GITHUB_OUTPUT}"
+          {
+            printf 'candidate_metadata=%s\n' "security-scan/input/release-candidate.json"
+            printf 'json_dir=%s\n' "security-scan/output/json"
+            printf 'sarif_path=%s\n' "security-scan/output/sarif/vulnerability-scan.sarif"
+            printf 'summary_path=%s\n' "security-scan/output/summary/vulnerability-scan-summary.json"
+          } >> "${GITHUB_OUTPUT}"
       - name: Validate candidate metadata
         run: |
           set -Eeuo pipefail
@@ -74,7 +76,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p "${JSON_DIR}" "$(dirname "${SARIF_PATH}")"
-          scan_failed=0
           python3 - "${CANDIDATE_METADATA}" "${JSON_DIR}" "${SARIF_PATH}" "${TRIVY_IMAGE}" "${IGNORE_FILE}" <<'PY' > /tmp/security-scan-commands.sh
           import json
           import shlex
@@ -189,7 +190,8 @@ jobs:
           SARIF_PATH: ${{ steps.paths.outputs.sarif_path }}
         run: |
           set -Eeuo pipefail
-          export IMAGE_REF="n/a" CANDIDATE_DIGEST="n/a" SCAN_RESULT="failed" REPORT_PATH="${SUMMARY_PATH:-n/a}"
+          REPORT_PATH="${SUMMARY_PATH:-n/a}"
+          export IMAGE_REF="n/a" CANDIDATE_DIGEST="n/a" SCAN_RESULT="failed" REPORT_PATH
           if [[ -n "${SUMMARY_PATH:-}" && -f "${SUMMARY_PATH}" ]]; then
             eval "$(python3 - "${SUMMARY_PATH}" <<'PY'
           import json
@@ -218,7 +220,12 @@ jobs:
             export SUMMARY_STATUS="failure"
             export FAILURE_REASON="vulnerability scan failed policy gate"
           else
-            export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'vulnerability scan failed or summary missing')"
+            if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+              FAILURE_REASON="none"
+            else
+              FAILURE_REASON="vulnerability scan failed or summary missing"
+            fi
+            export FAILURE_REASON
           fi
           export REMEDIATION_COMMAND="cloudnative-pg-timescaledb/scripts/evaluate-vulnerability-scan.py --help"
           cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
@@ -308,10 +315,20 @@ jobs:
             )"
           fi
           export SARIF_PATH="sarif/vulnerability-scan.sarif"
-          export UPLOAD_STATUS="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf uploaded || printf failed)"
+          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+            UPLOAD_STATUS="uploaded"
+          else
+            UPLOAD_STATUS="failed"
+          fi
+          export UPLOAD_STATUS
           export SCAN_RESULT="${{ needs.scan.outputs.scan_result }}"
           export PUBLISHED_DIGEST="n/a"
-          export FAILURE_REASON="$([[ "${SUMMARY_STATUS}" == "success" ]] && printf none || printf 'SARIF upload failed; inspect job logs')"
+          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+            FAILURE_REASON="none"
+          else
+            FAILURE_REASON="SARIF upload failed; inspect job logs"
+          fi
+          export FAILURE_REASON
           export REMEDIATION_COMMAND="check security-scan output artifact and SARIF upload permissions"
           cloudnative-pg-timescaledb/scripts/write-step-summary.sh \
             --template cloudnative-pg-timescaledb/templates/summaries/scan-sarif.md \

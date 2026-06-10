@@ -11,6 +11,7 @@ docker_bin="${DOCKER_BIN:-docker}"
 pg="${1:-}"
 debian="${2:-}"
 
+# shellcheck source=cloudnative-pg-timescaledb/scripts/lib/command.sh
 source "${SCRIPT_DIR}/lib/command.sh"
 require_pg_debian "smoke-test container" "${pg}" "${debian}"
 

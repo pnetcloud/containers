@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=cloudnative-pg-timescaledb/scripts/lib/command.sh
 source "${SCRIPT_DIR}/lib/command.sh"
 pg="${1:-}"
 debian="${2:-}"
@@ -18,7 +19,7 @@ target="pg${pg}-${debian}"
 
 "${SCRIPT_DIR}/generate-bake.sh" --metadata "${metadata}" --output "${bake_file}" --check >/dev/null
 
-selection_json="$(${SCRIPT_DIR}/generate-bake.sh --metadata "${metadata}" --output "${bake_file}" --json)"
+selection_json="$("${SCRIPT_DIR}"/generate-bake.sh --metadata "${metadata}" --output "${bake_file}" --json)"
 selection="$(${PYTHON:-python3} - "${selection_json}" "${target}" "${platform}" <<'PY'
 import json
 import sys

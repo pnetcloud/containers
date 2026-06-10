@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=cloudnative-pg-timescaledb/scripts/lib/command.sh
 source "${SCRIPT_DIR}/lib/command.sh"
 
 missing=()

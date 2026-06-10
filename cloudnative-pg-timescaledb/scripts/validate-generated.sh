@@ -231,9 +231,9 @@ PY
 
 collect_expected_files() {
   local generated_json catalog_json docs_json
-  generated_json="$(${SCRIPT_DIR}/generate-dockerfiles.sh --metadata "${metadata}" --output "${generated_root}" --json)"
-  catalog_json="$(${SCRIPT_DIR}/generate-catalog.sh --metadata "${metadata}" --output "${catalog_root}" --json)"
-  docs_json="$(${SCRIPT_DIR}/generate-docs.sh --metadata "${metadata}" --output "${docs_file}" --json)"
+  generated_json="$("${SCRIPT_DIR}"/generate-dockerfiles.sh --metadata "${metadata}" --output "${generated_root}" --json)"
+  catalog_json="$("${SCRIPT_DIR}"/generate-catalog.sh --metadata "${metadata}" --output "${catalog_root}" --json)"
+  docs_json="$("${SCRIPT_DIR}"/generate-docs.sh --metadata "${metadata}" --output "${docs_file}" --json)"
   python3 - "${metadata}" "${docs_file}" "${generated_json}" "${catalog_json}" "${docs_json}" <<'PY'
 import json
 import sys
