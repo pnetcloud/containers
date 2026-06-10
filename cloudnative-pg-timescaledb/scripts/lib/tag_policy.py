@@ -1,19 +1,38 @@
-from datetime import datetime
 import os
-import re
+from pathlib import Path
+import subprocess
+import sys
+
+sys.dont_write_bytecode = True
 
 
 DEFAULT_TAG_DATE = "20260609"
-DOCKER_TAG_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
+TAGS_SCRIPT = Path(__file__).with_name("tags.sh")
+
+
+def _run_tags(args):
+    proc = subprocess.run(
+        ["bash", str(TAGS_SCRIPT), *args],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        raise ValueError((proc.stderr or proc.stdout).strip())
+    return proc.stdout
+
+
+def _bool_arg(entry, field):
+    value = entry[field]
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    raise ValueError(f"{field} must be boolean")
 
 
 def validate_release_date(release_date):
-    if not re.fullmatch(r"[0-9]{8}", release_date):
-        raise ValueError(f"invalid release_date {release_date!r}; expected UTC YYYYMMDD")
-    try:
-        datetime.strptime(release_date, "%Y%m%d")
-    except ValueError as exc:
-        raise ValueError(f"invalid release_date {release_date!r}; expected valid UTC calendar date") from exc
+    _run_tags(["--validate-date", release_date])
     return release_date
 
 
@@ -23,16 +42,16 @@ def resolve_release_date(env=None):
 
 
 def generated_tags(entry, release_date):
-    release_date = validate_release_date(release_date)
-    suffix = "" if entry["debian_variant"] == "trixie" else f"-{entry['debian_variant']}"
-    immutable = f"{entry['pg_major']}-pg{entry['pg_version']}-ts{entry['timescaledb_version']}-{release_date}{suffix}"
-    if entry["experimental"]:
-        tags = [immutable]
-    else:
-        tags = [entry["pg_major"] if entry["debian_variant"] == "trixie" else f"{entry['pg_major']}-{entry['debian_variant']}", immutable]
-        if entry["latest_eligible"]:
-            tags.append("latest")
-    for tag in tags:
-        if not DOCKER_TAG_RE.fullmatch(tag):
-            raise ValueError(f"invalid Docker tag {tag!r}; expected [A-Za-z0-9_][A-Za-z0-9_.-]{{0,127}}")
-    return tags
+    output = _run_tags(
+        [
+            "--generate-fields",
+            release_date,
+            entry["pg_major"],
+            entry["pg_version"],
+            entry["debian_variant"],
+            entry["timescaledb_version"],
+            _bool_arg(entry, "experimental"),
+            _bool_arg(entry, "latest_eligible"),
+        ]
+    )
+    return output.splitlines()

@@ -1,6 +1,91 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+tags_error() {
+  printf 'error: %s\n' "$*" >&2
+}
+
+tags_validate_release_date() {
+  local release_date="$1"
+  if [[ ! "${release_date}" =~ ^[0-9]{8}$ ]]; then
+    tags_error "invalid release date '${release_date}'; expected UTC YYYYMMDD"
+    return 1
+  fi
+  if ! python3 - "${release_date}" <<'PY'
+from datetime import datetime
+import sys
+
+try:
+    datetime.strptime(sys.argv[1], "%Y%m%d")
+except ValueError:
+    raise SystemExit(1)
+PY
+  then
+    tags_error "invalid release date '${release_date}'; expected valid UTC calendar date"
+    return 1
+  fi
+}
+
+tags_validate_docker_tag() {
+  local tag="$1"
+  if [[ ! "${tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+    tags_error "invalid Docker tag '${tag}'; expected [A-Za-z0-9_][A-Za-z0-9_.-]{0,127}"
+    return 1
+  fi
+}
+
+tags_generate_from_fields() {
+  local release_date="$1"
+  local pg_major="$2"
+  local pg_version="$3"
+  local debian_variant="$4"
+  local timescaledb_version="$5"
+  local experimental="$6"
+  local latest_eligible="$7"
+  local suffix immutable rolling tag
+
+  tags_validate_release_date "${release_date}" || return 1
+  for value_name in pg_major pg_version debian_variant timescaledb_version experimental latest_eligible; do
+    if [[ -z "${!value_name}" ]]; then
+      tags_error "missing ${value_name} for tag generation"
+      return 1
+    fi
+  done
+  if [[ "${experimental}" != "true" && "${experimental}" != "false" ]]; then
+    tags_error "experimental must be true or false"
+    return 1
+  fi
+  if [[ "${latest_eligible}" != "true" && "${latest_eligible}" != "false" ]]; then
+    tags_error "latest_eligible must be true or false"
+    return 1
+  fi
+
+  suffix=""
+  if [[ "${debian_variant}" != "trixie" ]]; then
+    suffix="-${debian_variant}"
+  fi
+  immutable="${pg_major}-pg${pg_version}-ts${timescaledb_version}-${release_date}${suffix}"
+
+  if [[ "${experimental}" == "true" ]]; then
+    tags_validate_docker_tag "${immutable}" || return 1
+    printf '%s\n' "${immutable}"
+    return 0
+  fi
+
+  rolling="${pg_major}"
+  if [[ "${debian_variant}" != "trixie" ]]; then
+    rolling="${pg_major}-${debian_variant}"
+  fi
+  for tag in "${rolling}" "${immutable}"; do
+    tags_validate_docker_tag "${tag}" || return 1
+    printf '%s\n' "${tag}"
+  done
+  if [[ "${latest_eligible}" == "true" ]]; then
+    tags_validate_docker_tag "latest" || return 1
+    printf '%s\n' "latest"
+  fi
+}
+
 tags_validate_file() {
   local metadata_file="$1"
   local release_date="$2"
@@ -10,13 +95,13 @@ tags_validate_file() {
 from datetime import datetime
 from pathlib import Path
 import re
+import subprocess
 import sys
 sys.dont_write_bytecode = True
-sys.path.insert(0, sys.argv[3])
-from tag_policy import generated_tags
 
 path = Path(sys.argv[1])
 release_date = sys.argv[2]
+tags_script = Path(sys.argv[3]) / "tags.sh"
 command = f"validate-tags --metadata {path} --date {release_date}"
 
 def fail(expected, actual, remediation):
@@ -27,6 +112,31 @@ def fail(expected, actual, remediation):
         f"actual: {actual}\n"
         f"remediation: {remediation}"
     )
+
+def bool_arg(value):
+    return "true" if value is True else "false"
+
+def generated_tags(entry, date):
+    proc = subprocess.run(
+        [
+            "bash",
+            str(tags_script),
+            "--generate-fields",
+            date,
+            entry["pg_major"],
+            entry["pg_version"],
+            entry["debian_variant"],
+            entry["timescaledb_version"],
+            bool_arg(entry["experimental"]),
+            bool_arg(entry["latest_eligible"]),
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        raise ValueError((proc.stderr or proc.stdout).strip())
+    return proc.stdout.splitlines()
 
 def parse_scalar(raw):
     value = raw.strip()
@@ -219,3 +329,83 @@ if latest_rows != [("18", "trixie")]:
     fail("latest emitted exactly for PostgreSQL 18 trixie", repr(latest_rows), "Only the current primary PostgreSQL line may receive latest.")
 PY
 }
+
+tags_main() {
+  local command="${1:-}"
+  case "${command}" in
+    --generate-fields)
+      if [[ "$#" -ne 8 ]]; then
+        tags_error "usage: tags.sh --generate-fields YYYYMMDD PG_MAJOR PG_VERSION DEBIAN_VARIANT TIMESCALEDB_VERSION EXPERIMENTAL LATEST_ELIGIBLE"
+        return 64
+      fi
+      tags_generate_from_fields "$2" "$3" "$4" "$5" "$6" "$7" "$8"
+      ;;
+    --generate-json)
+      if [[ "$#" -ne 3 ]]; then
+        tags_error "usage: tags.sh --generate-json YYYYMMDD ENTRY_JSON"
+        return 64
+      fi
+      python3 - "${BASH_SOURCE[0]}" "$2" "$3" <<'PY'
+import json
+import subprocess
+import sys
+
+script, release_date, raw_entry = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    entry = json.loads(raw_entry)
+except json.JSONDecodeError as exc:
+    raise SystemExit(f"error: invalid entry JSON: {exc}")
+if not isinstance(entry, dict):
+    raise SystemExit("error: entry JSON must be an object")
+
+required = ["pg_major", "pg_version", "debian_variant", "timescaledb_version", "experimental", "latest_eligible"]
+missing = [field for field in required if field not in entry]
+if missing:
+    raise SystemExit(f"error: missing tag-policy JSON fields: {', '.join(missing)}")
+string_fields = ["pg_major", "pg_version", "debian_variant", "timescaledb_version"]
+invalid_strings = [field for field in string_fields if not isinstance(entry[field], str) or not entry[field]]
+if invalid_strings:
+    raise SystemExit(f"error: tag-policy JSON fields must be non-empty strings: {', '.join(invalid_strings)}")
+if not isinstance(entry["experimental"], bool) or not isinstance(entry["latest_eligible"], bool):
+    raise SystemExit("error: experimental and latest_eligible must be JSON booleans")
+
+proc = subprocess.run(
+    [
+        "bash",
+        script,
+        "--generate-fields",
+        release_date,
+        str(entry["pg_major"]),
+        str(entry["pg_version"]),
+        str(entry["debian_variant"]),
+        str(entry["timescaledb_version"]),
+        "true" if entry["experimental"] else "false",
+        "true" if entry["latest_eligible"] else "false",
+    ],
+    text=True,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+)
+if proc.returncode != 0:
+    sys.stderr.write(proc.stderr or proc.stdout)
+    raise SystemExit(proc.returncode)
+print(json.dumps(proc.stdout.splitlines(), separators=(",", ":")))
+PY
+      ;;
+    --validate-date)
+      if [[ "$#" -ne 2 ]]; then
+        tags_error "usage: tags.sh --validate-date YYYYMMDD"
+        return 64
+      fi
+      tags_validate_release_date "$2"
+      ;;
+    *)
+      tags_error "usage: tags.sh --generate-fields ... | --generate-json ... | --validate-date YYYYMMDD"
+      return 64
+      ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  tags_main "$@"
+fi

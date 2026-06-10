@@ -3,7 +3,7 @@ storyId: 1.4
 storyKey: 1-4-tag-policy-library-and-validation
 epic: 1
 title: 'Tag Policy Library and Validation'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: a6e5968
@@ -159,6 +159,9 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Addressed BMad review round 4 findings within Story 1.4 scope: required the `latest_eligible` owner to be publishable and emit `latest`.
 - 2026-06-10: Addressed BMad review round 5 findings within Story 1.4 scope: included the shared `tags.sh` tag-policy refactor in the review artifact.
 - 2026-06-10: Deferred matrix/generator hardening observations raised during review to their owning stories, especially Story 1.5 and Story 4.1; they are intentionally excluded from this story's final scoped review.
+- 2026-06-10: Reworked `tag_policy.py` into a compatibility adapter over `tags.sh`, leaving `tags.sh` as the single tag-policy source for generation, date validation, and Docker tag grammar.
+- 2026-06-10: Addressed final BMad Edge Case review findings: added explicit `|| return 1` guards for sourced bash validation calls and deterministic `--generate-json` errors for non-object JSON and non-string tag components.
+- 2026-06-10: Final BMad review round passed with Blind Hunter, Edge Case Hunter, and Acceptance Auditor reporting no findings on the staged Story 1.4 diff.
 
 ### Completion Notes
 
@@ -170,6 +173,8 @@ Every implementation story must finish with a working repository state and must 
 - Skipped rows cannot carry materialized publish tags, so disabled image rows cannot accidentally retain rolling, immutable, or `latest` references.
 - The only `latest_eligible` owner must be publishable and emit `latest`; skipped rows cannot reserve `latest` without producing the tag.
 - Tag validation reports invalid CLI arguments and non-file/non-UTF-8 metadata inputs with the same deterministic diagnostic shape used by other validators.
+- `tag_policy.py` is retained only as a compatibility adapter for Python generators/tests; it shells out to `tags.sh` and does not recompute the tag formula.
+- `tags.sh --generate-json` rejects invalid syntax, non-object JSON, non-string tag components, and non-boolean policy flags with controlled `error:` diagnostics and no Python traceback.
 - Story 1.4 intentionally does not add GHCR publish, tag promotion, catalog references, or public tag docs; those remain owned by later stories.
 
 ### Latest Validation
@@ -178,6 +183,8 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/tests/tags/run.sh` - passed.
 - `shellcheck -x cloudnative-pg-timescaledb/scripts/lib/tags.sh cloudnative-pg-timescaledb/scripts/validate-tags.sh cloudnative-pg-timescaledb/tests/tags/run.sh` - passed.
 - `make validate` - passed.
+- Final review-targeted checks passed: `tags.sh --generate-json` valid payload, malformed JSON, `null`, and non-string component cases; sourced `tags_generate_from_fields` invalid-date conditional case; Python `tag_policy` adapter smoke; `git diff --cached --check`.
+- Final BMad code-review round passed: Blind Hunter no findings, Edge Case Hunter no findings, Acceptance Auditor no findings.
 
 ## File List
 
@@ -216,3 +223,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Resolved BMad review round 4 findings for skipped latest ownership.
 - 2026-06-10: Resolved BMad review round 5 findings for Story 1.4 review artifact composition.
 - 2026-06-10: Recorded matrix/generator review observations as deferred owning-story work for Story 1.5 and Story 4.1.
+- 2026-06-10: Converted Python tag policy into a `tags.sh` adapter, hardened sourced bash validation behavior and `--generate-json` malformed-input diagnostics, and closed final BMad review with no findings.
