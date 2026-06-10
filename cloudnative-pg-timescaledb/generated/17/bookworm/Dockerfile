@@ -18,6 +18,7 @@ RUN set -eux; \
     test "$(dpkg --print-architecture)" = "${TARGETARCH}"; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
+    apt-get upgrade -y; \
     apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
     install -d -m 0755 /usr/share/keyrings; \
     curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /usr/share/keyrings/timescale-timescaledb.gpg; \

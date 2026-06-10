@@ -116,6 +116,7 @@ fi
 grep -RE "FROM ghcr.io/cloudnative-pg/postgresql:.+@sha256:" "${output}" >/tmp/story-3-1-from.out
 grep -Fq 'ARG TARGETARCH' "${dockerfile}" || { diag "grep TARGETARCH" "${dockerfile}" "BuildKit TARGETARCH arg is declared" "missing" "Expose BuildKit TARGETARCH inside the stage for multi-platform builds."; exit 1; }
 grep -Fq 'ARG TARGETARCH=amd64' "${dockerfile}" && { diag "grep TARGETARCH default" "${dockerfile}" "no default TARGETARCH" "ARG TARGETARCH=amd64" "Do not override BuildKit TARGETARCH during arm64 builds."; exit 1; }
+grep -Fq 'apt-get upgrade -y' "${dockerfile}" || { diag "grep security upgrade" "${dockerfile}" "base Debian security packages are upgraded before extension install" "missing" "Apply available Debian security fixes from the CNPG base repositories before installing extension packages."; exit 1; }
 
 skipped_output="${tmp_root}/skipped"
 run_generate "${FIXTURE_DIR}/skipped-nonpublish-missing-cnpg-digest.yaml" "${skipped_output}" "${manifest}" >/tmp/story-3-1-skipped.out

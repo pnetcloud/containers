@@ -1,0 +1,16 @@
+{
+  "ArtifactName": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-100-1-pg18-trixie-amd64@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "Results": [
+    {
+      "Target": "debian",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-42496",
+          "PkgName": "perl-base",
+          "InstalledVersion": "5.40.1-6",
+          "Severity": "CRITICAL"
+        }
+      ]
+    }
+  ]
+}

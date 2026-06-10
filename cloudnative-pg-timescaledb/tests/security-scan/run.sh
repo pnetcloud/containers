@@ -55,6 +55,27 @@ PY
   rm -f "${output}"
 }
 
+evaluate_unfixed_fixture() {
+  local output
+  output="$(mktemp)"
+  "${EVALUATOR}" --policy "${POLICY}" --ignore "${IGNORE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-json "${FIXTURE_DIR}/unfixed-threshold-reported.json" --output "${output}"
+  python3 - "${output}" <<'PY'
+import json
+import sys
+from pathlib import Path
+payload = json.loads(Path(sys.argv[1]).read_text())
+if payload["scan_result"] != "passed" or payload["failure_reason"]:
+    raise SystemExit(f"expected unfixed threshold finding to be reported without blocking: {payload}")
+if len(payload.get("threshold_findings", [])) != 1:
+    raise SystemExit(f"expected threshold finding evidence: {payload}")
+if len(payload.get("unfixed_threshold_findings", [])) != 1:
+    raise SystemExit(f"expected unfixed threshold finding evidence: {payload}")
+if payload.get("release_blocking_findings"):
+    raise SystemExit(f"unfixed finding must not be release-blocking by default: {payload}")
+PY
+  rm -f "${output}"
+}
+
 validate_security_scan_workflow() {
   local file="$1"
   python3 - "${file}" <<'PY'
@@ -137,6 +158,7 @@ PY
 
 for fixture in \
   valid-scan-pass.json \
+  unfixed-threshold-reported.json \
   high-threshold-exceeded.json \
   scanner-db-unavailable.json \
   valid-scan-pass-arm64.json \
@@ -150,10 +172,14 @@ for fixture in \
 done
 
 grep -Fq 'severity_threshold: HIGH' "${POLICY}" || { diag "grep policy" "${POLICY}" "HIGH severity threshold encoded" "missing" "Encode the vulnerability severity threshold in config."; exit 1; }
+grep -Fq 'fail_on_fixable_threshold_exceeded: true' "${POLICY}" || { diag "grep policy" "${POLICY}" "fixable threshold findings block release" "missing" "Block release when a fixed package version exists but the image has not consumed it."; exit 1; }
+grep -Fq 'fail_on_unfixed_threshold_exceeded: false' "${POLICY}" || { diag "grep policy" "${POLICY}" "unfixed threshold findings are reported without blocking by default" "missing" "Keep release automation green when upstream has not published a fixed package, while recording evidence."; exit 1; }
 grep -Fq 'undeclared_ignores: reject' "${IGNORE}" || { diag "grep ignore policy" "${IGNORE}" "undeclared ignores rejected" "missing" "Keep ignores explicit and reviewable."; exit 1; }
 grep -Fq 'fail closed' "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/vulnerability-policy.md" || { diag "grep vulnerability docs" "cloudnative-pg-timescaledb/docs/vulnerability-policy.md" "fail-closed behavior documented" "missing" "Document scanner DB failure behavior."; exit 1; }
+grep -Fq 'FixedVersion' "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/vulnerability-policy.md" || { diag "grep vulnerability docs" "cloudnative-pg-timescaledb/docs/vulnerability-policy.md" "fixable versus unfixed threshold behavior documented" "missing" "Document which vulnerabilities block release and which remain evidence-only."; exit 1; }
 
 evaluate_pass_fixture
+evaluate_unfixed_fixture
 scan_dir="$(mktemp -d)"
 cp "${FIXTURE_DIR}/valid-scan-pass.json" "${scan_dir}/pg18-trixie-linux-amd64.json"
 cp "${FIXTURE_DIR}/valid-scan-pass-arm64.json" "${scan_dir}/pg18-trixie-linux-arm64.json"
@@ -164,7 +190,7 @@ missing_platform_scan_dir="$(mktemp -d)"
 cp "${FIXTURE_DIR}/valid-scan-pass.json" "${missing_platform_scan_dir}/pg18-trixie-linux-amd64.json"
 expect_fail "missing platform scanner JSON output" "scanner JSON files exactly" "${SCAN_FILE_VALIDATOR}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-dir "${missing_platform_scan_dir}"
 rm -rf "${scan_dir}" "${empty_scan_dir}" "${missing_platform_scan_dir}"
-expect_fail "HIGH threshold exceeded" "vulnerabilities at or above HIGH" "${EVALUATOR}" --policy "${POLICY}" --ignore "${IGNORE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-json "${FIXTURE_DIR}/high-threshold-exceeded.json"
+expect_fail "HIGH threshold exceeded" "release-blocking vulnerabilities at or above HIGH" "${EVALUATOR}" --policy "${POLICY}" --ignore "${IGNORE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-json "${FIXTURE_DIR}/high-threshold-exceeded.json"
 expect_fail "scanner DB unavailable" "scanner database or metadata unavailable" "${EVALUATOR}" --policy "${POLICY}" --ignore "${IGNORE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-json "${FIXTURE_DIR}/scanner-db-unavailable.json"
 expect_fail "mismatched scanner artifact identity" "ArtifactName matches one candidate_ref@platform_digest" "${EVALUATOR}" --policy "${POLICY}" --ignore "${IGNORE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-json "${FIXTURE_DIR}/mismatched-scan-artifact.json"
 
