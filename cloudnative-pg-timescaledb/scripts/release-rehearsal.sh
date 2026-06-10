@@ -157,7 +157,7 @@ run_orchestration() {
   logs_dir="${tmp_dir}/release-rehearsal-logs"
   mkdir -p "${logs_dir}"
   local commands_file="${logs_dir}/commands.tsv"
-  local capture_output_file=""
+  local last_log_file=""
   : > "${commands_file}"
 
   run_step() {
@@ -175,6 +175,7 @@ run_orchestration() {
     set -e
     end="$(date -u +%s)"
     printf '%s\t%s\t%s\t%s\t%s\n' "${step_index}" "${label}" "${status}" "$((end - start))" "${log}" >> "${commands_file}"
+    last_log_file="${log}"
     if [[ "${status}" != "0" ]]; then
       printf '\n--- release rehearsal failed step log: %s ---\n' "${log}" >&2
       tail -n 200 "${log}" >&2 || true
@@ -183,37 +184,11 @@ run_orchestration() {
     fi
   }
 
-  run_matrix_step() {
-    local label="make matrix"
-    step_index=$((step_index + 1))
-    local log_slug log out
-    log_slug="$(slug "${label}")"
-    log="${logs_dir}/$(printf '%02d-%s.log' "${step_index}" "${log_slug}")"
-    out="${logs_dir}/$(printf '%02d-%s.out' "${step_index}" "${log_slug}")"
-    local start end status
-    start="$(date -u +%s)"
-    set +e
-    (cd "${checkout}" && make --no-print-directory matrix) >"${out}" 2>"${log}"
-    status="$?"
-    set -e
-    end="$(date -u +%s)"
-    printf '%s\t%s\t%s\t%s\t%s\n' "${step_index}" "${label}" "${status}" "$((end - start))" "${out},${log}" >> "${commands_file}"
-    if [[ "${status}" != "0" ]]; then
-      printf '\n--- release rehearsal failed step stdout: %s ---\n' "${out}" >&2
-      tail -n 200 "${out}" >&2 || true
-      printf '\n--- release rehearsal failed step stderr: %s ---\n' "${log}" >&2
-      tail -n 200 "${log}" >&2 || true
-      diag "release-rehearsal" "${label}" "command exits 0" "exit ${status}; stdout=${out}; stderr=${log}" "Inspect the command output, fix the release gate, and rerun from a clean checkout."
-      exit "${status}"
-    fi
-    capture_output_file="${out}"
-  }
-
   run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" make --no-print-directory update UPDATE_ARGS=--json
   run_step "make generate" env DATE="${date_value}" make --no-print-directory generate
   run_step "make validate" env DATE="${date_value}" make --no-print-directory validate
-  run_matrix_step
-  matrix_json="$(cat "${capture_output_file}")"
+  run_step "make matrix" make --no-print-directory matrix
+  matrix_json="$(cat "${last_log_file}")"
   run_step "make bake-print" make --no-print-directory bake-print
 
   while IFS=$'\t' read -r pg debian platform; do
@@ -733,8 +708,13 @@ if write_report:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(render_report())
 
+try:
+    report_display_path = report_path.relative_to(root).as_posix()
+except ValueError:
+    report_display_path = report_path.as_posix()
+
 if expect_failure:
     diag(fixture.get("fixture_path", fixture_path), "fixture fails release rehearsal", "passed", "Remove --expect-failure for positive fixtures or break the fixture invariant under test.")
 
-print(f"PASS release-rehearsal date={date_value} dry_run={str(dry_run).lower()} fixture={fixture.get('fixture_path', fixture_path)} report={report_path.relative_to(root).as_posix()}")
+print(f"PASS release-rehearsal date={date_value} dry_run={str(dry_run).lower()} fixture={fixture.get('fixture_path', fixture_path)} report={report_display_path}")
 PY
