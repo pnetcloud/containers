@@ -260,9 +260,26 @@ mkdir -p "${bad_upstream}/packages"
 ln -s "${PKG_FIXTURES}/trixie-amd64-available.json" "${bad_upstream}/packages/trixie-amd64-available.json"
 ln -s "${PKG_FIXTURES}/trixie-arm64-available.json" "${bad_upstream}/packages/trixie-arm64-available.json"
 ln -s "${PKG_FIXTURES}/bookworm-amd64-available.json" "${bad_upstream}/packages/bookworm-amd64-available.json"
-ln -s "${PKG_FIXTURES}/missing-toolkit-bookworm-arm64.json" "${bad_upstream}/packages/bookworm-arm64-available.json"
+cp "${PKG_FIXTURES}/bookworm-arm64-available.json" "${bad_upstream}/packages/bookworm-arm64-available.json"
+python3 - "${bad_upstream}/packages/bookworm-arm64-available.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["packages"] = [
+    package for package in payload["packages"]
+    if not (
+        package["pg_major"] == "18"
+        and package["package_type"] == "toolkit"
+        and package["architecture"] == "arm64"
+    )
+]
+path.write_text(json.dumps(payload, separators=(",", ":")))
+PY
 run_update "${resolver_skip_project}" "${bad_upstream}" "${base_tmp}/resolver-skip.out" "${base_tmp}/resolver-skip.err" || { diag "make update" "update-resolver-skip-reason" "exit 0" "$(cat "${base_tmp}/resolver-skip.err")" "Resolver-prefixed skip reasons should be updateable."; exit 1; }
-grep -Fq 'resolver:missing-toolkit:' "${resolver_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep resolver skip" "update-resolver-skip-reason" "resolver skip updated" "missing" "Update resolver-prefixed skip reasons."; exit 1; }
+grep -Fq 'skip_reason: "timescaledb-toolkit-postgresql-18 PostgreSQL 18 bookworm linux/arm64 missing packages while CNPG exists"' "${resolver_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep resolver skip" "update-resolver-skip-reason" "package/platform skip reason updated" "missing" "Update resolver-prefixed skip reasons to package-specific evidence."; exit 1; }
 
 hard_project="${base_tmp}/hard-fail"
 prepare_project "${hard_project}"

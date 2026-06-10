@@ -60,8 +60,8 @@ Manifest-list digest: `sha256:44444444444444444444444444444444444444444444444444
 
 ## Skipped Combinations
 
-- `19beta1-trixie`: Experimental PostgreSQL 19beta1 pending upstream TimescaleDB support
-- `19beta1-bookworm`: Experimental PostgreSQL 19beta1 pending upstream TimescaleDB support
+- `19beta1-trixie`: timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists
+- `19beta1-bookworm`: timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 bookworm linux/amd64 linux/arm64 missing packages while CNPG exists
 
 ## Failure Reasons Exercised
 

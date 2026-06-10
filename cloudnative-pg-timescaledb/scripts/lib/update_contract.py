@@ -270,7 +270,9 @@ def update_entries(data, cnpg, packages):
             missing.append("toolkit")
         current_reason = entry["skip_reason"]
         if missing:
-            reason = f"resolver:missing-{'-'.join(missing)}: {entry['pg_major']} {entry['debian_variant']} unresolved {'/'.join(missing)}"
+            reason = pkg_row.get("skip_reason", "")
+            if not reason or reason == current_reason:
+                reason = f"resolver:missing-{'-'.join(missing)}: {entry['pg_major']} {entry['debian_variant']} unresolved {'/'.join(missing)}"
             if current_reason == "" or current_reason.startswith("resolver:"):
                 entry["skip_reason"] = reason
         elif current_reason.startswith("resolver:"):

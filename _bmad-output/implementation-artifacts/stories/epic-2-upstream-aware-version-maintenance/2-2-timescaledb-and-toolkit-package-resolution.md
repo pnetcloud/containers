@@ -192,11 +192,14 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Closed the review correction for experimental metadata `pg_major: 19beta1` by deriving package ABI `pg_package_major: 19` for package names, lookup keys, fixtures, skip reasons, and compact JSON output.
 - 2026-06-10: Added negative coverage rejecting package fixture records named with `postgresql-19beta1` and rejecting metadata `pg_major: 19` as a supported stable line.
 - 2026-06-10: Re-ran targeted validation successfully: `bash cloudnative-pg-timescaledb/tests/packagecloud/run.sh`, `bash cloudnative-pg-timescaledb/tests/update/run.sh`, `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh`, `bash cloudnative-pg-timescaledb/tests/generators/run.sh`, `shellcheck -x cloudnative-pg-timescaledb/scripts/lib/packagecloud.sh cloudnative-pg-timescaledb/tests/packagecloud/run.sh`, and `git diff --check`.
+- 2026-06-10: Hardened package version choice to use Debian version ordering, including epoch and tilde semantics, so resolver fixtures do not select pre-release or no-epoch packages over the intended stable package version.
+- 2026-06-10: Re-ran targeted validation successfully after Debian version ordering hardening: `bash cloudnative-pg-timescaledb/tests/update/run.sh`, `bash cloudnative-pg-timescaledb/tests/packagecloud/run.sh`, `bash cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh`, `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh`, `shellcheck -x cloudnative-pg-timescaledb/scripts/lib/packagecloud.sh cloudnative-pg-timescaledb/tests/packagecloud/run.sh cloudnative-pg-timescaledb/scripts/release-rehearsal.sh cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh`, and `git diff --check`.
 
 ### Completion Notes
 
 - `resolve-versions.sh --check-packages` now resolves package names, package versions, and extension versions for TimescaleDB and Toolkit per PostgreSQL major, Debian variant, and platform.
 - Package names are derived from PostgreSQL package ABI major. Experimental metadata `pg_major: 19beta1` maps to `pg_package_major: 19`, package names ending in `19beta1` are rejected, and compact resolver JSON includes `pg_package_major` without treating `19` as a supported stable metadata line.
+- Package version selection now follows Debian ordering rules for epochs and `~` pre-release markers rather than simple lexical or dotted-number sorting.
 - Publishable rows hard-fail when either required platform is absent, when a package is missing, or when versions differ across required platforms.
 - Non-publish rows require a specific `skip_reason` naming package, PostgreSQL major, Debian variant, and platform for missing package cases.
 - JSON output is compact and stdout-only on success; human diagnostics use deterministic `command/artifact/expected/actual/remediation` fields.
@@ -205,6 +208,7 @@ Every implementation story must finish with a working repository state and must 
 ## File List
 
 - `cloudnative-pg-timescaledb/scripts/lib/packagecloud.sh`
+- `cloudnative-pg-timescaledb/scripts/lib/update_contract.py`
 - `cloudnative-pg-timescaledb/scripts/resolve-versions.sh`
 - `cloudnative-pg-timescaledb/scripts/validate.sh`
 - `cloudnative-pg-timescaledb/tests/packagecloud/run.sh`
@@ -231,9 +235,11 @@ Every implementation story must finish with a working repository state and must 
 - `cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile.skipped.json`
 - `cloudnative-pg-timescaledb/generated/19beta1/bookworm/Dockerfile.skipped.json`
 - `cloudnative-pg-timescaledb/docs/generated/compatibility-table.md`
+- `cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md`
 - `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-bake-valid.json`
 - `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-dockerfiles-valid.json`
 - `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-matrix-valid.json`
+- `cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures/valid-full-matrix.json`
 - `_bmad-output/implementation-artifacts/execution-plan-20260610.md`
 
 ## Change Log
@@ -242,3 +248,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Wired package resolver tests into `make validate`.
 - 2026-06-09: Hardened package resolver after subagent review for required platform coverage and live public Packagecloud index parsing.
 - 2026-06-10: Completed PG19 beta package ABI correction, regenerated derived outputs, and marked Story 2.2 done after targeted validation passed.
+- 2026-06-10: Hardened package version selection with Debian epoch/tilde ordering and refreshed release rehearsal skip-reason fixtures.
