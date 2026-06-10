@@ -154,6 +154,7 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Re-ran `validate-tags.sh`, `tests/tags/run.sh`, `make validate`, and `git diff --check` successfully after review fixes.
 - 2026-06-10: Fixed shellcheck SC2016 in `tests/tags/run.sh` without changing the literal `TAG_VALIDATION_DATE` assertion, then re-ran tag validation, fixture tests, shellcheck, `make validate`, and `git diff --check`.
 - 2026-06-10: Addressed BMad review findings: added controlled `validate-tags.sh` diagnostics for missing option values, rejected `tags` on `publish: false` rows, converted directory and invalid UTF-8 metadata paths into deterministic diagnostics, removed the fixed `/tmp` positive-output path, and kept the `DATE` fallback assertion aligned with `validate.sh`.
+- 2026-06-10: Addressed BMad review round 2 findings: made missing `18-trixie` latest ownership fail unconditionally, moved tag date resolution/calendar validation into shared tag policy, and proved generated matrix tags/candidate refs honor `TAG_VALIDATION_DATE -> DATE -> 20260609`.
 
 ### Completion Notes
 
@@ -164,6 +165,7 @@ Every implementation story must finish with a working repository state and must 
 - Publishable rows cannot bypass tag validation by omitting `tags`; every generated tag is checked for deterministic ownership and Docker tag grammar before later publish stories consume it.
 - Skipped rows cannot carry materialized publish tags, so disabled image rows cannot accidentally retain rolling, immutable, or `latest` references.
 - Tag validation reports invalid CLI arguments and non-file/non-UTF-8 metadata inputs with the same deterministic diagnostic shape used by other validators.
+- Generated tag consumers now use the same shared release-date resolution and calendar validation as tag validation, so matrix/candidate refs cannot silently drift to `20260609` or accept impossible dates.
 - Story 1.4 intentionally does not add GHCR publish, tag promotion, catalog references, or public tag docs; those remain owned by later stories.
 
 ### Latest Validation
@@ -176,9 +178,12 @@ Every implementation story must finish with a working repository state and must 
 ## File List
 
 - `cloudnative-pg-timescaledb/scripts/lib/tags.sh`
+- `cloudnative-pg-timescaledb/scripts/lib/tag_policy.py`
+- `cloudnative-pg-timescaledb/scripts/lib/generator_contract.py`
 - `cloudnative-pg-timescaledb/scripts/validate-tags.sh`
 - `cloudnative-pg-timescaledb/scripts/validate.sh`
 - `cloudnative-pg-timescaledb/tests/tags/run.sh`
+- `cloudnative-pg-timescaledb/tests/matrix/run.sh`
 - `cloudnative-pg-timescaledb/tests/tags/fixtures/valid-tags.yaml`
 - `cloudnative-pg-timescaledb/tests/tags/fixtures/wrong-latest-pg17.yaml`
 - `cloudnative-pg-timescaledb/tests/tags/fixtures/missing-latest-pg18-trixie.yaml`
@@ -204,3 +209,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Hardened tag validation after code review for missing materialized tags, CNPG base mismatch, duplicate tag ownership, and invalid Docker tag characters.
 - 2026-06-10: Fixed shellcheck quoting in tag fixture runner and refreshed validation evidence.
 - 2026-06-10: Resolved BMad review findings for tag CLI argument diagnostics, skipped-row tag rejection, metadata read diagnostics, test temp output, and review artifact self-consistency.
+- 2026-06-10: Resolved BMad review round 2 findings for required latest ownership and shared generated tag-date validation.

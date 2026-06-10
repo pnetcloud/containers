@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 sys.dont_write_bytecode = True
-from tag_policy import generated_tags
+from tag_policy import generated_tags, resolve_release_date
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -327,10 +327,11 @@ def image_ref(data, entry):
 
 
 def release_date(command="generate-matrix"):
-    value = os.environ.get("TAG_VALIDATION_DATE", "20260609")
-    if not re.fullmatch(r"[0-9]{8}", value):
-        diag(command, "TAG_VALIDATION_DATE", "UTC YYYYMMDD", value, "Set TAG_VALIDATION_DATE to a deterministic UTC release date.")
-    return value
+    value = os.environ.get("TAG_VALIDATION_DATE") or os.environ.get("DATE") or "20260609"
+    try:
+        return resolve_release_date(os.environ)
+    except ValueError as exc:
+        diag(command, "TAG_VALIDATION_DATE/DATE", "valid UTC YYYYMMDD", value, f"{exc}. Set TAG_VALIDATION_DATE or DATE to a deterministic UTC release date.")
 
 
 def validate_latest(entries, command, artifact):

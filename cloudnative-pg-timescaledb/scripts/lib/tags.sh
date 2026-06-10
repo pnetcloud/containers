@@ -208,7 +208,7 @@ for idx, entry in enumerate(entries):
         if "tags" in entry and entry["tags"] != actual:
             fail(f"entries[{idx}].tags exactly generated policy tags", repr(entry["tags"]), f"Use deterministic tags {actual!r} for this PG/Debian/date combination.")
 
-if latest_rows and latest_rows != [("18", "trixie")]:
+if latest_rows != [("18", "trixie")]:
     fail("latest emitted exactly for PostgreSQL 18 trixie", repr(latest_rows), "Only the current primary PostgreSQL line may receive latest.")
 PY
 }

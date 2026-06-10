@@ -1,9 +1,28 @@
+from datetime import datetime
+import os
 import re
 
 
-def generated_tags(entry, release_date):
+DEFAULT_TAG_DATE = "20260609"
+
+
+def validate_release_date(release_date):
     if not re.fullmatch(r"[0-9]{8}", release_date):
-        raise ValueError(f"invalid release_date {release_date!r}; expected YYYYMMDD")
+        raise ValueError(f"invalid release_date {release_date!r}; expected UTC YYYYMMDD")
+    try:
+        datetime.strptime(release_date, "%Y%m%d")
+    except ValueError as exc:
+        raise ValueError(f"invalid release_date {release_date!r}; expected valid UTC calendar date") from exc
+    return release_date
+
+
+def resolve_release_date(env=None):
+    values = os.environ if env is None else env
+    return validate_release_date(values.get("TAG_VALIDATION_DATE") or values.get("DATE") or DEFAULT_TAG_DATE)
+
+
+def generated_tags(entry, release_date):
+    release_date = validate_release_date(release_date)
     suffix = "" if entry["debian_variant"] == "trixie" else f"-{entry['debian_variant']}"
     immutable = f"{entry['pg_major']}-pg{entry['pg_version']}-ts{entry['timescaledb_version']}-{release_date}{suffix}"
     if entry["experimental"]:

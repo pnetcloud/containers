@@ -164,6 +164,25 @@ if actual != expected:
 PY
 rm -f "${generated}"
 
+generated="$(mktemp)"
+DATE=20260610 "${SCRIPT}" --metadata "${PUBLISHABLE_METADATA}" --json >"${generated}"
+python3 - "${generated}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+tags = [tag for row in payload["include"] for tag in row["intended_tags"]]
+candidate_refs = [row["candidate_ref"] for row in payload["include"]]
+if not tags or not all("20260610" in tag for tag in tags if "-pg" in tag and "-ts" in tag):
+    raise SystemExit(f"DATE fallback did not reach intended immutable tags: {tags}")
+if not candidate_refs or not all("20260610" in ref for ref in candidate_refs):
+    raise SystemExit(f"DATE fallback did not reach candidate refs: {candidate_refs}")
+PY
+rm -f "${generated}"
+
+expect_command_fail "invalid TAG_VALIDATION_DATE calendar date" "valid UTC YYYYMMDD|valid UTC calendar date" env TAG_VALIDATION_DATE=20261340 "${SCRIPT}" --metadata "${PUBLISHABLE_METADATA}" --json
+
 validate_matrix "${FIXTURE_DIR}/valid-publishable-matrix.json"
 python3 - "${ROOT_DIR}" "${PUBLISHABLE_METADATA}" "${FIXTURE_DIR}/valid-publishable-matrix.json" <<'PY'
 from pathlib import Path

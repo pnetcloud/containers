@@ -80,11 +80,50 @@ Path(output).write_text("\n".join(result) + "\n")
 PY
 }
 
+remove_latest_row_fixture() {
+  local output="$1"
+  python3 - "${FIXTURE_DIR}/valid-tags.yaml" "${output}" <<'PY'
+from pathlib import Path
+import sys
+
+source, output = sys.argv[1:]
+lines = Path(source).read_text().splitlines()
+entries = []
+current = []
+for line in lines:
+    if line.startswith("  - ") and current:
+        entries.append(current)
+        current = [line]
+    elif current:
+        current.append(line)
+    elif line.startswith("  - "):
+        current = [line]
+    else:
+        entries.append([line])
+if current:
+    entries.append(current)
+
+result = []
+removed = False
+for block in entries:
+    text = "\n".join(block)
+    if not removed and 'pg_major: "18"' in text and "debian_variant: trixie" in text:
+        removed = True
+        continue
+    result.extend(block)
+if not removed:
+    raise SystemExit("failed to remove 18-trixie fixture row")
+Path(output).write_text("\n".join(result) + "\n")
+PY
+}
+
 skipped_with_tags_fixture="$(mktemp)"
+missing_latest_owner_fixture="$(mktemp)"
 invalid_metadata_dir="$(mktemp -d)"
 invalid_utf8_fixture="$(mktemp)"
-trap 'rm -rf "${skipped_with_tags_fixture}" "${invalid_metadata_dir}" "${invalid_utf8_fixture}"' EXIT
+trap 'rm -rf "${skipped_with_tags_fixture}" "${missing_latest_owner_fixture}" "${invalid_metadata_dir}" "${invalid_utf8_fixture}"' EXIT
 replace_line_fixture "${skipped_with_tags_fixture}" "    publish: true" "    publish: false"
+remove_latest_row_fixture "${missing_latest_owner_fixture}"
 printf '\377\n' >"${invalid_utf8_fixture}"
 
 "${VALIDATOR}" --metadata "${FIXTURE_DIR}/valid-tags.yaml" --date "${DATE}" >/dev/null
@@ -95,6 +134,7 @@ expect_arg_fail "metadata option flag-as-value" "--metadata <path>" --metadata -
 
 expect_fail "wrong latest on PG17" "latest only for non-experimental 18 trixie" "${FIXTURE_DIR}/wrong-latest-pg17.yaml"
 expect_fail "missing latest on PG18 trixie" "PostgreSQL 18 trixie has latest_eligible true" "${FIXTURE_DIR}/missing-latest-pg18-trixie.yaml"
+expect_fail "missing latest owner row" "latest emitted exactly for PostgreSQL 18 trixie" "${missing_latest_owner_fixture}"
 expect_fail "wrong latest on bookworm" "latest only for non-experimental 18 trixie" "${FIXTURE_DIR}/wrong-latest-bookworm.yaml"
 expect_fail "wrong latest on PG19beta1" "latest only for non-experimental 18 trixie" "${FIXTURE_DIR}/wrong-latest-pg19beta1.yaml"
 expect_fail "invalid bookworm suffix" "tags exactly generated policy tags" "${FIXTURE_DIR}/invalid-bookworm-suffix.yaml"
