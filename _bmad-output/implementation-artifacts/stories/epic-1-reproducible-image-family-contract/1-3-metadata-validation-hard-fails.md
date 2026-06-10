@@ -3,7 +3,7 @@ storyId: 1.3
 storyKey: 1-3-metadata-validation-hard-fails
 epic: 1
 title: 'Metadata Validation Hard-Fails'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: cae19b0
@@ -223,6 +223,7 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Addressed additional BMad review findings: rejected whitespace and invalid OCI components in `image.registry`/`image.repository`, and removed later-story documentation edits from the Story 1.3 follow-up scope.
 - 2026-06-10: Addressed BMad review round 2 findings: tightened registry/repository regexes to reject malformed OCI components, converted directory and invalid UTF-8 metadata paths into deterministic diagnostics, and strengthened the Make metadata gate test to reject any downstream validator execution after metadata failure.
 - 2026-06-10: Addressed BMad review round 3 finding by enforcing the 255-character OCI repository name limit with fixture coverage.
+- 2026-06-10: BMad code review round 4 completed with Blind Hunter, Edge Case Hunter, and Acceptance Auditor all returning `PASS - no findings`; story status updated to `done`.
 
 ### Completion Notes
 
@@ -289,3 +290,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Resolved additional review findings for image reference whitespace/format validation and Story 1.3 commit scope.
 - 2026-06-10: Resolved review round 2 findings for image reference component validation, metadata file read diagnostics, and downstream validator fail-fast assertions.
 - 2026-06-10: Resolved review round 3 repository length boundary finding.
+- 2026-06-10: Completed clean BMad code review round 4 and marked Story 1.3 done.
