@@ -1,0 +1,6 @@
+name: Invalid Flow Map Job Write Permission
+on:
+  push:
+permissions:
+  contents: read
+jobs: { autocommit: { runs-on: ubuntu-latest, permissions: { contents: write }, steps: [ { run: "true" } ] } }

@@ -42,7 +42,7 @@ root = Path(sys.argv[1])
 policy_path = Path(sys.argv[2])
 
 COMMAND = "validate-workflows"
-ACTION_RE = re.compile(r"uses:\s*([^\s#]+)")
+ACTION_RE = re.compile(r"uses:\s*['\"]?([^\s#'\"]+)['\"]?")
 PINNED_RE = re.compile(r"^[^@]+@[0-9a-f]{40}$")
 REQUIRED_POLICY_KEYS = {
     "action_pin_exceptions": {"workflow", "job", "action", "reason", "owner_story"},
@@ -140,6 +140,84 @@ def workflow_triggers(payload):
     if isinstance(raw, dict):
         return {str(key) for key in raw}
     return set()
+
+
+def workflow_jobs(payload, path):
+    jobs = payload.get("jobs")
+    if not isinstance(jobs, dict) or not jobs:
+        diag(path, "workflow jobs is a non-empty mapping", type(jobs).__name__, "Define jobs as a YAML mapping.")
+    for job, job_payload in jobs.items():
+        if not isinstance(job_payload, dict):
+            diag(path, f"job {job} is a mapping", type(job_payload).__name__, "Define each job as a YAML mapping.")
+    return {str(job): job_payload for job, job_payload in jobs.items()}
+
+
+def executable_run_text(run):
+    executable = []
+    heredoc_end = None
+    for line in run.splitlines():
+        if heredoc_end:
+            if line.strip() == heredoc_end:
+                heredoc_end = None
+            continue
+        uncommented = line.split("#", 1)[0]
+        stripped = uncommented.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if re.match(r"^(echo|printf)\b", stripped):
+            continue
+        heredoc_match = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", stripped)
+        if heredoc_match:
+            heredoc_end = heredoc_match.group(1)
+        executable.append(uncommented)
+    return "\n".join(executable)
+
+
+def workflow_run_text(payload, path, unconditional_only=False):
+    runs = []
+    for job, job_payload in workflow_jobs(payload, path).items():
+        if unconditional_only and job_payload.get("if") is not None:
+            continue
+        steps = job_payload.get("steps", [])
+        if steps is None:
+            continue
+        if not isinstance(steps, list):
+            diag(path, f"job {job} steps is a list", type(steps).__name__, "Define workflow steps as a list.")
+        for idx, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            run = step.get("run")
+            if isinstance(run, str):
+                if unconditional_only and step.get("if") is not None:
+                    continue
+                runs.append(executable_run_text(run))
+            elif run is not None:
+                diag(path, f"job {job} steps[{idx}].run is a string", type(run).__name__, "Use string run blocks.")
+    return "\n".join(runs)
+
+
+def workflow_actions(payload, path):
+    actions = []
+    for job, job_payload in workflow_jobs(payload, path).items():
+        job_action = job_payload.get("uses")
+        if isinstance(job_action, str):
+            actions.append((job, job_action))
+        elif job_action is not None:
+            diag(path, f"job {job}.uses is a string", type(job_action).__name__, "Use string reusable workflow references.")
+        steps = job_payload.get("steps", [])
+        if steps is None:
+            continue
+        if not isinstance(steps, list):
+            diag(path, f"job {job} steps is a list", type(steps).__name__, "Define workflow steps as a list.")
+        for idx, step in enumerate(steps):
+            if not isinstance(step, dict):
+                continue
+            action = step.get("uses")
+            if isinstance(action, str):
+                actions.append((job, action))
+            elif action is not None:
+                diag(path, f"job {job} steps[{idx}].uses is a string", type(action).__name__, "Use string action references.")
+    return actions
 
 
 def top_level_block(lines, key):
@@ -243,25 +321,31 @@ def readable_version_comment(lines, idx):
     return any(re.search(r"\bv?[0-9]+(?:\.[0-9]+){1,2}\b", candidate) for candidate in candidates)
 
 
+def command_present(run_text, pattern):
+    return bool(re.search(pattern, run_text, re.MULTILINE))
+
+
 def validate_workflow(path, policy):
     text = path.read_text()
     rel = path.relative_to(root).as_posix()
     lines = text.splitlines()
     payload = load_workflow(path)
+    yaml_jobs = workflow_jobs(payload, path)
     if path.name == "validate.yml":
+        run_text = workflow_run_text(payload, path, unconditional_only=True)
         required = {"pull_request", "push", "workflow_dispatch"}
         actual = workflow_triggers(payload)
         if not required.issubset(actual):
             diag(path, f"validate.yml triggers include {sorted(required)}", sorted(actual), "Add pull_request, push, and workflow_dispatch triggers.")
-        if "make validate" not in text:
+        if not command_present(run_text, r"^\s*make\s+validate\b"):
             diag(path, "validate workflow runs make validate", "missing", "Call make validate from validate.yml.")
-        if "find .github/workflows -type f" not in text or "xargs -0 actionlint" not in text:
+        if not command_present(run_text, r"^\s*find\s+\.github/workflows\s+-type\s+f\b.*\|\s*xargs\s+-0\s+actionlint\b"):
             diag(path, "validate workflow runs actionlint through deterministic workflow discovery", "missing", "Use find .github/workflows -type f ... -print0 | sort -z | xargs -0 actionlint.")
-        if "git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck" not in text:
+        if not command_present(run_text, r"^\s*git\s+ls-files\s+'cloudnative-pg-timescaledb/scripts/\*\.sh'\s+'cloudnative-pg-timescaledb/scripts/\*\*/\*\.sh'\s+\|\s+sort\s+\|\s+xargs\s+shellcheck\b"):
             diag(path, "validate workflow runs shellcheck against git-tracked script list", "missing", "Use git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck.")
-        if "shellcheck" not in text or "apt-get install" not in text:
+        if not command_present(run_text, r"^\s*(sudo\s+)?apt-get\s+install\b[^\n]*\bshellcheck\b"):
             diag(path, "validate workflow installs or provides real shellcheck", "missing", "Install shellcheck before make validate; bash -n is not a sufficient CI gate.")
-        if re.search(r"bash\s+-n", text) and "shellcheck" not in text:
+        if re.search(r"bash\s+-n", run_text) and "shellcheck" not in run_text:
             diag(path, "bash -n is not the CI shell validation gate", "bash -n only", "Run real shellcheck in CI.")
     if "permissions" not in payload:
         diag(path, "workflow declares explicit top-level permissions", "missing", "Set top-level permissions to contents: read or {} to avoid repository default token scope.")
@@ -272,25 +356,16 @@ def validate_workflow(path, policy):
         if value == "write":
             diag(path, "no top-level write permissions", f"{permission}: write", "Move write permissions to named allowlisted jobs only.")
     triggers = workflow_triggers(payload)
-    jobs = job_blocks(lines)
-    yaml_jobs = payload.get("jobs", {}) if isinstance(payload.get("jobs"), dict) else {}
-    current_job = "<top-level>"
-    for idx, raw in enumerate(lines):
-        job_match = re.match(r"^\s{2}([A-Za-z0-9_-]+):\s*$", raw)
-        if job_match and any(raw in block for block in jobs.values()):
-            current_job = job_match.group(1)
-        match = ACTION_RE.search(raw)
-        if not match:
-            continue
-        action = match.group(1)
+    for job, action in workflow_actions(payload, path):
         if action.startswith("./"):
             continue
-        if not PINNED_RE.fullmatch(action) and not action_allowed(policy, rel, current_job, action):
+        if not PINNED_RE.fullmatch(action) and not action_allowed(policy, rel, job, action):
             diag(path, "third-party actions pinned to full commit SHA or allowlisted", action, "Pin action refs to 40-character SHAs with readable version comments.")
-        if PINNED_RE.fullmatch(action) and not readable_version_comment(lines, idx):
-            diag(path, "pinned actions include readable version comments", action, "Add a nearby version comment such as '# actions/checkout v4.2.2'.")
-    for job, block in jobs.items():
-        job_payload = yaml_jobs.get(job, {}) if isinstance(yaml_jobs.get(job, {}), dict) else {}
+    for idx, raw in enumerate(lines):
+        match = ACTION_RE.search(raw)
+        if match and PINNED_RE.fullmatch(match.group(1)) and not readable_version_comment(lines, idx):
+            diag(path, "pinned actions include readable version comments", match.group(1), "Add a nearby version comment such as '# actions/checkout v4.2.2'.")
+    for job, job_payload in yaml_jobs.items():
         perms = permissions_from_value(job_payload.get("permissions"))
         if perms.get("*") == "write-all":
             diag(path, "no job write-all permissions", f"job={job} write-all", "Use explicit least-privilege job permissions.")

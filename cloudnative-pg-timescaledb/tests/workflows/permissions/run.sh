@@ -202,10 +202,15 @@ for fixture in \
   top-level-write.yml \
   broad-top-level-write.yml \
   pr-write-token.yml \
+  inline-comment-job-write-permission.yml \
+  quoted-job-write-permission.yml \
+  flow-map-job-write-permission.yml \
   unpinned-action.yml \
+  unpinned-reusable-workflow.yml \
   unpinned-release-action.yml \
   action-short-sha.yml \
   action-missing-version-comment.yml \
+  action-quoted-missing-version-comment.yml \
   action-name-version-not-comment.yml \
   valid-pinned-action.yml \
   write-all-yaml-extension.yaml \
@@ -224,6 +229,12 @@ for fixture in \
   disallowed-security-events-write-job.yml \
   invalid-allowlist-entry.yml \
   missing-strict-mode.sh \
+  validate-comments-only.yml \
+  validate-run-comments-only.yml \
+  validate-conditional-gates.yml \
+  validate-heredoc-gates.yml \
+  validate-short-circuit-gates.yml \
+  validate-apt-without-shellcheck.yml \
   valid-update-autocommit-contents-write.yml \
   invalid-update-nonautocommit-contents-write.yml; do
   [[ -f "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -f" "${FIXTURE_DIR}/${fixture}" "fixture exists" "missing" "Restore Story 2.4 workflow policy fixtures."; exit 1; }
@@ -284,14 +295,19 @@ for tuple in \
   "flow-map-permissions.yml no top-level write permissions" \
   "commented-write-permissions.yml no top-level write permissions" \
   "quoted-write-permissions.yml no top-level write permissions" \
+  "inline-comment-job-write-permission.yml write permissions are explicitly allowlisted" \
+  "quoted-job-write-permission.yml write permissions are explicitly allowlisted" \
+  "flow-map-job-write-permission.yml write permissions are explicitly allowlisted" \
   "pr-write-token.yml pull_request workflows do not receive write tokens" \
   "pr-inline-list-write-token.yml pull_request workflows do not receive write tokens" \
   "pr-scalar-write-token.yml pull_request workflows do not receive write tokens" \
   "pr-target-write-token.yml pull_request workflows do not receive write tokens" \
   "unpinned-action.yml third-party actions pinned" \
+  "unpinned-reusable-workflow.yml third-party actions pinned" \
   "unpinned-release-action.yml third-party actions pinned" \
   "action-short-sha.yml third-party actions pinned" \
   "action-missing-version-comment.yml pinned actions include readable version comments" \
+  "action-quoted-missing-version-comment.yml pinned actions include readable version comments" \
   "action-name-version-not-comment.yml pinned actions include readable version comments" \
   "missing-top-level-permissions.yml workflow declares explicit top-level permissions" \
   "release-sensitive-permission.yml write permissions are explicitly allowlisted"; do
@@ -328,6 +344,36 @@ strict_root="${tmp_root}/missing-strict"
 prepare_root "${strict_root}"
 cp "${FIXTURE_DIR}/missing-strict-mode.sh" "${strict_root}/cloudnative-pg-timescaledb/scripts/missing-strict-mode.sh"
 expect_fail "missing strict mode" "set -Eeuo pipefail|missing strict mode" "${strict_root}"
+
+validate_comments_root="${tmp_root}/validate-comments-only"
+prepare_root "${validate_comments_root}"
+cp "${FIXTURE_DIR}/validate-comments-only.yml" "${validate_comments_root}/.github/workflows/validate.yml"
+expect_fail "validate comments only" "validate workflow runs make validate" "${validate_comments_root}"
+
+validate_run_comments_root="${tmp_root}/validate-run-comments-only"
+prepare_root "${validate_run_comments_root}"
+cp "${FIXTURE_DIR}/validate-run-comments-only.yml" "${validate_run_comments_root}/.github/workflows/validate.yml"
+expect_fail "validate run comments only" "validate workflow runs make validate" "${validate_run_comments_root}"
+
+validate_conditional_root="${tmp_root}/validate-conditional-gates"
+prepare_root "${validate_conditional_root}"
+cp "${FIXTURE_DIR}/validate-conditional-gates.yml" "${validate_conditional_root}/.github/workflows/validate.yml"
+expect_fail "validate conditional gates" "validate workflow runs make validate" "${validate_conditional_root}"
+
+validate_heredoc_root="${tmp_root}/validate-heredoc-gates"
+prepare_root "${validate_heredoc_root}"
+cp "${FIXTURE_DIR}/validate-heredoc-gates.yml" "${validate_heredoc_root}/.github/workflows/validate.yml"
+expect_fail "validate heredoc gates" "validate workflow runs make validate" "${validate_heredoc_root}"
+
+validate_short_circuit_root="${tmp_root}/validate-short-circuit-gates"
+prepare_root "${validate_short_circuit_root}"
+cp "${FIXTURE_DIR}/validate-short-circuit-gates.yml" "${validate_short_circuit_root}/.github/workflows/validate.yml"
+expect_fail "validate short circuit gates" "validate workflow runs make validate" "${validate_short_circuit_root}"
+
+validate_apt_root="${tmp_root}/validate-apt-without-shellcheck"
+prepare_root "${validate_apt_root}"
+cp "${FIXTURE_DIR}/validate-apt-without-shellcheck.yml" "${validate_apt_root}/.github/workflows/validate.yml"
+expect_fail "validate apt without shellcheck" "validate workflow installs or provides real shellcheck" "${validate_apt_root}"
 
 rm -rf "${tmp_root}"
 printf 'PASS story-2.4 workflow permission fixtures\n'

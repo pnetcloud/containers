@@ -3,7 +3,7 @@ storyId: 2.4
 storyKey: 2-4-required-validation-workflow-gate
 epic: 2
 title: 'Required Validation Workflow Gate'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: 6c1ba90
@@ -173,23 +173,31 @@ Every implementation story must finish with a working repository state and must 
 - Implemented `validate-workflows.sh` for action pinning, readable version comments, top-level/job write permission checks, PR write token rejection, allowlist schema validation, and strict shell mode checks.
 - Wired `make validate` through `scripts/validate.sh` to run workflow policy validation and workflow permission fixtures.
 - Added fixtures for least privilege, write-all, top-level write, PR write token, unpinned action, release-sensitive permission, valid allowlisted permission, invalid allowlist schema, and missing shell strict mode.
-- Subagent review reported no blocking findings.
+- Addressed BMAD code-review findings by switching job permission checks from raw regex job blocks to parsed YAML jobs, checking required `validate.yml` commands only inside executable `run:` blocks, and preserving YAML-aware action job ownership for action allowlist checks.
+- Added regression fixtures for inline-comment job IDs, quoted job IDs, flow-style job maps with job-level write permissions, unpinned reusable workflows, and `validate.yml` command strings that appear only in comments/names.
+- Addressed BMAD code-review pass 2 findings by requiring required `validate.yml` gates to appear in unconditional jobs/steps and matching command-like executable lines after removing shell comments and output-only `echo`/`printf` lines.
+- Added regression fixtures for commented/echoed required commands inside `run:` blocks and conditional-only validation gates.
+- Addressed BMAD code-review pass 3 findings by excluding heredoc payload text from required gate matching, rejecting short-circuited required gates, requiring `apt-get install` to install `shellcheck`, and enforcing readable version comments for YAML-quoted pinned actions.
+- Added regression fixtures for heredoc-only gates, short-circuited gates, `apt-get install` without `shellcheck`, and quoted pinned actions without readable version comments.
 
 ### Validation Commands
 
-- `bash cloudnative-pg-timescaledb/scripts/validate-workflows.sh` - passed; local `actionlint` and `shellcheck` binaries were not installed, so the script reported deterministic SKIPs for external tools while running built-in policy checks.
+- `bash cloudnative-pg-timescaledb/scripts/validate-workflows.sh` - passed.
 - `bash cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh` - passed.
+- `shellcheck -x cloudnative-pg-timescaledb/scripts/validate-workflows.sh cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh` - passed.
 - `make validate` - passed.
-- `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/*.yml` - passed.
-- `find cloudnative-pg-timescaledb/scripts -type f -name '*.sh' -print0 | xargs -0 bash -n` - passed as local shell syntax fallback because `shellcheck` is not installed in this environment.
-- `git diff --cached --check` - passed.
-- Staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && make validate` - passed.
+- `actionlint .github/workflows/*.yml` - passed.
+- `git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck -x` - passed.
+- `git diff --check` - passed.
+- Staged-index snapshot validation using a temporary detached `git worktree`, `git diff --cached --binary | git apply --index`, and `make validate` - passed.
 
 ### Completion Notes
 
 - FR-20: validation workflow and local gate now validate workflow policy, scripts, and repository gates before future update/build/scan/publish stories are accepted.
 - NFR-3: workflows default to least privilege; write-all, broad top-level write, PR write tokens, and unallowlisted release-sensitive permissions fail validation.
 - Workflow requirements: `validate.yml` exists and validates current plus future `update.yml`, `build.yml`, and `security-scan.yml` files when present.
+- Review follow-up: permission validation now covers YAML-valid job keys with comments, quoted IDs, flow-style mappings, and reusable workflow job-level `uses`; `validate.yml` command checks now ignore non-executable comments, display names, shell comments, output-only lines, conditional-only gates, heredoc payloads, and short-circuited commands.
+- Review follow-up: shellcheck installation evidence now requires `apt-get install` to install `shellcheck`, and readable version comment enforcement covers quoted pinned `uses:` values.
 
 ## File List
 
@@ -207,3 +215,6 @@ Every implementation story must finish with a working repository state and must 
 - Added required validation workflow and workflow policy validator.
 - Added workflow permission/action pinning/strict-mode fixtures and test runner.
 - Integrated workflow policy validation into `make validate`.
+- 2026-06-10: Addressed BMAD code-review findings for YAML job parsing, executable `validate.yml` command checks, and shellcheck evidence.
+- 2026-06-10: Hardened workflow validation for reusable workflows, conditional required gates, and commented/echoed required commands.
+- 2026-06-10: Hardened workflow validation for heredoc/short-circuit gate bypasses, explicit shellcheck installation, and quoted pinned action version comments.
