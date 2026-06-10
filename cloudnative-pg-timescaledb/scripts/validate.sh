@@ -7,6 +7,7 @@ TAG_VALIDATION_DATE="${TAG_VALIDATION_DATE:-${DATE:-20260609}}"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/story-1-2-make-help.sh"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh"
+printf 'PASS make validate Story 1.2 command-surface gates\n'
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-metadata.sh"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-tags.sh" --metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" --date "${TAG_VALIDATION_DATE}"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-generated.sh"

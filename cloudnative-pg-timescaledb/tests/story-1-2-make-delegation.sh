@@ -59,6 +59,15 @@ if grep -Eq 'packagecloud|apt-get|docker buildx|docker build|CREATE EXTENSION|gh
   exit 1
 fi
 
+makefile_without_comments="$(mktemp)"
+sed -E '/^[[:space:]]*#/d; s/[[:space:]]+#.*$//' "${MAKEFILE}" >"${makefile_without_comments}"
+if perl -ne 'if (/(?<!\$)\$[\(\{](shell|eval)([[:space:]\)\}]|$)|^[ ]*[^#[:space:]][^:=]*!=|^[^#[:space:]][^:=]*:[^#]*[[:space:]][^#[:space:]][^:=]*!=/) { print; $found = 1 } END { exit($found ? 0 : 1) }' "${makefile_without_comments}"; then
+  rm -f "${makefile_without_comments}"
+  diag "scan Makefile" "Makefile" "no make-time shell/eval execution in command facade" "make-time execution construct found" "Keep root Makefile targets as direct script delegations without hidden expansion-time logic."
+  exit 1
+fi
+rm -f "${makefile_without_comments}"
+
 if grep -RIn --exclude-dir=tests --exclude='story-1-2-*' 'vendor/' "${MAKEFILE}" "${SCRIPT_DIR}"; then
   diag "scan command surface" "Makefile and scripts" "no command-surface dependency on reference trees" "reference-tree path found" "Remove command-surface dependency on reference-only inputs."
   exit 1
@@ -143,6 +152,22 @@ chmod +x "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-1-source-of-truth.
   "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-help.sh" \
   "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh"
 
+for runner in \
+  metadata tags generators dockerfile package-install bake matrix smoke/container smoke/sql generated-drift cnpg-resolver packagecloud update \
+  workflows/permissions workflows/summaries workflows/build-candidates security-scan release-evidence publish-tag-promotion catalog \
+  workflows/update-autocommit renovate barman-plugin docs/barman-plugin docs/readme docs/tags docs/catalog docs/verification docs/maintainer \
+  docs/troubleshooting release-rehearsal docs-validation; do
+  path="${sandbox}/cloudnative-pg-timescaledb/tests/${runner}/run.sh"
+  mkdir -p "$(dirname "${path}")"
+  cat >"${path}" <<SH
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'STUB tests/%s/run.sh\n' '${runner}'
+exit 0
+SH
+  chmod +x "${path}"
+done
+
 tmp="$(mktemp)"
 if ! make -C "${sandbox}" validate >"${tmp}" 2>&1; then
     output="$(cat "${tmp}")"
@@ -152,16 +177,78 @@ if ! make -C "${sandbox}" validate >"${tmp}" 2>&1; then
 fi
 output="$(cat "${tmp}")"
 rm -f "${tmp}"
-for marker in 'PASS story-1.2 make help' 'PASS story-1.2 make delegation' 'PASS story-1.2 make params' 'PASS make validate Story 1.2 available gates'; do
+for marker in 'PASS story-1.2 make help' 'PASS story-1.2 make delegation' 'PASS story-1.2 make params' 'PASS make validate Story 1.2 command-surface gates' 'PASS make validate Story 1.2 available gates'; do
     if ! grep -Fq "${marker}" <<<"${output}"; then
       diag "make validate sandbox" "validate target" "${marker}" "${output}" "Ensure scripts/validate.sh actually reaches Story 1.2 gates."
       exit 1
     fi
 done
-story_gate_line="$(grep -nF 'PASS story-1.2 make params' <<<"${output}" | head -n1 | cut -d: -f1)"
-later_validator_line="$(grep -nF 'STUB validate-metadata' <<<"${output}" | head -n1 | cut -d: -f1)"
-if [[ -z "${story_gate_line}" || -z "${later_validator_line}" || "${story_gate_line}" -ge "${later_validator_line}" ]]; then
+line_of() {
+  local marker="$1"
+  grep -nF "${marker}" <<<"${output}" | head -n1 | cut -d: -f1
+}
+
+max_story_gate_line=0
+for marker in 'PASS story-1.2 make help' 'PASS story-1.2 make delegation' 'PASS story-1.2 make params'; do
+  marker_line="$(line_of "${marker}")"
+  if [[ -z "${marker_line}" ]]; then
+    diag "make validate sandbox" "validate target" "${marker}" "${output}" "Ensure scripts/validate.sh actually reaches every Story 1.2 gate."
+    exit 1
+  fi
+  if (( marker_line > max_story_gate_line )); then
+    max_story_gate_line="${marker_line}"
+  fi
+done
+
+min_later_validator_line=0
+for marker in \
+  'PASS make validate Story 1.2 command-surface gates' 'STUB validate-metadata' 'STUB validate-tags' 'STUB validate-generated' 'STUB validate-docs' \
+  'STUB validate-barman-boundary' 'STUB validate-workflows' 'STUB tests/metadata/run.sh' 'STUB tests/tags/run.sh' 'STUB tests/generators/run.sh' \
+  'STUB tests/dockerfile/run.sh' 'STUB tests/package-install/run.sh' 'STUB tests/bake/run.sh' 'STUB tests/matrix/run.sh' \
+  'STUB tests/smoke/container/run.sh' 'STUB tests/smoke/sql/run.sh' 'STUB tests/generated-drift/run.sh' 'STUB tests/cnpg-resolver/run.sh' \
+  'STUB tests/packagecloud/run.sh' 'STUB tests/update/run.sh' 'STUB tests/workflows/permissions/run.sh' 'STUB tests/workflows/summaries/run.sh' \
+  'STUB tests/workflows/build-candidates/run.sh' 'STUB tests/security-scan/run.sh' 'STUB tests/release-evidence/run.sh' \
+  'STUB tests/publish-tag-promotion/run.sh' 'STUB tests/catalog/run.sh' 'STUB tests/workflows/update-autocommit/run.sh' 'STUB tests/renovate/run.sh' \
+  'STUB tests/barman-plugin/run.sh' 'STUB tests/docs/barman-plugin/run.sh' 'STUB tests/docs/readme/run.sh' 'STUB tests/docs/tags/run.sh' \
+  'STUB tests/docs/catalog/run.sh' 'STUB tests/docs/verification/run.sh' 'STUB tests/docs/maintainer/run.sh' \
+  'STUB tests/docs/troubleshooting/run.sh' 'STUB tests/release-rehearsal/run.sh' 'STUB tests/docs-validation/run.sh'; do
+  marker_line="$(line_of "${marker}")"
+  if [[ -z "${marker_line}" ]]; then
+    diag "make validate sandbox" "validate target" "${marker}" "${output}" "Ensure later validators are present in the validate ordering proof."
+    exit 1
+  fi
+  if (( min_later_validator_line == 0 || marker_line < min_later_validator_line )); then
+    min_later_validator_line="${marker_line}"
+  fi
+done
+
+if (( max_story_gate_line >= min_later_validator_line )); then
     diag "make validate sandbox" "validate target" "Story 1.2 gates run before later validators" "${output}" "Run command-surface gates before later-story heavy validation so Story 1.2 failures are visible."
+    exit 1
+fi
+
+cat >"${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'PASS story-1.2 make params\n'
+exit 42
+SH
+chmod +x "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh"
+tmp="$(mktemp)"
+if make -C "${sandbox}" validate >"${tmp}" 2>&1; then
+    output="$(cat "${tmp}")"
+    rm -f "${tmp}"
+    diag "make validate fail-fast sandbox" "validate target" "Story 1.2 gate failure stops make validate with non-zero status" "${output}" "Do not mask Story 1.2 validation failures before later validators."
+    exit 1
+fi
+output="$(cat "${tmp}")"
+rm -f "${tmp}"
+if ! grep -Fq 'PASS story-1.2 make params' <<<"${output}"; then
+    diag "make validate fail-fast sandbox" "validate target" "failing Story 1.2 gate was reached" "${output}" "Keep Story 1.2 gates directly executed by scripts/validate.sh."
+    exit 1
+fi
+if grep -Fq 'STUB validate-metadata' <<<"${output}"; then
+    diag "make validate fail-fast sandbox" "validate target" "later validators do not run after a Story 1.2 failure" "${output}" "Keep scripts/validate.sh fail-fast; avoid `|| true` or equivalent masking around Story 1.2 gates."
     exit 1
 fi
 # END story-1-2 sandbox proof

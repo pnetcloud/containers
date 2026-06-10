@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SCRIPT_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts"
+# shellcheck source=cloudnative-pg-timescaledb/scripts/lib/common.sh
 source "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/common.sh"
 
 contract_root="${ROOT_DIR}"
@@ -211,10 +212,53 @@ done
 
 expected_tmp="$(mktemp)"
 actual_tmp="$(mktemp)"
+manifest_tmp=""
 cleanup() {
   rm -f "${expected_tmp}" "${actual_tmp}"
+  if [[ -n "${manifest_tmp}" ]]; then
+    rm -f "${manifest_tmp}"
+  fi
 }
 trap cleanup EXIT
+
+write_manifest_fixture() {
+  local metadata_path="$1"
+  local fixture_path="$2"
+  python3 - "${SCRIPT_DIR}" "${metadata_path}" "${fixture_path}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+script_dir = Path(sys.argv[1])
+metadata = Path(sys.argv[2])
+fixture = Path(sys.argv[3])
+sys.path.insert(0, str(script_dir / "lib"))
+import generator_contract  # noqa: E402
+
+data = generator_contract.parse_metadata(metadata, "validate-generated")
+entries = data.get("entries", [])
+manifests = []
+seen = set()
+for entry in entries:
+    tag = str(entry.get("cnpg_tag", "")).strip()
+    digest = str(entry.get("cnpg_digest", "")).strip()
+    platforms = entry.get("platforms", [])
+    if not tag or not digest:
+        continue
+    key = (tag, digest)
+    if key in seen:
+        continue
+    seen.add(key)
+    manifests.append({"tag": tag, "digest": digest, "platforms": platforms})
+fixture.write_text(json.dumps({"manifests": manifests}, indent=2, sort_keys=True) + "\n")
+PY
+}
+
+if [[ -z "${CNPG_MANIFEST_FIXTURE:-}" ]]; then
+  manifest_tmp="$(mktemp)"
+  write_manifest_fixture "${metadata}" "${manifest_tmp}"
+  export CNPG_MANIFEST_FIXTURE="${manifest_tmp}"
+fi
 
 rel_path() {
   local path="$1"
