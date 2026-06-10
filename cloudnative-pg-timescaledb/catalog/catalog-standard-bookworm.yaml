@@ -4,4 +4,8 @@ kind: ClusterImageCatalog
 metadata:
   name: cloudnative-pg-timescaledb-standard-bookworm
 spec:
-  images: []
+  images:
+    - major: 17
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609-bookworm@sha256:b0dc5fb71a029ba46b83211a96e443e504365b5355f9005bfdbaef2fd499e3b2
+    - major: 18
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609-bookworm@sha256:906d0275f6030e45f164a5866cfebd287a407655c7d83b1316afd747693c8dc8

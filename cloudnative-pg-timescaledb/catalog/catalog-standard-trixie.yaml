@@ -4,4 +4,8 @@ kind: ClusterImageCatalog
 metadata:
   name: cloudnative-pg-timescaledb-standard-trixie
 spec:
-  images: []
+  images:
+    - major: 17
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609@sha256:4e555145268a3f81ca35667ddcafea59f43142ac9af1f51ded6082243f88d584
+    - major: 18
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:16d532e04dec8c5d41094c2df4f40ff7a1134d983f359a359115eeb6075a5e7a
