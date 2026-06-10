@@ -385,6 +385,18 @@ def diag(expected, actual, remediation):
 sentences = re.split(r"\n\s*\n|(?<=[.!?])\s+", text)
 def directly_negates_source_claim(sentence):
     return re.search(
+        r"\b(?:is|are|becomes?|remain|become|be)\b\s+(?:not|never)\s+(?:the\s+|an?\s+)?(?:independent\s+)?(?:hand-edited|manually edited|edited by hand|maintained by hand|hand-maintained|manually[- ]maintained)\s+sources?(?: of truth|-of-truth)\b",
+        sentence,
+        re.I,
+    ) or re.search(
+        r"\b(?:is|are|becomes?|remain|become|be)\b\s+(?:not|never)\s+(?:the\s+|an?\s+)?(?:hand-edited|manually edited|edited by hand|maintained by hand|hand-maintained|manually[- ]maintained)\s+source(?: of truth|-of-truth)\b",
+        sentence,
+        re.I,
+    ) or re.search(
+        r"\b(?:is|are|becomes?|remain|become|be)\b\s+(?:not|never)\s+(?:the\s+|an?\s+)?(?:independent\s+)?(?:manually kept|maintained manually|manually curated|hand-curated|hand curated|hand-authored|human-curated|human-authored|manually authored|human-maintained)\s+(?:sources?(?: of truth|-of-truth)?|sources?\s+(?:of|for)\s+(?:image metadata|image combinations|compatibility data|supported versions|supported image definitions?))\b",
+        sentence,
+        re.I,
+    ) or re.search(
         r"\b(?:is|are|becomes?|remain|become|be)\b\s+(?:not|never)\s+(?:an?\s+)?(?:independent\s+)?(?:hand-edited|manually edited|edited by hand|maintained by hand)\s+sources? of truth\b",
         sentence,
         re.I,
@@ -488,6 +500,7 @@ terms = [
     r"Dockerfiles?",
     r"Docker Bake definitions?",
     r"workflow matrices",
+    r"(?:compatibility|support|build|image|versions?)[ -]matri(?:x|ces|xes)",
     r"matrix\.yaml",
     r"GitHub Actions matrix",
     r"workflow matrix",
@@ -506,7 +519,7 @@ terms = [
     r"image tags?",
 ]
 artifact_subject = (
-    r"(?:Dockerfiles?|Docker Bake definitions?|workflow matrices|matrix\.yaml|GitHub Actions matrix|workflow matrix|CI matrix data|catalogs?|catalog manifests|"
+    r"(?:Dockerfiles?|Docker Bake definitions?|workflow matrices|(?:compatibility|support|build|image|versions?)[ -]matri(?:x|ces|xes)|matrix\.yaml|GitHub Actions matrix|workflow matrix|CI matrix data|catalogs?|catalog manifests|"
     r"ClusterImageCatalog manifests|generated docs?|generated documentation|generated outputs?|generated artifacts?|generated files?|README tables?|compatibility tables?|examples?|image tags?)"
 )
 authority_conflict = re.search(
@@ -1380,6 +1393,7 @@ for env_line in re.findall(r"(?im)^\s*ENV\s+(.+)$", text):
         name = re.escape(var_name[0])
         text = expand_var_refs(text, name, "vendor")
 is_dockerfile = re.search(r"(?i)(?:^|/)(?:Dockerfile[^/]*|[^/]+\.Dockerfile|Containerfile[^/]*|[^/]+\.Containerfile)$", str(path)) is not None
+is_markdown_file = str(path).lower().endswith((".md", ".mdx", ".markdown"))
 def diag(expected, actual, remediation):
     raise SystemExit(
         f"command: validate_no_vendor_build_context {path}\n"
@@ -1388,7 +1402,10 @@ def diag(expected, actual, remediation):
         f"actual: {actual}\n"
         f"remediation: {remediation}"
     )
-vendor_path = r"[\"']?(?:/|\./|(?:\.\./)+|[A-Za-z0-9_.-]+/)*vendor(?:/|[\"']|\s|,|]|\)|$)"
+vendor_prefix = r"(?:/|\./|(?:\.\./)+|~(?:[A-Za-z0-9_.-]+)?/(?:[A-Za-z0-9_.-]+/)*|[A-Za-z0-9_.-]+/|\$\([^)]+\)[\"']?/|\$\{[^}]+\}[\"']?/|\$[A-Za-z_][A-Za-z0-9_]*[\"']?/)*"
+vendor_path = r"[\"']?" + vendor_prefix + r"[\"']?vendor[\"']?(?:/|[\"']|\s|,|]|\)|$)"
+vendor_prose_path = r"[\"']?" + vendor_prefix + r"[\"']?vendor[\"']?(?:/|(?=[\"'\s,.\]\)]|$))"
+is_make_file = re.search(r"(?i)(?:^|/)(?:Makefile|makefile|GNUmakefile|[^/]+\.mk)$", str(path)) is not None
 patterns = [
     r"^\s*(?-i:COPY|ADD)\s+(?:--[^\s]+\s+)*" + vendor_path,
     r"^\s*`+\s*(?i:copy|add)\s+(?:--[^\s]+\s+)*" + vendor_path,
@@ -1397,6 +1414,8 @@ patterns = [
     r"\b(?:cp|rsync)\b[^\n;]{0,80}(?:\./)?vendor(?:/|\s|$)",
     r"(?:^|[;&|]|\n\s*[-*]?\s*)\s*(?:exec\s+)?(?:\./|/|(?:\.\./)+)?vendor/[^\s;]+",
     r"\b(?:bash|sh|python3?|node|ruby|perl)\s+(?:\./|(?:\.\./)+)?vendor/",
+    r"(?:^|[;&|()]|\$\(|\n|\b(?:if|elif|else|while|until|then|do)\s+)\s*!?\s*(?:source|\.)\s+<\([^)]*" + vendor_path + r"[^)]*\)",
+    r"(?:^|[;&|()]|\$\(|\n|\b(?:if|elif|else|while|until|then|do)\s+)\s*!?\s*(?:source|\.)\s+" + vendor_path,
     r"\bmake\s+(?:-C|--directory(?:=|\s+))\s*(?:\./|(?:\.\./)+)?vendor/?\b",
     r"\bcd\s+(?:\./|(?:\.\./)+)?vendor/?\b",
     r"\btar\b[^\n;]{0,80}(?:\s-C\s+|\s--directory(?:=|\s+))(?:\./|(?:\.\./)+)?vendor/?\b",
@@ -1410,6 +1429,7 @@ patterns = [
     r"\bdocker\s+(?:(?:image\s+)?build|buildx\s+build)\b(?:(?![;&|]).){0,160}<\s*[\"']?(?:[^\s\"']*/)?vendor/",
     r"\bdocker\s+buildx(?:\s+(?:--(?:builder|builder-instance|config)\s+[^\s]+|--[^\s=]+(?:=[^\s]+)?|-[A-Za-z]+))*\s+bake\b(?:(?![;&|]).){0,200}--set(?:\s+|=)[\"']?[^\"'\s=]+\.contexts?(?:\.[A-Za-z0-9_.-]+)?=[\"']?(?:[^\s\"']*/)?vendor(?:/\.?|/[^\s\"']*)?(?:[\"']|\s|$)",
     r"\b(?:docker(?:\s+(?:--(?:context|host|config|log-level)\s+[^\s]+|--[^\s=]+(?:=[^\s]+)?|-[A-Za-z]+))*\s+(?:(?:image\s+)?build|buildx\s+build)|podman\s+build|nerdctl\s+build|buildah\s+bud)\b(?:(?![;&|]).){0,160}(?:^|\s)[\"']?(?:[^\s\"']*/)?vendor(?:/\.?|/[^\s\"']*)?(?:[\"']|\s|$)",
+    r"\b(?:docker(?:\s+(?:--(?:context|host|config|log-level)\s+[^\s]+|--[^\s=]+(?:=[^\s]+)?|-[A-Za-z]+))*\s+(?:(?:image\s+)?build|buildx\s+build)|podman\s+build|nerdctl\s+build|buildah\s+bud)\b(?:(?![;&|]).){0,160}(?:^|\s)" + vendor_path,
     r"\bdocker\s+buildx(?:\s+(?:--(?:builder|builder-instance|config)\s+[^\s]+|--[^\s=]+(?:=[^\s]+)?|-[A-Za-z]+))*\s+build\b(?:(?![;&|]).){0,160}(?:^|\s)[\"']?(?:[^\s\"']*/)?vendor(?:/\.?|/[^\s\"']*)?(?:[\"']|\s|$)",
     r"\bdocker\s+compose\b(?:(?![;&|]).){0,120}(?:-f|--file)(?:\s+|=)[\"']?(?:[^\s\"']*/)?vendor/",
     r"\bbuild\s*:\s*[\"']?(?:[^\n\"']*/)?vendor/?\b",
@@ -1421,34 +1441,63 @@ patterns = [
     r"[\"']?context[\"']?\s*[:=]\s*(?:join\([^;\n]*)?[\"']vendor[\"']",
     r"\badditional_contexts\s*:\s*\n(?:\s+[A-Za-z0-9_.-]+\s*:\s*[\"']?(?:/|\./|(?:\.\./)+)?vendor/?[\"']?\s*\n?)+",
     r"\bcontexts\s*=\s*\{[\s\S]{0,400}=\s*[\"'][^\"']*/?vendor(?:/[^\"']*)?[\"']",
-    r"\bbuild context\s+(?:\./)?vendor/?\b",
-    r"\bbuild context\b.{0,80}\b(?:from|comes from|is loaded from)\s+(?:[^\s\"']*/)?vendor/?\b",
-    r"(?:\./)?vendor/?\b.{0,80}\b(?:docker\s+)?build context\b",
-    r"\bruntime (?:inputs?|dependenc(?:y|ies))\s+(?:\./)?vendor/?\b",
-    r"\bruntime (?:inputs?|dependenc(?:y|ies))\b[^\n;]{0,80}\bfrom\s+(?:[^\s\"']*/)?vendor/?\b",
+    r"\bbuild context\s+" + vendor_prose_path,
+    r"\bbuild context\b.{0,80}\b(?:from|comes from|is loaded from)\s+" + vendor_prose_path,
+    vendor_prose_path + r".{0,80}\b(?:docker\s+)?build context\b",
+    r"\bruntime (?:inputs?|dependenc(?:y|ies))\s+" + vendor_prose_path,
+    r"\bruntime (?:inputs?|dependenc(?:y|ies))\b[^\n;]{0,80}\bfrom\s+" + vendor_prose_path,
     r"\bruntime (?:inputs?|dependenc(?:y|ies))\b[^\n;]{0,80}\b(?:from|loaded from|provided by)\s+(?:the\s+)?(?:vendor tree|vendored examples|vendored reference)\b",
-    r"\bcopied source tree\s+(?:\./)?vendor/?\b",
-    r"\bpackage source\s+(?:\./)?vendor/?\b",
+    r"\bcopied source tree\s+" + vendor_prose_path,
+    r"\bpackage source\s+" + vendor_prose_path,
     r"\b(?:use\s+)?(?:the\s+)?(?:vendor tree|vendored examples|vendored reference|vendor)\s+as\s+(?:an?\s+)?(?:package source|runtime dependency|runtime input|build input|build context)\b",
     r"\b(?:install|apt(?:-get)?|package|packages?)\b[^\n;]{0,80}\bfrom\s+(?:[^\s\"']*/)?vendor/?\b",
     r"\binstall\b[^\n;]{0,120}(?:\./|/|(?:\.\./)+)?vendor/[^\s;]+",
     r"\b(?:apt(?:-get)?|dpkg)\b[^\n;]{0,120}(?:\./|/|(?:\.\./)+)?vendor/[^\s;]+",
     r"\b(?:vendor tree|vendored examples|vendored reference)\b.{0,80}\b(?:runtime inputs?|runtime dependenc(?:y|ies)|package sources?|build inputs?|build context|copied source tree)\b",
+    r"\b(?:runtime|builds?|build dependenc(?:y|ies)|runtime dependenc(?:y|ies))\b.{0,80}\b(?:depend|depends|require|requires|required|use|uses)\b.{0,80}\b(?:the\s+)?(?:vendor tree|vendored examples|vendored reference)\b",
+    r"\b(?:production images?|runtime|containers?)\b.{0,80}\b(?:depend|depends|depending|require|requires|required)\b.{0,80}" + vendor_prose_path,
+    r"\b(?:production images?|images?|containers?)\b.{0,80}\b(?:use|uses|depend|depends|depending|require|requires|required)\b.{0,80}" + vendor_prose_path + r".{0,80}\b(?:build|runtime)\b",
+    r"\b(?:build|builds|building)\b.{0,80}\b(?:production images?|images?|containers?)\b.{0,80}\bfrom\s+" + vendor_prose_path,
+    r"\b(?:production images?|images?|containers?)\b.{0,80}\b(?:are|is|were|was)?\s*built\b.{0,80}\bfrom\s+" + vendor_prose_path,
+    r"\b(?:production\s+)?builds?\b.{0,80}\b(?:depend|depends|depending|require|requires|required)\b.{0,80}" + vendor_prose_path,
+    r"\bbuild dependenc(?:y|ies)\b.{0,80}\bon\s+" + vendor_prose_path,
+    r"\bruntime dependenc(?:y|ies)\b.{0,80}\bon\s+" + vendor_prose_path,
+    vendor_prose_path + r".{0,80}\b(?:is|are|becomes?|remain|must be|should be|will be)\b.{0,40}\b(?:required|needed)\b.{0,40}\b(?:at|for|during)\s+runtime\b",
+    r"\bruntime\b.{0,80}\b(?:depend|depends|depending|require|requires|required)\b.{0,80}" + vendor_prose_path,
     r"\b(?:install|apt(?:-get)?|packages)\b[^\n;]{0,80}\bfrom\s+(?:the\s+)?(?:vendor tree|vendored examples|vendored reference)\b",
     r"\b(?:production image builds?|image builds?|builds?)\b[^\n;]{0,80}\b(?:use|uses)\b[^\n;]{0,80}\b(?:vendor tree|vendored examples|vendored reference)\b",
     r"\b(?:production image builds?|image builds?|builds?)\b[^\n;]{0,80}\b(?:use|uses)\b[^\n;]{0,80}\b(?:vendor tree|vendored examples|vendored reference)\b[^\n;]{0,80}\b(?:package sources?|runtime|build inputs?)\b",
-    r"(?:\./)?vendor/.{0,80}(?:runtime inputs?|runtime dependenc(?:y|ies)|copied source tree|package source)",
+    r"\b(?:production images?|images?|containers?)\b[^\n;]{0,80}\b(?:use|uses|depend|depends|require|requires)\b[^\n;]{0,80}\b(?:vendor tree|vendored examples|vendored reference)\b[^\n;]{0,80}\b(?:during|at|for|as)\s+(?:build|runtime)\b",
+    vendor_prose_path + r".{0,80}(?:runtime inputs?|runtime dependenc(?:y|ies)|copied source tree|package source)",
+]
+make_patterns = [
+    r"(?m)^\s*(?:-?include|sinclude)\s+(?:[^#\n]*\s+)?" + vendor_path,
+]
+markdown_code_patterns = [
+    r"(?m)^\s*(?:`+|\$\s+|[-*]\s+`?)\s*(?:-?include|sinclude)\s+(?:[^#\n]*\s+)?" + vendor_path,
 ]
 safe_negations = [
     r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\s+(?:run\s+)?(?:docker\s+(?:(?:image\s+)?build|buildx\s+(?:build|bake))|podman\s+build|nerdctl\s+build|buildah\s+bud)\b(?:\s+\.)?[^\n;.]{0,120}(?:-f|--file)(?:\s+|=)(?:[^\s\"']*/)?vendor/",
     r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\s+(?:run\s+)?docker\s+buildx\b[^\n;.]{0,160}\bbake\b[^\n;.]{0,200}--set(?:\s+|=)[\"']?[^\"'\s=]+\.contexts?(?:\.[A-Za-z0-9_.-]+)?=[\"']?(?:[^\s\"']*/)?vendor(?:/\.?|/[^\s\"']*)?(?:[\"']|\s|$)",
-    r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\s+(?:run\s+)?(?:docker(?:\s+(?:--(?:context|host|config|log-level)\s+[^\s]+|--[^\s=]+(?:=[^\s]+)?|-[A-Za-z]+))*\s+(?:(?:image\s+)?build|buildx\s+build)|podman\s+build|nerdctl\s+build|buildah\s+bud)\b[^\n;.]{0,160}(?:^|\s)(?:\./|(?:\.\./)+)?vendor/?\.?(?:\s|$)",
+    r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\s+(?:run\s+)?(?:docker(?:\s+(?:--(?:context|host|config|log-level)\s+[^\s]+|--[^\s=]+(?:=[^\s]+)?|-[A-Za-z]+))*\s+(?:(?:image\s+)?build|buildx\s+build)|podman\s+build|nerdctl\s+build|buildah\s+bud)\b(?:(?![;&|]).){0,160}(?:^|\s)[\"']?(?:[^\s\"']*/)?vendor(?:/\.?|/[^\s\"']*)?(?:[\"']|\s|$)",
+    r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\s+(?:run\s+)?(?:docker(?:\s+(?:--(?:context|host|config|log-level)\s+[^\s]+|--[^\s=]+(?:=[^\s]+)?|-[A-Za-z]+))*\s+(?:(?:image\s+)?build|buildx\s+build)|podman\s+build|nerdctl\s+build|buildah\s+bud)\b[^\n;.]{0,160}(?:^|\s)" + vendor_path,
     r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\s+(?:copy|add|cp|rsync)\b[^\n;]{0,80}(?:\./)?vendor(?:/|\s|$)",
-    r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\s+(?:use\s+)?(?:\./)?vendor/?(?:\b|(?=\s|$)).{0,80}\b(?:as\s+)?(?:the\s+)?(?:(?:docker\s+)?build context|build input|runtime input|runtime dependency|package source)",
-    r"(?:\./)?vendor/?(?:\b|(?=\s|$)).{0,80}\b(?:is not|is never|must not be|must never be)\b.{0,80}(?:an?\s+)?(?:(?:docker\s+)?build context|build input|runtime input|runtime dependency|package source)",
-    r"(?:\./)?vendor/.{0,80}\b(?:must not|must never|does not|do not|never)\b.{0,80}(?:runtime inputs?|runtime dependenc(?:y|ies)|copied source tree|package source)",
-    r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\b.{0,80}(?:runtime inputs?|runtime dependenc(?:y|ies)|copied source tree|package source)\s+(?:\./)?vendor/?\b",
+    r"\b(?:do not|don't|must not|should not|should never|must never|never|avoid|forbidden to)\b.{0,80}(?:source|\.)\s+" + vendor_path,
+    r"(?m)^\s*#\s*(?:do not|don't|must not|should not|should never|must never|never|avoid)\b.{0,80}\b(?:-?include|sinclude)\s+(?:\./|(?:\.\./)+)?vendor(?:/|\s|$)",
+    r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\s+(?:use\s+)?" + vendor_prose_path + r".{0,80}\b(?:as\s+)?(?:the\s+)?(?:(?:docker\s+)?build context|build input|runtime input|runtime dependency|package source)",
+    vendor_prose_path + r".{0,80}\b(?:is not|is never|must not be|must never be)\b.{0,80}(?:an?\s+)?(?:(?:docker\s+)?build context|build input|runtime input|runtime dependency|package source)",
+    vendor_prose_path + r".{0,80}\b(?:must not|must never|does not|do not|never)\b.{0,80}(?:runtime inputs?|runtime dependenc(?:y|ies)|copied source tree|package source)",
+    r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\b.{0,80}(?:runtime inputs?|runtime dependenc(?:y|ies)|copied source tree|package source)\s+" + vendor_prose_path,
     r"\b(?:vendor tree|vendored examples|vendored reference)\b.{0,80}\b(?:must not|must never|does not|do not|never|is not|are not|is never|are never)\b.{0,80}(?:runtime inputs?|runtime dependenc(?:y|ies)|package sources?|build inputs?|build context|copied source tree)",
+    r"\b(?:do not|don't|must not|must never|should not|should never|never|avoid|forbidden to)\b.{0,80}\b(?:depend|depends|depending|require|requires|required)\b.{0,80}" + vendor_prose_path + r".{0,40}\bruntime\b",
+    vendor_prose_path + r".{0,80}\b(?:is not|is never|must not be|must never be|should not be|should never be)\b.{0,40}\b(?:required|needed)\b.{0,40}\b(?:at|for|during)\s+runtime\b",
+    r"\bruntime\b.{0,80}\b(?:does not|do not|must not|must never|should not|should never|never)\b.{0,40}\b(?:depend|depends|depending|require|requires|required)\b.{0,80}" + vendor_prose_path,
+    r"\b(?:do not|don't|must not|must never|should not|should never|never|avoid|forbidden to)\b.{0,80}\b(?:build|builds|building)\b.{0,80}\b(?:production images?|images?|containers?)\b.{0,80}\bfrom\s+" + vendor_prose_path,
+    r"\b(?:production\s+)?builds?\b.{0,80}\b(?:does not|do not|must not|must never|should not|should never|never)\b.{0,40}\b(?:depend|depends|depending|require|requires|required)\b.{0,80}" + vendor_prose_path,
+    r"\b(?:production images?|images?|containers?)\b.{0,80}\b(?:are|is|were|was|be|being|been|must be|should be|will be)\b\s+(?:not|never)\s+built\b.{0,80}\bfrom\s+" + vendor_prose_path,
+    r"\bbuild dependenc(?:y|ies)\b.{0,80}\b(?:must not|must never|should not|should never|never|is not|are not|does not|do not)\b.{0,80}\bon\s+" + vendor_prose_path,
+    r"\bruntime dependenc(?:y|ies)\b.{0,80}\b(?:must not|must never|should not|should never|never|is not|are not|does not|do not)\b.{0,80}\bon\s+" + vendor_prose_path,
+    r"\b(?:production images?|images?|containers?|runtime|containers?)\b.{0,80}\b(?:do not|does not|must not|must never|should not|should never|never)\b.{0,40}\b(?:use|uses|depend|depends|depending|require|requires|required)\b.{0,80}" + vendor_prose_path + r".{0,80}\b(?:build|runtime)\b",
     r"\b(?:do not|don't|must not|should not|never|avoid|forbidden to)\b.{0,80}(?:use|install|build|runtime|package).{0,80}\b(?:the\s+)?(?:vendor tree|vendored examples|vendored reference)\b.{0,80}(?:runtime inputs?|runtime dependenc(?:y|ies)|package sources?|build inputs?|build context|copied source tree)?",
 ]
 if re.search(r"(?ims)^\s*(?:copy|add)\s+(?:--[^\s]+\s+)*\[[^\]]*[\"'](?:/|\./|(?:\.\./)+)?vendor(?:/[^\"']*)?[\"'][^\]]*,\s*[\"'][^\"']+[\"']\s*\]", text):
@@ -1466,6 +1515,8 @@ if re.search(r"(?mi)^\s*additional_contexts\s*:\s*\n(?:\s+[\"']?[A-Za-z0-9_.-]+[
     diag("vendor/ is reference-only and not build/runtime/package input", "compose additional_contexts vendor/", "Keep vendor/ out of Docker Compose named build contexts.")
 if re.search(r"(?mi)^\s*additional_contexts\s*:\s*\n(?:\s+[\"']?[A-Za-z0-9_.-]+[\"']?\s*:\s*[>|][-+]?\s*\n\s*[\"']?(?:/|\./|(?:\.\./)+)?vendor(?:/[^\"'\s]*)?[\"']?\s*$)+", text):
     diag("vendor/ is reference-only and not build/runtime/package input", "compose folded additional_contexts vendor/", "Keep vendor/ out of Docker Compose named build contexts.")
+if is_markdown_file and re.search(r"(?ims)^[ ]{0,3}(?P<make_fence>`{3,}|~{3,})[ \t]*(?:make|makefile|mk)(?:[^\n]*)?\n(?:(?!^[ ]{0,3}(?P=make_fence)).)*?^\s*(?:-?include|sinclude)\s+(?:[^#\n]*\s+)?" + vendor_path, text):
+    diag("vendor/ is reference-only and not build/runtime/package input", "Markdown fenced make include vendor/", "Do not document vendor/ Make includes as build logic.")
 if re.search(r"(?mi)^\s*additional_contexts\s*:\s*\n(?:\s*-\s*[A-Za-z0-9_.-]+=[\"']?(?:/|\./|(?:\.\./)+)?vendor(?:/[^\"'\s]*)?[\"']?\s*$)+", text):
     diag("vendor/ is reference-only and not build/runtime/package input", "compose additional_contexts list vendor/", "Keep vendor/ out of Docker Compose named build contexts.")
 if re.search(r"(?mi)^\s*additional_contexts\s*:\s*\{[^}\n]*:\s*[\"']?(?:/|\./|(?:\.\./)+)?vendor(?:/[^\"'\s}]*)?[\"']?[^}\n]*\}", text):
@@ -1885,18 +1936,26 @@ for ref_name in vendor_hcl_refs:
         diag("vendor/ is reference-only and not build/runtime/package input", f"HCL vendor context indirection {ref_name}", "Keep vendor/ out of Docker Bake context variables and locals.")
 
 def is_safe_match(clause, unsafe_match):
+    local_prefix = re.split(r"[!?]|\.\s+|,\s+", clause[:unsafe_match.start()])[-1]
+    if not re.search(r"[!?]|\.\s+", unsafe_match.group(0)) and not re.search(r",\s*\S", local_prefix) and re.search(r"\b(?:do not|don't|must not|must never|should not|should never|never|avoid|forbidden to)\b", local_prefix, re.I):
+        return True
     for safe in safe_negations:
         for safe_match in re.finditer(safe, clause, re.I):
             if unsafe_match.start() < safe_match.start() or unsafe_match.end() > safe_match.end():
                 continue
+            if re.search(r"[!?]|\.\s+", safe_match.group(0)):
+                continue
             prefix = clause[safe_match.start():unsafe_match.start()]
+            if re.search(r"[!?]|\.\s+", prefix):
+                continue
             if re.search(r"[,.:]\s*\S", prefix):
                 continue
             return True
     return False
 
-for clause in re.split(r"\n|;|,\s*then\b|\bthen\b|&&|\|\||\bbut\b|\band\b|\bor\b", text):
-    for pattern in patterns:
+for clause in re.split(r"\n|;|[.!?]\s+|,\s*then\b|\bthen\b|&&|\|\||\bbut\b|\band\b|\bor\b", text):
+    active_patterns = patterns + (make_patterns if is_make_file else []) + (markdown_code_patterns if is_markdown_file else [])
+    for pattern in active_patterns:
         for match in re.finditer(pattern, clause, re.I):
             if re.search(r"\b(?:COPY|ADD)\s+--from=vendor\b", match.group(0), re.I):
                 continue
@@ -1952,8 +2011,21 @@ git_product_files() {
 }
 
 should_scan_vendor_file() {
+  if is_markdown_doc "$1"; then
+    return 0
+  fi
   case "$1" in
-    *Dockerfile*|*dockerfile*|*Containerfile*|*containerfile*|Makefile|*/Makefile|*.mk|*.hcl|*.json|*.toml|*.md|*.yml|*.yaml|*.sh|*.bash|*.zsh|*.ksh|*.fish|cloudnative-pg-timescaledb/scripts/*|scripts/*|bin/*)
+    *Dockerfile*|*dockerfile*|*Containerfile*|*containerfile*|Makefile|*/Makefile|makefile|*/makefile|GNUmakefile|*/GNUmakefile|*.mk|*.hcl|*.json|*.toml|*.yml|*.yaml|*.sh|*.bash|*.zsh|*.ksh|*.fish|cloudnative-pg-timescaledb/scripts/*|scripts/*|bin/*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+is_markdown_doc() {
+  local lower="${1,,}"
+  case "${lower}" in
+    *.md|*.mdx|*.markdown)
       return 0
       ;;
   esac
@@ -2031,6 +2103,11 @@ source_truth_fixtures=(
   "${FIXTURE_DIR}/docs/invalid-source-of-truth.md"
   "${FIXTURE_DIR}/docs/invalid-source-of-truth-workflow-matrices.md"
   "${FIXTURE_DIR}/docs/invalid-source-of-truth-github-actions-matrix.md"
+  "${FIXTURE_DIR}/docs/invalid-source-of-truth-compatibility-matrix.md"
+  "${FIXTURE_DIR}/docs/invalid-source-of-truth-compatibility-hyphen-matrix.md"
+  "${FIXTURE_DIR}/docs/invalid-source-of-truth-compatibility-matrices.md"
+  "${FIXTURE_DIR}/docs/invalid-source-of-truth-support-matrixes.md"
+  "${FIXTURE_DIR}/docs/invalid-source-of-truth-version-matrix.md"
   "${FIXTURE_DIR}/docs/invalid-source-of-truth-catalogs.md"
   "${FIXTURE_DIR}/docs/invalid-source-of-truth-generated-docs.md"
   "${FIXTURE_DIR}/docs/invalid-source-of-truth-generated-files.md"
@@ -2162,6 +2239,11 @@ validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-metadat
 validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-generated-outputs-control-negation.md" 0
 validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-function-as-negation.md" 0
 validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-operate-as-negation.md" 0
+validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-compatibility-matrices-manual-negation.md" 0
+validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-compatibility-hyphen-manual-negation.md" 0
+validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-compatibility-matrices-hyphen-manual-negation.md" 0
+validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-human-authored-negation.md" 0
+validate_docs_source_of_truth "${FIXTURE_DIR}/docs/valid-source-of-truth-manually-curated-negation.md" 0
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-prose-add.md"
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-build-context-imperative-negation.md"
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-negation.md"
@@ -2173,6 +2255,17 @@ validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-label.md"
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-build-context-negation.md"
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-build-context-imperative-negation.md"
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-build-context-should-not.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-docker-build-variable-negation.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-docker-build-named-home-negation.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-source-variable-negation.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-production-images-depend-subject-negation.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-production-images-use-runtime-subject-negation.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-build-production-images-variable-negation.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-production-images-not-built-from.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-specific-runtime-labels.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-reference-only-include-prose.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-reference-only-include-after-nonmake-fence.md"
+validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-reference-only-include-after-closed-make-fence.md"
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-buildx-bake-set-context-negation.md"
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-vendored-examples-runtime-negation.md"
 validate_no_vendor_build_context "${FIXTURE_DIR}/docs/valid-vendor-tree-build-input-negation.md"
@@ -2226,6 +2319,9 @@ expect_fail "vendor markdown list lowercase copy" --contains "vendor/ is referen
 expect_fail "vendor lowercase dockerfile copy" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-lowercase-copy.Dockerfile"
 expect_fail "vendor containerfile copy" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-containerfile-copy.Containerfile"
 expect_fail "vendor docker build command" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-docker-build.md"
+expect_fail "vendor docker build split quoted variable command" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-docker-build-split-quoted-variable-prefix.md"
+expect_fail "vendor docker build split quoted vendor segment command" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-docker-build-split-quoted-vendor-segment.md"
+expect_fail "vendor docker build home-relative command" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-docker-build-home-relative.md"
 expect_fail "vendor parent-relative docker build command" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-parent-relative-build.md"
 expect_fail "vendor docker build subdir command" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-docker-build-subdir.md"
 expect_fail "vendor docker image build command" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-docker-image-build.md"
@@ -2324,6 +2420,22 @@ expect_fail "vendor comma then safe prefix" --contains "vendor/ is reference-onl
 expect_fail "vendor package source from" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-package-source-from.md"
 expect_fail "vendor execute helper" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-execute-helper.md"
 expect_fail "vendor direct executable" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-direct-exec.md"
+expect_fail "vendor shell source" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source.md"
+expect_fail "vendor shell source absolute" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-absolute.md"
+expect_fail "vendor shell source quoted" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-quoted.md"
+expect_fail "vendor shell source variable prefix" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-variable-prefix.md"
+expect_fail "vendor shell source split quoted variable prefix" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-split-quoted-variable-prefix.md"
+expect_fail "vendor shell source split quoted vendor segment" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-split-quoted-vendor-segment.md"
+expect_fail "vendor shell source home-relative" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-home-relative.md"
+expect_fail "vendor shell source named-home-relative" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-named-home-relative.md"
+expect_fail "vendor shell source process substitution" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-process-substitution.md"
+expect_fail "vendor shell source named-home process substitution" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-named-home-process-substitution.md"
+expect_fail "vendor shell source if control flow" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-if.md"
+expect_fail "vendor shell source negated if control flow" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-if-negated.md"
+expect_fail "vendor shell source elif dot control flow" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-elif-dot.md"
+expect_fail "vendor shell source else control flow" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-else.md"
+expect_fail "vendor shell source command substitution" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-command-substitution.md"
+expect_fail "vendor shell source while dot control flow" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-shell-source-while-dot.md"
 expect_fail "vendor apt package file" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-apt-file.md"
 expect_fail "vendor dpkg package file" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-dpkg-file.md"
 expect_fail "vendor install file" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-install-file.Dockerfile"
@@ -2338,12 +2450,38 @@ expect_fail "vendor quoted dockerfile path" --contains "vendor/ is reference-onl
 expect_fail "vendor dockerfile no slash" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-dockerfile-no-slash.md"
 expect_fail "vendor runtime dependencies" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-runtime-dependencies.md"
 expect_fail "vendor runtime dependencies vendor-first" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-runtime-dependencies-vendor-first.md"
+expect_fail "vendor runtime depends on" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-runtime-depends-on.md"
+expect_fail "vendor required at runtime" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-required-at-runtime.md"
+expect_fail "vendor image uses literal path" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-image-uses-literal-path.md"
+expect_fail "vendor production images use vendored examples" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-production-images-use-vendored-examples.md"
+expect_fail "vendor build uses vendored reference" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-uses-vendored-reference.md"
+expect_fail "vendor build production images from" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-production-images-from.md"
+expect_fail "vendor build production images from absolute" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-production-images-from-absolute.md"
+expect_fail "vendor build production images from parent" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-production-images-from-parent.md"
+expect_fail "vendor build production images from variable prefix" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-production-images-from-variable-prefix.md"
+expect_fail "vendor build production images from split quoted variable prefix" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-production-images-from-split-quoted-variable-prefix.md"
+expect_fail "vendor build production images from split quoted vendor segment" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-production-images-from-split-quoted-vendor-segment.md"
+expect_fail "vendor build production images from home-relative path" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-production-images-from-home-relative.md"
+expect_fail "vendor build production images from named-home-relative path" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-production-images-from-named-home-relative.md"
+expect_fail "vendor build depends on" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-build-depends-on.md"
+expect_fail "vendor runtime dependency on" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-runtime-dependency-on.md"
 expect_fail "vendor runtime from" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-runtime-from.md"
 expect_fail "vendor runtime loaded from tree" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-runtime-loaded-from-tree.md"
 expect_fail "vendor as package source" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-as-package-source.md"
 expect_fail "vendor docker run volume" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-docker-run-volume.md"
 expect_fail "vendor podman run mount" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-podman-run-mount.md"
 expect_fail "vendor make -C usage" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-c.md"
+expect_fail "vendor make include" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-include.mk"
+expect_fail "vendor make include absolute" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-include-absolute.mk"
+expect_fail "vendor make include variable prefix" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-include-variable-prefix.mk"
+expect_fail "vendor make include variable subdir prefix" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-include-variable-subdir-prefix.mk"
+expect_fail "vendor make include quoted vendor segment" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-include-quoted-vendor-segment.mk"
+expect_fail "vendor make include second operand" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-include-second-operand.mk"
+expect_fail "vendor markdown make include example" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-markdown-make-include-example.md"
+expect_fail "vendor markdown fenced make include example" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-markdown-fenced-make-include-example.md"
+expect_fail "vendor markdown indented fenced make include example" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-markdown-indented-fenced-make-include-example.md"
+expect_fail "vendor markdown spaced fenced make include example" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-markdown-spaced-fenced-make-include-example.md"
+expect_fail "vendor markdown tilde fenced make include example" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-markdown-tilde-fenced-make-include-example.md"
 expect_fail "vendor make --directory usage" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-directory.md"
 expect_fail "vendor make --directory= usage" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-directory-equals.md"
 expect_fail "vendor make variable build context" --contains "vendor/ is reference-only" validate_no_vendor_build_context "${FIXTURE_DIR}/docs/invalid-vendor-make-variable.mk"
@@ -2538,8 +2676,40 @@ should_scan_vendor_file "cloudnative-pg-timescaledb/Makefile" || {
   diag "should_scan_vendor_file cloudnative-pg-timescaledb/Makefile" "cloudnative-pg-timescaledb/Makefile" "vendor scan enabled" "not scanned" "Scan project Makefiles for vendor misuse."
   exit 1
 }
+should_scan_vendor_file "cloudnative-pg-timescaledb/makefile" || {
+  diag "should_scan_vendor_file cloudnative-pg-timescaledb/makefile" "cloudnative-pg-timescaledb/makefile" "vendor scan enabled" "not scanned" "Scan lowercase GNU makefiles for vendor misuse."
+  exit 1
+}
+should_scan_vendor_file "cloudnative-pg-timescaledb/GNUmakefile" || {
+  diag "should_scan_vendor_file cloudnative-pg-timescaledb/GNUmakefile" "cloudnative-pg-timescaledb/GNUmakefile" "vendor scan enabled" "not scanned" "Scan GNUmakefile for vendor misuse."
+  exit 1
+}
 should_scan_vendor_file "cloudnative-pg-timescaledb/scripts/build.bash" || {
   diag "should_scan_vendor_file build.bash" "cloudnative-pg-timescaledb/scripts/build.bash" "vendor scan enabled" "not scanned" "Scan shell extension scripts for vendor misuse."
+  exit 1
+}
+should_scan_vendor_file "cloudnative-pg-timescaledb/docs/metadata.mdx" || {
+  diag "should_scan_vendor_file metadata.mdx" "cloudnative-pg-timescaledb/docs/metadata.mdx" "vendor scan enabled" "not scanned" "Scan MDX docs for vendor misuse."
+  exit 1
+}
+should_scan_vendor_file "cloudnative-pg-timescaledb/docs/metadata.MD" || {
+  diag "should_scan_vendor_file metadata.MD" "cloudnative-pg-timescaledb/docs/metadata.MD" "vendor scan enabled" "not scanned" "Scan uppercase Markdown docs for vendor misuse."
+  exit 1
+}
+should_scan_vendor_file "cloudnative-pg-timescaledb/docs/metadata.MarkDown" || {
+  diag "should_scan_vendor_file metadata.MarkDown" "cloudnative-pg-timescaledb/docs/metadata.MarkDown" "vendor scan enabled" "not scanned" "Scan mixed-case Markdown docs for vendor misuse."
+  exit 1
+}
+is_markdown_doc "cloudnative-pg-timescaledb/docs/metadata.mdx" || {
+  diag "is_markdown_doc metadata.mdx" "cloudnative-pg-timescaledb/docs/metadata.mdx" "docs source-of-truth scan enabled" "not scanned" "Scan MDX docs for competing source-of-truth claims."
+  exit 1
+}
+is_markdown_doc "cloudnative-pg-timescaledb/docs/metadata.MD" || {
+  diag "is_markdown_doc metadata.MD" "cloudnative-pg-timescaledb/docs/metadata.MD" "docs source-of-truth scan enabled" "not scanned" "Scan uppercase Markdown docs for competing source-of-truth claims."
+  exit 1
+}
+is_markdown_doc "cloudnative-pg-timescaledb/docs/metadata.MarkDown" || {
+  diag "is_markdown_doc metadata.MarkDown" "cloudnative-pg-timescaledb/docs/metadata.MarkDown" "docs source-of-truth scan enabled" "not scanned" "Scan mixed-case Markdown docs for competing source-of-truth claims."
   exit 1
 }
 is_shebang_file "${FIXTURE_DIR}/docs/valid-extensionless-script.md" || {
@@ -2569,11 +2739,9 @@ done < <(git_product_files)
 while IFS= read -r -d '' file; do
   full_path="${ROOT_DIR}/${file}"
   [[ -f "${full_path}" ]] || continue
-  case "${file}" in
-    *.md)
-      validate_docs_source_of_truth "${full_path}" 0
-      ;;
-  esac
+  if is_markdown_doc "${file}"; then
+    validate_docs_source_of_truth "${full_path}" 0
+  fi
 done < <(git_product_files)
 
 printf 'PASS story-1.1 source-of-truth validation\n'
