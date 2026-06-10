@@ -32,6 +32,29 @@ expect_fail() {
   rm -f "${tmp}"
 }
 
+expect_arg_fail() {
+  local description="$1"
+  local pattern="$2"
+  shift 2
+  local tmp status
+  tmp="$(mktemp)"
+  set +e
+  "${VALIDATOR}" "$@" >"${tmp}" 2>&1
+  status="$?"
+  set -e
+  if [[ "${status}" != "64" ]]; then
+    diag "${VALIDATOR} $*" "${description}" "exit 64" "exit ${status}; $(tr '\n' ' ' <"${tmp}")" "Use controlled argument diagnostics for invalid validate-metadata usage."
+    rm -f "${tmp}"
+    exit 1
+  fi
+  if ! grep -E -q "${pattern}" "${tmp}"; then
+    diag "${VALIDATOR} $*" "${description}" "diagnostic matches ${pattern}" "$(tr '\n' ' ' <"${tmp}")" "Print deterministic argument failure diagnostics."
+    rm -f "${tmp}"
+    exit 1
+  fi
+  rm -f "${tmp}"
+}
+
 policy_fixture() {
   local output="$1"
   local extension="$2"
@@ -71,25 +94,106 @@ Path(output).write_text('\n'.join(result) + '\n')
 PY
 }
 
+replace_line_fixture() {
+  local output="$1"
+  local pattern="$2"
+  local replacement="$3"
+  python3 - "${FIXTURE_DIR}/valid.yaml" "${output}" "${pattern}" "${replacement}" <<'PY'
+from pathlib import Path
+import sys
+
+source, output, pattern, replacement = sys.argv[1:]
+lines = Path(source).read_text().splitlines()
+replaced = False
+result = []
+for line in lines:
+    if not replaced and pattern in line:
+        result.append(replacement)
+        replaced = True
+    else:
+        result.append(line)
+if not replaced:
+    raise SystemExit(f"failed to replace fixture line containing {pattern!r}")
+Path(output).write_text("\n".join(result) + "\n")
+PY
+}
+
+assert_make_validate_metadata_gate() {
+  local sandbox output
+  sandbox="$(mktemp -d)"
+  mkdir -p "${sandbox}/cloudnative-pg-timescaledb/scripts" "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-1-source-of-truth" "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2"
+  cp "${ROOT_DIR}/Makefile" "${sandbox}/Makefile"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate.sh" "${sandbox}/cloudnative-pg-timescaledb/scripts/validate.sh"
+  chmod +x "${sandbox}/cloudnative-pg-timescaledb/scripts/validate.sh"
+  for path in \
+    cloudnative-pg-timescaledb/tests/story-1-1-source-of-truth.sh \
+    cloudnative-pg-timescaledb/tests/story-1-2-make-help.sh \
+    cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh \
+    cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh; do
+    mkdir -p "${sandbox}/$(dirname "${path}")"
+    cat >"${sandbox}/${path}" <<SH
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'STUB %s\n' '${path}'
+SH
+    chmod +x "${sandbox}/${path}"
+  done
+  cat >"${sandbox}/cloudnative-pg-timescaledb/scripts/validate-metadata.sh" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'STUB validate-metadata failed\n'
+exit 42
+SH
+  chmod +x "${sandbox}/cloudnative-pg-timescaledb/scripts/validate-metadata.sh"
+  for script in validate-tags validate-generated validate-docs validate-barman-boundary validate-workflows; do
+    cat >"${sandbox}/cloudnative-pg-timescaledb/scripts/${script}.sh" <<SH
+#!/usr/bin/env bash
+set -Eeuo pipefail
+printf 'STUB %s\n' '${script}'
+SH
+    chmod +x "${sandbox}/cloudnative-pg-timescaledb/scripts/${script}.sh"
+  done
+  output="$(mktemp)"
+  if make -C "${sandbox}" validate >"${output}" 2>&1; then
+    diag "make validate sandbox" "Makefile validate target" "metadata validator failure stops make validate" "$(cat "${output}")" "Do not bypass validate-metadata.sh in make validate."
+    rm -rf "${sandbox}" "${output}"
+    exit 1
+  fi
+  if ! grep -Fq 'STUB validate-metadata failed' "${output}" || grep -Fq 'STUB validate-tags' "${output}"; then
+    diag "make validate sandbox" "Makefile validate target" "validate-metadata.sh runs before later validators and fails fast" "$(cat "${output}")" "Call validate-metadata.sh directly and before downstream validators."
+    rm -rf "${sandbox}" "${output}"
+    exit 1
+  fi
+  rm -rf "${sandbox}" "${output}"
+}
+
 "${VALIDATOR}" "${FIXTURE_DIR}/valid.yaml" >/tmp/story-1-3-valid.out
 "${VALIDATOR}" "${FIXTURE_DIR}/valid-extension-sources.yaml" >/tmp/story-3-2-valid-extension-sources.out
 
 valid_policy_fixture="$(mktemp)"
+valid_true_unsupported_mode_fixture="$(mktemp)"
 missing_reason_fixture="$(mktemp)"
 missing_target_fixture="$(mktemp)"
 unsupported_mode_fixture="$(mktemp)"
 unknown_extension_fixture="$(mktemp)"
-trap 'rm -f "${valid_policy_fixture}" "${missing_reason_fixture}" "${missing_target_fixture}" "${unsupported_mode_fixture}" "${unknown_extension_fixture}"' EXIT
+invalid_registry_fixture="$(mktemp)"
+invalid_repository_fixture="$(mktemp)"
+trap 'rm -f "${valid_policy_fixture}" "${valid_true_unsupported_mode_fixture}" "${missing_reason_fixture}" "${missing_target_fixture}" "${unsupported_mode_fixture}" "${unknown_extension_fixture}" "${invalid_registry_fixture}" "${invalid_repository_fixture}"' EXIT
 policy_fixture "${valid_policy_fixture}" pgaudit false "PGAudit is validated by control file" control-file pgaudit.control
+policy_fixture "${valid_true_unsupported_mode_fixture}" pgaudit true __omit__ sql-only __omit__
 policy_fixture "${missing_reason_fixture}" pgaudit false __omit__ control-file pgaudit.control
 policy_fixture "${missing_target_fixture}" pgaudit false "PGAudit is validated by control file" control-file __omit__
 policy_fixture "${unsupported_mode_fixture}" pgaudit false "PGAudit is validated by control file" sql-only pgaudit.control
 policy_fixture "${unknown_extension_fixture}" postgis false "PostGIS is outside this image contract" control-file postgis.control
+replace_line_fixture "${invalid_registry_fixture}" "  registry:" "  registry: []"
+replace_line_fixture "${invalid_repository_fixture}" "  repository:" "  repository: \"\""
 "${VALIDATOR}" "${valid_policy_fixture}" >/tmp/story-3-5-valid-extension-policy.out
 
 expect_fail "missing top-level key" "top-level keys exactly" "${FIXTURE_DIR}/missing-top-level-key.yaml"
 expect_fail "wrong current major" "image.current_major" "${FIXTURE_DIR}/wrong-current-major.yaml"
 expect_fail "wrong primary Debian" "image.primary_debian_variant" "${FIXTURE_DIR}/wrong-primary-debian-variant.yaml"
+expect_fail "invalid image registry" "image.registry is non-empty string" "${invalid_registry_fixture}"
+expect_fail "invalid image repository" "image.repository is non-empty string" "${invalid_repository_fixture}"
 expect_fail "wrong allowed PostgreSQL majors" "allowed.postgres_majors" "${FIXTURE_DIR}/wrong-allowed-postgres-majors.yaml"
 expect_fail "wrong allowed Debian variants" "allowed.debian_variants" "${FIXTURE_DIR}/wrong-allowed-debian-variants.yaml"
 expect_fail "wrong allowed platforms" "allowed.platforms" "${FIXTURE_DIR}/wrong-allowed-platforms.yaml"
@@ -120,11 +224,11 @@ expect_fail "package extension source missing package version" "package_version.
 expect_fail "extension policy missing reason" "non_creatable_reason" "${missing_reason_fixture}"
 expect_fail "extension policy missing target" "validation_target" "${missing_target_fixture}"
 expect_fail "extension policy unsupported mode" "extensions.pgaudit.validation_mode is supported" "${unsupported_mode_fixture}"
+expect_fail "extension policy unsupported mode when creatable true" "extensions.pgaudit.validation_mode is supported" "${valid_true_unsupported_mode_fixture}"
 expect_fail "extension policy unknown extension" "extensions.<ext> uses supported extension names" "${unknown_extension_fixture}"
 
-if ! grep -Fq 'validate-metadata.sh' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate.sh"; then
-  diag "scan validate.sh" "cloudnative-pg-timescaledb/scripts/validate.sh" "make validate calls validate-metadata.sh" "missing" "Wire metadata validation into make validate."
-  exit 1
-fi
+expect_arg_fail "validate-metadata extra args" "zero or one metadata file path" "${FIXTURE_DIR}/valid.yaml" "${FIXTURE_DIR}/invalid-postgres-major.yaml"
+expect_arg_fail "validate-metadata empty explicit arg" "metadata file path is non-empty" ""
+assert_make_validate_metadata_gate
 
 printf 'PASS story-1.3 metadata validation fixtures\n'

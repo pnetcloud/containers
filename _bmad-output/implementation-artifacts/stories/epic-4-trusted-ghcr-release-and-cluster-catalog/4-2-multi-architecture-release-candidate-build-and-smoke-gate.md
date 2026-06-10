@@ -158,7 +158,7 @@ Every implementation story must finish with a working repository state and must 
 - Added `validate-candidate-metadata.py` with required key, digest, runtime architecture, publish/experimental, candidate-only ref, and group-level platform coverage validation.
 - Generated release candidate schema docs through `generate-docs.sh`/`generator_contract.py`; updated generated drift, update, autocommit, workflow policy, and generator contract references.
 - Reviewer found two MAJOR issues: metadata validator did not require one record per declared platform, and workflow could record top-level digest as platform digest. Fixed both and reviewer re-check reported no remaining BLOCKER/MAJOR.
-- 2026-06-10 remote GitHub Actions proof supersedes earlier local controlled-failure notes: `Build Release Candidates` completed successfully for commit `74b4a07e8ccb5644f8ac4d5c6f4300fa7e191522` at `https://github.com/pnetcloud/containers/actions/runs/27265860054`, proving PG17/PG18 trixie/bookworm candidate build, per-platform smoke, vulnerability scan, and SARIF upload jobs on GitHub Actions.
+- 2026-06-10 remote GitHub Actions proof supersedes earlier local controlled-failure notes: `Build Release Candidates` completed successfully for commit `e12488ecdde7b6f3588d32b75ebf878210273534` at `https://github.com/pnetcloud/containers/actions/runs/27267944657`, proving PG17/PG18 trixie/bookworm candidate build, per-platform smoke, vulnerability scan, and SARIF upload jobs on GitHub Actions.
 
 ### Completion Notes
 
@@ -180,7 +180,7 @@ Every implementation story must finish with a working repository state and must 
 - `make smoke PG=18 DEBIAN=trixie CHECKS=container` returned Make exit 2 with controlled Error 65 for `publish:false` production row.
 - `make smoke PG=18 DEBIAN=trixie CHECKS=sql` returned Make exit 2 with controlled Error 65 for `publish:false` production row.
 - `actionlint .github/workflows/build.yml` skipped locally because `actionlint` is unavailable.
-- `gh run view 27265860054 --repo pnetcloud/containers --json url,status,conclusion,headSha,name` returned `name=Build Release Candidates`, `status=completed`, `conclusion=success`, `headSha=74b4a07e8ccb5644f8ac4d5c6f4300fa7e191522`, `url=https://github.com/pnetcloud/containers/actions/runs/27265860054`.
+- `gh run view 27267944657 --repo pnetcloud/containers --json url,status,conclusion,headSha,name` returned `name=Build Release Candidates`, `status=completed`, `conclusion=success`, `headSha=e12488ecdde7b6f3588d32b75ebf878210273534`, `url=https://github.com/pnetcloud/containers/actions/runs/27267944657`.
 
 ### File List
 

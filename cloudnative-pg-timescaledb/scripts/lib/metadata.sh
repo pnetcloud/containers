@@ -112,6 +112,9 @@ if not isinstance(image, dict):
 required_image = {"registry", "repository", "current_major", "primary_debian_variant"}
 if set(image) != required_image:
     fail(f"image keys exactly {sorted(required_image)}", f"missing {sorted(required_image - set(image))}, extra {sorted(set(image) - required_image)}", "Fix image metadata keys.")
+for field in ["registry", "repository"]:
+    if not isinstance(image[field], str) or not image[field].strip():
+        fail(f"image.{field} is non-empty string", repr(image[field]), "Set image registry and repository to usable image reference text.")
 if image["current_major"] != "18":
     fail("image.current_major is string '18'", repr(image["current_major"]), "Set current_major to '18'.")
 if image["primary_debian_variant"] != "trixie":
@@ -218,13 +221,13 @@ for idx, entry in enumerate(entries):
         for field in ["non_creatable_reason", "validation_mode", "validation_target"]:
             if field in policy and not isinstance(policy[field], str):
                 fail(f"entries[{idx}].extensions.{extension}.{field} is string", type(policy[field]).__name__, "Quote extension validation policy text values if needed.")
+        if "validation_mode" in policy and policy["validation_mode"] not in supported_validation_modes:
+            fail(f"entries[{idx}].extensions.{extension}.validation_mode is supported", repr(policy["validation_mode"]), "Use control-file, library, or preinstalled-extension.")
         if creatable is False:
             required_false = {"non_creatable_reason", "validation_mode", "validation_target"}
             missing_false = sorted(field for field in required_false if not str(policy.get(field, "")).strip())
             if missing_false:
                 fail(f"entries[{idx}].extensions.{extension} creatable:false has complete validation policy", f"missing {missing_false}; actual {policy}", "Document non-creatable extensions with reason, validation mode, and validation target.")
-            if policy["validation_mode"] not in supported_validation_modes:
-                fail(f"entries[{idx}].extensions.{extension}.validation_mode is supported", repr(policy["validation_mode"]), "Use control-file, library, or preinstalled-extension.")
     platforms = entry["platforms"]
     if not isinstance(platforms, list) or not platforms:
         fail(f"entries[{idx}].platforms is non-empty list", type(platforms).__name__, "Set explicit platform list.")
