@@ -166,7 +166,7 @@ if ! run_update "${current_project}" "${upstream}" "${FIXTURE_DIR}/current-refer
   diag "make update" "current-reference" "exit 0" "$(cat "${base_tmp}/current.err")" "Current Barman reference should be a deterministic no-op."
   exit 1
 fi
-assert_barman_json "${base_tmp}/current.out" false "v0.12.0" "v0.12.0"
+assert_barman_json "${base_tmp}/current.out" false "v0.13.0" "v0.13.0"
 status="$(cd "${current_project}" && git status --porcelain --untracked-files=all)"
 [[ -z "${status}" ]] || { diag "git status" "current-reference" "clean no-op" "${status}" "Current Barman reference must not rewrite metadata or docs."; exit 1; }
 
@@ -176,12 +176,12 @@ if ! run_update "${changed_project}" "${upstream}" "${FIXTURE_DIR}/changed-refer
   diag "make update" "changed-reference" "exit 0" "$(cat "${base_tmp}/changed.err")" "Changed Barman reference should update metadata and generated docs deterministically."
   exit 1
 fi
-assert_barman_json "${base_tmp}/changed.out" true "v0.12.0" "v0.13.0"
+assert_barman_json "${base_tmp}/changed.out" true "v0.13.0" "v0.14.0"
 status="$(cd "${changed_project}" && git status --porcelain --untracked-files=all)"
 expected_status=$' M cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md\n M cloudnative-pg-timescaledb/versions.yaml'
 [[ "${status}" == "${expected_status}" ]] || { diag "git status" "changed-reference" "only versions.yaml and generated Barman doc change" "${status}" "Keep Barman updates deterministic and reviewable."; exit 1; }
 grep -Fq 'CloudNativePG Barman Cloud Plugin' "${changed_project}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" || { diag "grep" "barman-plugin-reference.md" "required plugin phrase" "missing" "Generated docs must use the plugin path wording."; exit 1; }
-grep -Fq 'ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0' "${changed_project}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" || { diag "grep" "barman-plugin-reference.md" "new plugin image" "missing" "Generated docs must include the new plugin image."; exit 1; }
+grep -Fq 'ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.14.0' "${changed_project}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" || { diag "grep" "barman-plugin-reference.md" "new plugin image" "missing" "Generated docs must include the new plugin image."; exit 1; }
 
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-barman-boundary.sh"
 expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-dockerfile" "barman-cloud"

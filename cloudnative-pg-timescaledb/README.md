@@ -70,10 +70,10 @@ The CloudNativePG Barman Cloud Plugin is the supported v1 backup integration pat
 
 Current generated Barman plugin reference values from `cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md`:
 
-- Release: `v0.12.0`
-- Manifest URL: `https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.12.0/manifest.yaml`
-- Plugin image: `ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.12.0`
-- Sidecar image: `ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.12.0`
+- Release: `v0.13.0`
+- Manifest URL: `https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.13.0/manifest.yaml`
+- Plugin image: `ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0`
+- Sidecar image: `ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0`
 
 Backup guidance remains compatible with direct image tags:
 

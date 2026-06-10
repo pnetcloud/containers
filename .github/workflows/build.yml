@@ -429,6 +429,19 @@ jobs:
           print("set -Eeuo pipefail")
           print(f"evidence_path={shlex.quote(str(evidence_path))}")
           print(f"mkdir -p {shlex.quote(str(evidence_path.parent / 'attestations'))} {shlex.quote(str(evidence_path.parent / 'verification'))}")
+          print("cosign_verify_with_retry() {")
+          print("  local subject=\"$1\"")
+          print("  local output=\"$2\"")
+          print("  local attempt")
+          print("  for attempt in 1 2 3 4 5; do")
+          print("    if cosign verify --certificate-identity \"${EXPECTED_CERTIFICATE_IDENTITY}\" --certificate-oidc-issuer \"${COSIGN_CERTIFICATE_ISSUER}\" \"${subject}\" >\"${output}\"; then")
+          print("      return 0")
+          print("    fi")
+          print("    printf 'cosign verify not ready for %s; retry %s/5 after registry propagation delay\\n' \"${subject}\" \"${attempt}\" >&2")
+          print("    sleep 10")
+          print("  done")
+          print("  cosign verify --certificate-identity \"${EXPECTED_CERTIFICATE_IDENTITY}\" --certificate-oidc-issuer \"${COSIGN_CERTIFICATE_ISSUER}\" \"${subject}\" >\"${output}\"")
+          print("}")
           print(f"docker buildx imagetools inspect {shlex.quote(image + '@' + index_digest)} --raw > {shlex.quote(str(attestation_path))}")
           for idx, digest in enumerate(digests):
               subject = f"{image}@{digest}"
@@ -438,11 +451,7 @@ jobs:
               verification_ref = f"{subject}#verification"
               verification_path = evidence_path.parent / "verification" / (digest.replace(':', '-') + ".json")
               print(f"cosign sign --yes {shlex.quote(subject)}")
-              print(
-                  "cosign verify --certificate-identity \"${EXPECTED_CERTIFICATE_IDENTITY}\" "
-                  f"--certificate-oidc-issuer {shlex.quote(expected_issuer)} {shlex.quote(subject)} "
-                  f"> {shlex.quote(str(verification_path))}"
-              )
+              print(f"cosign_verify_with_retry {shlex.quote(subject)} {shlex.quote(str(verification_path))}")
               evidence["per_digest_evidence"].append({
                   "digest": digest,
                   "sbom_ref": sbom_ref,
