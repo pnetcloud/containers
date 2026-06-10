@@ -159,11 +159,18 @@ SH
     rm -rf "${sandbox}" "${output}"
     exit 1
   fi
-  if ! grep -Fq 'STUB validate-metadata failed' "${output}" || grep -Fq 'STUB validate-tags' "${output}"; then
+  if ! grep -Fq 'STUB validate-metadata failed' "${output}"; then
     diag "make validate sandbox" "Makefile validate target" "validate-metadata.sh runs before later validators and fails fast" "$(cat "${output}")" "Call validate-metadata.sh directly and before downstream validators."
     rm -rf "${sandbox}" "${output}"
     exit 1
   fi
+  for script in validate-tags validate-generated validate-docs validate-barman-boundary validate-workflows; do
+    if grep -Fq "STUB ${script}" "${output}"; then
+      diag "make validate sandbox" "Makefile validate target" "no downstream validators run after metadata failure" "$(cat "${output}")" "Fail fast immediately after validate-metadata.sh fails."
+      rm -rf "${sandbox}" "${output}"
+      exit 1
+    fi
+  done
   rm -rf "${sandbox}" "${output}"
 }
 
@@ -180,9 +187,17 @@ invalid_registry_fixture="$(mktemp)"
 invalid_repository_fixture="$(mktemp)"
 invalid_registry_whitespace_fixture="$(mktemp)"
 invalid_registry_path_fixture="$(mktemp)"
+invalid_registry_empty_label_fixture="$(mktemp)"
+invalid_registry_hyphen_label_fixture="$(mktemp)"
 invalid_repository_whitespace_fixture="$(mktemp)"
 invalid_repository_uppercase_fixture="$(mktemp)"
-trap 'rm -f "${valid_policy_fixture}" "${valid_true_unsupported_mode_fixture}" "${missing_reason_fixture}" "${missing_target_fixture}" "${unsupported_mode_fixture}" "${unknown_extension_fixture}" "${invalid_registry_fixture}" "${invalid_repository_fixture}" "${invalid_registry_whitespace_fixture}" "${invalid_registry_path_fixture}" "${invalid_repository_whitespace_fixture}" "${invalid_repository_uppercase_fixture}"' EXIT
+invalid_repository_double_dot_fixture="$(mktemp)"
+invalid_repository_mixed_separator_fixture="$(mktemp)"
+invalid_repository_triple_underscore_fixture="$(mktemp)"
+invalid_repository_too_long_fixture="$(mktemp)"
+invalid_metadata_dir="$(mktemp -d)"
+invalid_utf8_fixture="$(mktemp)"
+trap 'rm -rf "${valid_policy_fixture}" "${valid_true_unsupported_mode_fixture}" "${missing_reason_fixture}" "${missing_target_fixture}" "${unsupported_mode_fixture}" "${unknown_extension_fixture}" "${invalid_registry_fixture}" "${invalid_repository_fixture}" "${invalid_registry_whitespace_fixture}" "${invalid_registry_path_fixture}" "${invalid_registry_empty_label_fixture}" "${invalid_registry_hyphen_label_fixture}" "${invalid_repository_whitespace_fixture}" "${invalid_repository_uppercase_fixture}" "${invalid_repository_double_dot_fixture}" "${invalid_repository_mixed_separator_fixture}" "${invalid_repository_triple_underscore_fixture}" "${invalid_repository_too_long_fixture}" "${invalid_metadata_dir}" "${invalid_utf8_fixture}"' EXIT
 policy_fixture "${valid_policy_fixture}" pgaudit false "PGAudit is validated by control file" control-file pgaudit.control
 policy_fixture "${valid_true_unsupported_mode_fixture}" pgaudit true __omit__ sql-only __omit__
 policy_fixture "${missing_reason_fixture}" pgaudit false __omit__ control-file pgaudit.control
@@ -193,10 +208,20 @@ replace_line_fixture "${invalid_registry_fixture}" "  registry:" "  registry: []
 replace_line_fixture "${invalid_repository_fixture}" "  repository:" "  repository: \"\""
 replace_line_fixture "${invalid_registry_whitespace_fixture}" "  registry:" "  registry: \" ghcr.io\""
 replace_line_fixture "${invalid_registry_path_fixture}" "  registry:" "  registry: \"ghcr.io/pnetcloud\""
+replace_line_fixture "${invalid_registry_empty_label_fixture}" "  registry:" "  registry: \"ghcr..io\""
+replace_line_fixture "${invalid_registry_hyphen_label_fixture}" "  registry:" "  registry: \"ghcr-.io\""
 replace_line_fixture "${invalid_repository_whitespace_fixture}" "  repository:" "  repository: \"pnetcloud/cloudnative pg-timescaledb\""
 replace_line_fixture "${invalid_repository_uppercase_fixture}" "  repository:" "  repository: \"pnetcloud/CloudNative-PG-TimescaleDB\""
+replace_line_fixture "${invalid_repository_double_dot_fixture}" "  repository:" "  repository: \"pnetcloud/foo..bar\""
+replace_line_fixture "${invalid_repository_mixed_separator_fixture}" "  repository:" "  repository: \"pnetcloud/foo.-bar\""
+replace_line_fixture "${invalid_repository_triple_underscore_fixture}" "  repository:" "  repository: \"pnetcloud/foo___bar\""
+printf -v long_repository 'pnetcloud/%0300d' 0
+replace_line_fixture "${invalid_repository_too_long_fixture}" "  repository:" "  repository: \"${long_repository}\""
+printf '\377\n' >"${invalid_utf8_fixture}"
 "${VALIDATOR}" "${valid_policy_fixture}" >/tmp/story-3-5-valid-extension-policy.out
 
+expect_fail "metadata path is directory" "metadata file is a regular UTF-8 YAML file" "${invalid_metadata_dir}"
+expect_fail "metadata path is invalid UTF-8" "metadata file is UTF-8 text" "${invalid_utf8_fixture}"
 expect_fail "missing top-level key" "top-level keys exactly" "${FIXTURE_DIR}/missing-top-level-key.yaml"
 expect_fail "wrong current major" "image.current_major" "${FIXTURE_DIR}/wrong-current-major.yaml"
 expect_fail "wrong primary Debian" "image.primary_debian_variant" "${FIXTURE_DIR}/wrong-primary-debian-variant.yaml"
@@ -204,8 +229,14 @@ expect_fail "invalid image registry" "image.registry is non-empty string" "${inv
 expect_fail "invalid image repository" "image.repository is non-empty string" "${invalid_repository_fixture}"
 expect_fail "image registry whitespace" "image.registry has no whitespace" "${invalid_registry_whitespace_fixture}"
 expect_fail "image registry path component" "image.registry is OCI registry" "${invalid_registry_path_fixture}"
+expect_fail "image registry empty label" "image.registry is OCI registry" "${invalid_registry_empty_label_fixture}"
+expect_fail "image registry hyphen-ended label" "image.registry is OCI registry" "${invalid_registry_hyphen_label_fixture}"
 expect_fail "image repository whitespace" "image.repository has no whitespace" "${invalid_repository_whitespace_fixture}"
 expect_fail "image repository uppercase" "image.repository is lowercase" "${invalid_repository_uppercase_fixture}"
+expect_fail "image repository double dot" "image.repository is lowercase" "${invalid_repository_double_dot_fixture}"
+expect_fail "image repository mixed separators" "image.repository is lowercase" "${invalid_repository_mixed_separator_fixture}"
+expect_fail "image repository triple underscore" "image.repository is lowercase" "${invalid_repository_triple_underscore_fixture}"
+expect_fail "image repository too long" "image.repository length is at most 255" "${invalid_repository_too_long_fixture}"
 expect_fail "wrong allowed PostgreSQL majors" "allowed.postgres_majors" "${FIXTURE_DIR}/wrong-allowed-postgres-majors.yaml"
 expect_fail "wrong allowed Debian variants" "allowed.debian_variants" "${FIXTURE_DIR}/wrong-allowed-debian-variants.yaml"
 expect_fail "wrong allowed platforms" "allowed.platforms" "${FIXTURE_DIR}/wrong-allowed-platforms.yaml"

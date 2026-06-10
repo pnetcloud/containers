@@ -93,9 +93,17 @@ def parse_versions_yaml(text):
     return data
 
 try:
-    data = parse_versions_yaml(path.read_text())
+    data = parse_versions_yaml(path.read_text(encoding="utf-8"))
 except FileNotFoundError:
     fail("metadata file exists", str(path), "Create the metadata file before validating.")
+except IsADirectoryError:
+    fail("metadata file is a regular UTF-8 YAML file", str(path), "Pass a metadata YAML file path, not a directory.")
+except PermissionError as exc:
+    fail("metadata file is readable", repr(exc), "Fix file permissions before validating metadata.")
+except UnicodeDecodeError as exc:
+    fail("metadata file is UTF-8 text", repr(exc), "Write metadata files as UTF-8 YAML text.")
+except OSError as exc:
+    fail("metadata file is readable", repr(exc), "Fix the metadata file path or filesystem error before validating.")
 
 required_top = {"schema_version", "image", "allowed", "entries"}
 optional_top = {"barman_plugin"}
@@ -117,13 +125,17 @@ for field in ["registry", "repository"]:
         fail(f"image.{field} is non-empty string", repr(image[field]), "Set image registry and repository to usable image reference text.")
     if image[field] != image[field].strip() or re.search(r"\s", image[field]):
         fail(f"image.{field} has no whitespace", repr(image[field]), "Remove leading, trailing, or embedded whitespace from image reference metadata.")
-registry_pattern = r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::[0-9]+)?"
-repository_component = r"[a-z0-9]+(?:(?:[._-]+)[a-z0-9]+)*"
+domain_component = r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+registry_pattern = rf"{domain_component}(?:\.{domain_component})*(?::[0-9]+)?"
+repository_separator = r"(?:[._]|__|-+)"
+repository_component = rf"[a-z0-9]+(?:{repository_separator}[a-z0-9]+)*"
 repository_pattern = rf"{repository_component}(?:/{repository_component})*"
 if not re.fullmatch(registry_pattern, image["registry"]):
     fail("image.registry is OCI registry host[:port]", repr(image["registry"]), "Use a lowercase registry host with optional port, for example ghcr.io.")
 if not re.fullmatch(repository_pattern, image["repository"]):
     fail("image.repository is lowercase slash-separated OCI repository path", repr(image["repository"]), "Use lowercase repository path components separated by '/', for example pnetcloud/cloudnative-pg-timescaledb.")
+if len(image["repository"]) > 255:
+    fail("image.repository length is at most 255 characters", f"{len(image['repository'])} characters", "Use an OCI repository path no longer than 255 characters.")
 if image["current_major"] != "18":
     fail("image.current_major is string '18'", repr(image["current_major"]), "Set current_major to '18'.")
 if image["primary_debian_variant"] != "trixie":
