@@ -485,7 +485,7 @@ workflow_overrides = {
     "status": os.environ.get("WORKFLOW_RUN_STATUS", ""),
     "conclusion": os.environ.get("WORKFLOW_RUN_CONCLUSION", ""),
 }
-if any(workflow_overrides.values()):
+if any(workflow_overrides.values()) and not expect_failure:
     workflow = fixture.setdefault("workflow_dispatch", {})
     for key, value in workflow_overrides.items():
         if value:

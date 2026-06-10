@@ -45,7 +45,8 @@ expect_fail() {
   local tmp status
   tmp="$(mktemp)"
   set +e
-  "${SCRIPT}" --dry-run --date 20260609 --fixture "${FIXTURE_DIR}/${fixture}" --expect-failure >"${tmp}" 2>&1
+  WORKFLOW_RUN_URL=https://github.com/pnetcloud/containers/actions/runs/1234567890 \
+    "${SCRIPT}" --dry-run --date 20260609 --fixture "${FIXTURE_DIR}/${fixture}" --expect-failure >"${tmp}" 2>&1
   status="$?"
   set -e
   if [[ "${status}" == "0" ]]; then
