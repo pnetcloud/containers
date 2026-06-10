@@ -401,6 +401,7 @@ Required `include[]` keys:
 | --- | --- |
 | `pg_major` | PostgreSQL major from metadata, including experimental `19beta1`. |
 | `pg_version` | PostgreSQL version from metadata. |
+| `timescaledb_version` | TimescaleDB version used in immutable tags. |
 | `debian_variant` | Debian variant, with `trixie` primary and `bookworm` secondary. |
 | `image` | Registry/repository from metadata. |
 | `candidate_ref` | Candidate image reference using the immutable intended tag. |
@@ -538,6 +539,7 @@ def matrix_summary(data, entries):
                 {
                     "pg_major": entry["pg_major"],
                     "pg_version": entry["pg_version"],
+                    "timescaledb_version": entry["timescaledb_version"],
                     "debian_variant": entry["debian_variant"],
                     "image": image,
                     "candidate_ref": f"{image}:{immutable_tag}",

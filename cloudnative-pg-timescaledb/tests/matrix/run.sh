@@ -22,7 +22,7 @@ import sys
 path = Path(sys.argv[1])
 command = f"validate matrix fixture {path}"
 required_include = {
-    "pg_major", "pg_version", "debian_variant", "image", "candidate_ref", "digest",
+    "pg_major", "pg_version", "timescaledb_version", "debian_variant", "image", "candidate_ref", "digest",
     "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental",
     "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref",
 }
@@ -261,6 +261,20 @@ Path(output).write_text(json.dumps(payload, separators=(",", ":")))
 PY
 expect_command_fail "shared workflow validator rejects fake immutable tags" "policy immutable tag" "${VALIDATE_MATRIX_JSON}" --file "${fake_immutable_matrix}"
 rm -f "${fake_immutable_matrix}"
+wrong_timescale_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${wrong_timescale_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["intended_tags"][1] = payload["include"][0]["intended_tags"][1].replace("ts2.27.2", "ts9.99.9")
+payload["include"][0]["candidate_ref"] = f"{payload['include'][0]['image']}:{payload['include'][0]['intended_tags'][1]}"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects wrong TimescaleDB immutable tag" "policy immutable tag" "${VALIDATE_MATRIX_JSON}" --file "${wrong_timescale_matrix}"
+rm -f "${wrong_timescale_matrix}"
 bookworm_latest_matrix="$(mktemp)"
 python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${bookworm_latest_matrix}" <<'PY'
 from pathlib import Path
@@ -275,6 +289,20 @@ Path(output).write_text(json.dumps(payload, separators=(",", ":")))
 PY
 expect_command_fail "shared workflow validator rejects bookworm latest" "latest_eligible only" "${VALIDATE_MATRIX_JSON}" --file "${bookworm_latest_matrix}"
 rm -f "${bookworm_latest_matrix}"
+missing_latest_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${missing_latest_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["latest_eligible"] = False
+payload["include"][0]["intended_tags"] = [tag for tag in payload["include"][0]["intended_tags"] if tag != "latest"]
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator requires latest owner" "latest_eligible true|exactly one latest owner" "${VALIDATE_MATRIX_JSON}" --file "${missing_latest_matrix}"
+rm -f "${missing_latest_matrix}"
 trixie_suffix_matrix="$(mktemp)"
 python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${trixie_suffix_matrix}" <<'PY'
 from pathlib import Path
@@ -289,6 +317,52 @@ Path(output).write_text(json.dumps(payload, separators=(",", ":")))
 PY
 expect_command_fail "shared workflow validator rejects trixie Debian suffix" "policy immutable tag|trixie immutable tag" "${VALIDATE_MATRIX_JSON}" --file "${trixie_suffix_matrix}"
 rm -f "${trixie_suffix_matrix}"
+unsupported_pg_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${unsupported_pg_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+row = payload["include"][0]
+row["pg_major"] = "20"
+row["pg_version"] = "20.1"
+row["intended_tags"] = ["20", "20-pg20.1-ts2.27.2-20260609"]
+row["candidate_ref"] = f"{row['image']}:{row['intended_tags'][1]}"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects unsupported PostgreSQL" "pg_major is supported" "${VALIDATE_MATRIX_JSON}" --file "${unsupported_pg_matrix}"
+rm -f "${unsupported_pg_matrix}"
+unsupported_debian_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${unsupported_debian_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+row = payload["include"][0]
+row["debian_variant"] = "alpine"
+row["intended_tags"][1] = f"{row['pg_major']}-pg{row['pg_version']}-ts{row['timescaledb_version']}-20260609-alpine"
+row["candidate_ref"] = f"{row['image']}:{row['intended_tags'][1]}"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects unsupported Debian" "debian_variant is supported" "${VALIDATE_MATRIX_JSON}" --file "${unsupported_debian_matrix}"
+rm -f "${unsupported_debian_matrix}"
+invalid_platform_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${invalid_platform_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["platforms"] = ["linux/amd64"]
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects incomplete platforms" "platforms exactly" "${VALIDATE_MATRIX_JSON}" --file "${invalid_platform_matrix}"
+rm -f "${invalid_platform_matrix}"
 expect_matrix_fail "missing required key" "missing .*digest" "${FIXTURE_DIR}/missing-required-key.json"
 expect_matrix_fail "19beta1 must be experimental" "19beta1 .*experimental" "${FIXTURE_DIR}/pg19beta1-not-experimental.json"
 expect_matrix_fail "bookworm cannot be latest" "latest_eligible only" "${FIXTURE_DIR}/bookworm-latest-eligible.json"

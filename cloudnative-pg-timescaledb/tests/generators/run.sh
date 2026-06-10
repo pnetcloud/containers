@@ -104,7 +104,7 @@ elif kind == "matrix":
     require_keys(payload, {"include", "skipped"}, "matrix payload")
     rows = []
     for row in payload["include"]:
-        require_keys(row, {"pg_major", "pg_version", "debian_variant", "image", "candidate_ref", "digest", "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental", "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"}, "matrix include row")
+        require_keys(row, {"pg_major", "pg_version", "timescaledb_version", "debian_variant", "image", "candidate_ref", "digest", "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental", "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"}, "matrix include row")
         if row["publish"] is not True:
             fail("matrix include rows are publishable", repr(row), "Only publishable metadata rows should become build matrix rows.")
         if not row["dockerfile"] or not row["bake_target"] or not row["candidate_ref"] or not row["intended_tags"]:

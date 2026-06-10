@@ -23,7 +23,8 @@
       "publish": true,
       "sbom_ref": "",
       "scan_result": "pending",
-      "signature_ref": ""
+      "signature_ref": "",
+      "timescaledb_version": "2.27.2"
     },
     {
       "bake_target": "pg18-trixie",
@@ -49,7 +50,8 @@
       "publish": true,
       "sbom_ref": "",
       "scan_result": "pending",
-      "signature_ref": ""
+      "signature_ref": "",
+      "timescaledb_version": "2.27.2"
     },
     {
       "bake_target": "pg17-bookworm",
@@ -74,7 +76,8 @@
       "publish": true,
       "sbom_ref": "",
       "scan_result": "pending",
-      "signature_ref": ""
+      "signature_ref": "",
+      "timescaledb_version": "2.27.2"
     },
     {
       "bake_target": "pg18-bookworm",
@@ -99,7 +102,8 @@
       "publish": true,
       "sbom_ref": "",
       "scan_result": "pending",
-      "signature_ref": ""
+      "signature_ref": "",
+      "timescaledb_version": "2.27.2"
     }
   ],
   "skipped": [
