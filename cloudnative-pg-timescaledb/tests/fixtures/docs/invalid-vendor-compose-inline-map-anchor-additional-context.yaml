@@ -1,0 +1,5 @@
+x-paths: {ctx: &ctx ./vendor}
+services:
+  app:
+    build:
+      additional_contexts: {deps: *ctx}

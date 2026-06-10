@@ -93,7 +93,6 @@ jobs:
           platforms_csv="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["PLATFORMS_JSON"])))')"
           printf 'Building multi-platform candidate PG=%s DEBIAN=%s platforms=%s ref=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${platforms_csv}" "${candidate_ref}"
           docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl --sbom=true --provenance=mode=max "${BAKE_TARGET}" \
-            --set "${BAKE_TARGET}.context=." \
             --set "${BAKE_TARGET}.platform=${platforms_csv}" \
             --set "${BAKE_TARGET}.tags=${candidate_ref}" \
             --set "${BAKE_TARGET}.output=type=registry,push=true"
@@ -306,7 +305,7 @@ jobs:
       - matrix
       - candidate
       - security_scan
-    if: ${{ needs.matrix.outputs.has_include == 'true' }}
+    if: ${{ needs.matrix.outputs.has_include == 'true' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -567,7 +566,7 @@ jobs:
       - security_scan
       - release_evidence
       - tag_validation
-    if: ${{ needs.matrix.outputs.has_include == 'true' }}
+    if: ${{ needs.matrix.outputs.has_include == 'true' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -647,6 +646,25 @@ jobs:
           print(f"promotion_status={metadata['promotion_status']}")
           print("final_tags=" + ",".join(metadata["final_tags"]))
           PY
+      - name: Verify public anonymous pulls
+        env:
+          METADATA_PATH: publish/output/${{ matrix.bake_target }}/ghcr-release-metadata.json
+        run: |
+          set -Eeuo pipefail
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          python3 - "${METADATA_PATH}" <<'PY' > /tmp/public-pulls.txt
+          import json
+          import sys
+          from pathlib import Path
+
+          metadata = json.loads(Path(sys.argv[1]).read_text())
+          for tag in metadata["final_tags"]:
+              print(f"{metadata['image']}:{tag}")
+          PY
+          while IFS= read -r ref; do
+            printf 'Verifying public anonymous pull: %s\n' "${ref}"
+            docker pull "${ref}"
+          done < /tmp/public-pulls.txt
       - name: Write publish summary
         if: always()
         env:

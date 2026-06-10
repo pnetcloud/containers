@@ -160,6 +160,7 @@ required_entry = {
     "pgaudit_package_version", "platforms", "publish", "experimental",
     "latest_eligible", "skip_reason",
 }
+optional_entry = {"tags"}
 string_fields = required_entry - {"platforms", "publish", "experimental", "latest_eligible"}
 bool_fields = {"publish", "experimental", "latest_eligible"}
 resolver_owned = {"cnpg_digest", "timescaledb_version", "timescaledb_package_name", "timescaledb_package_version", "toolkit_version", "toolkit_package_name", "toolkit_package_version"}
@@ -195,15 +196,20 @@ for idx, entry in enumerate(entries):
     if not isinstance(entry, dict):
         fail(f"entries[{idx}] is mapping", type(entry).__name__, "Use mapping entries.")
     extension_policy_keys = {key for key in entry if parse_extension_policy_key(key)}
-    extra_entry_keys = set(entry) - required_entry - extension_policy_keys
+    extra_entry_keys = set(entry) - required_entry - optional_entry - extension_policy_keys
     if not required_entry.issubset(entry) or extra_entry_keys:
-        fail(f"entries[{idx}] keys exactly {sorted(required_entry)} plus optional extensions.<ext>.* policy keys", f"missing {sorted(required_entry - set(entry))}, extra {sorted(extra_entry_keys)}", "Fix entry metadata keys.")
+        fail(f"entries[{idx}] keys exactly {sorted(required_entry)} plus optional tags and extensions.<ext>.* policy keys", f"missing {sorted(required_entry - set(entry))}, extra {sorted(extra_entry_keys)}", "Fix entry metadata keys.")
     for field in string_fields:
         if not isinstance(entry[field], str):
             fail(f"entries[{idx}].{field} is string", type(entry[field]).__name__, f"Quote {field} if needed.")
     for field in bool_fields:
         if not isinstance(entry[field], bool):
             fail(f"entries[{idx}].{field} is boolean", type(entry[field]).__name__, f"Use true or false for {field}.")
+    if "tags" in entry:
+        if not isinstance(entry["tags"], list) or any(not isinstance(tag, str) for tag in entry["tags"]):
+            fail(f"entries[{idx}].tags is string list", repr(entry.get("tags")), "Use an inline YAML string list for deterministic publish tags.")
+        if not entry["publish"]:
+            fail(f"entries[{idx}].tags only present on publishable rows", repr(entry["tags"]), "Keep tags off unpublished rows until they enter the release path.")
     extension_policies = entry_extension_policies(entry, idx)
     for extension, policy in extension_policies.items():
         creatable = policy.get("creatable")

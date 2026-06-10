@@ -4,9 +4,9 @@
 
 | PostgreSQL | Debian | Publish | Experimental | Latest Eligible | Platforms | Skip Reason |
 | --- | --- | --- | --- | --- | --- | --- |
-| 17 | trixie | false | false | false | linux/amd64, linux/arm64 | Publish disabled until release gate enables image builds |
-| 18 | trixie | false | false | true | linux/amd64, linux/arm64 | Publish disabled until release gate enables image builds |
+| 17 | trixie | true | false | false | linux/amd64, linux/arm64 |  |
+| 18 | trixie | true | false | true | linux/amd64, linux/arm64 |  |
 | 19beta1 | trixie | false | true | false | linux/amd64, linux/arm64 | Experimental PostgreSQL 19beta1 pending upstream support |
-| 17 | bookworm | false | false | false | linux/amd64, linux/arm64 | Publish disabled until release gate enables image builds |
-| 18 | bookworm | false | false | false | linux/amd64, linux/arm64 | Publish disabled until release gate enables image builds |
+| 17 | bookworm | true | false | false | linux/amd64, linux/arm64 |  |
+| 18 | bookworm | true | false | false | linux/amd64, linux/arm64 |  |
 | 19beta1 | bookworm | false | true | false | linux/amd64, linux/arm64 | Experimental PostgreSQL 19beta1 pending upstream support |

@@ -1,0 +1,4 @@
+COPY [
+  "vendor/",
+  "/app/vendor/"
+]

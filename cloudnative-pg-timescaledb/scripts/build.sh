@@ -15,7 +15,6 @@ bake_file="${BAKE_FILE:-${SCRIPT_DIR}/../docker-bake.hcl}"
 docker_bin="${DOCKER_BIN:-docker}"
 platform="${PLATFORM:-linux/amd64}"
 target="pg${pg}-${debian}"
-context="."
 
 "${SCRIPT_DIR}/generate-bake.sh" --metadata "${metadata}" --output "${bake_file}" --check >/dev/null
 
@@ -56,6 +55,13 @@ print(json.loads(sys.argv[1]).get("row", {}).get("dockerfile", ""))
 PY
 )"
 
+context="$(${PYTHON:-python3} - "${selection}" <<'PY'
+import json
+import sys
+print(json.loads(sys.argv[1]).get("row", {}).get("context", "."))
+PY
+)"
+
 case "${status}" in
   buildable)
     ;;
@@ -79,7 +85,7 @@ PY
     ;;
 esac
 
-if [[ ! -f "${SCRIPT_DIR}/../../${dockerfile}" && ! -f "${dockerfile}" ]]; then
+if [[ ! -f "${SCRIPT_DIR}/../../${context}/${dockerfile}" && ! -f "${SCRIPT_DIR}/../../${dockerfile}" && ! -f "${dockerfile}" ]]; then
   diag "make build PG=${pg} DEBIAN=${debian}" "${dockerfile}" "generated Dockerfile exists for ${target}" "missing; target=${target}; context=${context}; platform=${platform}; PG=${pg}; DEBIAN=${debian}" "Run make generate and ensure the selected metadata row is publishable."
   exit "${EXIT_UNAVAILABLE}"
 fi

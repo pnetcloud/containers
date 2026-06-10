@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TAG_VALIDATION_DATE="${TAG_VALIDATION_DATE:-20260609}"
+TAG_VALIDATION_DATE="${TAG_VALIDATION_DATE:-${DATE:-20260609}}"
 
 "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/story-1-1-source-of-truth.sh"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-metadata.sh"

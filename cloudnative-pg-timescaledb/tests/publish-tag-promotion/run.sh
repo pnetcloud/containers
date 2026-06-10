@@ -189,6 +189,10 @@ security_needs = needs(security_scan)
 evidence_needs = needs(release_evidence)
 tag_needs = needs(tag_validation)
 require({"matrix", "candidate", "security_scan", "release_evidence", "tag_validation"}.issubset(publish_needs), "publish has explicit same-run needs on matrix, candidate, security_scan, release_evidence, tag_validation", sorted(publish_needs), "Make final tag promotion depend on every prior release gate.")
+publish_if = str(publish.get("if", ""))
+for marker in ["github.event_name == 'workflow_dispatch'", "github.ref == 'refs/heads/main'", "startsWith(github.ref, 'refs/tags/')"]:
+    require(marker in publish_if, f"publish job if guard contains {marker}", publish_if, "Restrict final tag promotion to manual, main, or tag release contexts.")
+require("needs.matrix.outputs.has_include == 'true'" in publish_if, "publish job if guard requires non-empty generated matrix", publish_if, "Publish only generated publishable rows.")
 require("candidate" in security_needs, "security_scan needs candidate", sorted(security_needs), "Scan the same candidate metadata built and smoked in this run.")
 require({"candidate", "security_scan"}.issubset(evidence_needs), "release_evidence needs candidate and security_scan", sorted(evidence_needs), "Sign and verify only after candidate and scan gates pass.")
 require({"candidate", "security_scan", "release_evidence"}.issubset(tag_needs), "tag_validation needs candidate, security_scan, and release_evidence", sorted(tag_needs), "Create release gate metadata only after all upstream gates pass.")
@@ -222,10 +226,13 @@ for marker in [
     "docker buildx imagetools create",
     "published_digest",
     "final_tags",
+    "docker logout ghcr.io",
+    "docker pull",
     "ghcr-release-metadata-${{ matrix.bake_target }}",
     "GITHUB_STEP_SUMMARY",
 ]:
     require(marker in publish_text, f"publish job contains {marker}", "missing", "Publish must validate same-digest gates, promote exact final tags, and emit metadata evidence.")
+require(publish_text.index("docker buildx imagetools create") < publish_text.index("docker logout ghcr.io") < publish_text.index("docker pull"), "publish verifies public anonymous pulls after final tag promotion", "wrong order", "Promote final tags first, then logout and pull anonymously to prove public GHCR availability.")
 require("--tag-validation-status passed" not in publish_text, "publish job does not synthesize tag validation status", "found", "Publish must consume release gate metadata from the tag_validation job.")
 perms = publish.get("permissions", {})
 require(perms.get("contents") == "read" and perms.get("packages") == "write", "publish permissions are contents read and packages write", perms, "Use least privilege for GHCR tag promotion.")

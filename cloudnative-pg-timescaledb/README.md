@@ -120,7 +120,7 @@ The compatibility overview is generated from `cloudnative-pg-timescaledb/version
 - `cloudnative-pg-timescaledb/docs/generated/compatibility.md`
 - `cloudnative-pg-timescaledb/docs/generated/compatibility-table.md`
 
-The current metadata keeps every entry at `publish: false` until the release gates explicitly enable buildable image lines. Skipped entries keep a non-empty `skip_reason`; generated Dockerfiles and Bake targets are emitted only for publishable entries.
+The current metadata enables publishable stable PostgreSQL `17` and `18` image lines for Debian `trixie` and `bookworm`. PostgreSQL `19beta1` remains experimental with `publish: false` and a non-empty `skip_reason`; generated Dockerfiles and Bake targets are emitted only for publishable entries.
 
 The `vendor/` tree is reference-only. Production image definitions and workflows must use generated project files and upstream package sources instead of copying from the vendored examples.
 

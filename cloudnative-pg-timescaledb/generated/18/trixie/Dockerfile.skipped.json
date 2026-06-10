@@ -1,8 +1,0 @@
-{
-  "buildable": false,
-  "debian_variant": "trixie",
-  "pg_major": "18",
-  "publish": false,
-  "skip_reason": "Publish disabled until release gate enables image builds",
-  "source_entry": "18-trixie"
-}

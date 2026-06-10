@@ -18,8 +18,8 @@ entries:
     timescaledb_package_version: ""
     toolkit_version: ""
     toolkit_package_version: ""
-    platforms: ["linux/amd64"]
+    platforms: []
     publish: false
     experimental: false
     latest_eligible: true
-    skip_reason: "Missing linux/arm64"
+    skip_reason: "Missing platform values"

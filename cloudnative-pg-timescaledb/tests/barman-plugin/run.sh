@@ -13,6 +13,7 @@ prepare_project() {
   mkdir -p "${target}/cloudnative-pg-timescaledb" "${target}/docs"
   cp "${ROOT_DIR}/Makefile" "${target}/Makefile"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts" "${target}/cloudnative-pg-timescaledb/scripts"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/templates" "${target}/cloudnative-pg-timescaledb/templates"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/generated" "${target}/cloudnative-pg-timescaledb/generated"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/catalog" "${target}/cloudnative-pg-timescaledb/catalog"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/docs" "${target}/cloudnative-pg-timescaledb/docs"

@@ -17,6 +17,7 @@ prepare_project() {
   cp "${ROOT_DIR}/Makefile" "${target}/Makefile"
   mkdir -p "${target}/cloudnative-pg-timescaledb" "${target}/docs"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts" "${target}/cloudnative-pg-timescaledb/scripts"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/templates" "${target}/cloudnative-pg-timescaledb/templates"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/generated" "${target}/cloudnative-pg-timescaledb/generated"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/catalog" "${target}/cloudnative-pg-timescaledb/catalog"
   mkdir -p "${target}/cloudnative-pg-timescaledb/docs/generated"
@@ -45,6 +46,9 @@ text = re.sub(r'(    cnpg_tag: ")17\.[0-9]+-standard-', r'\g<1>17-standard-', te
 text = re.sub(r'(    cnpg_tag: ")18\.[0-9]+-standard-', r'\g<1>18-standard-', text)
 for field in ["cnpg_digest", "timescaledb_version", "timescaledb_package_version", "toolkit_version", "toolkit_package_version"]:
     text = re.sub(rf'(    {field}: )"[^"]*"', rf'\1""', text)
+text = re.sub(r'    publish: true', '    publish: false', text)
+text = re.sub(r'    skip_reason: ""', '    skip_reason: "Pending resolver update fixture"', text)
+text = re.sub(r'\n    tags: \[[^\n]*\]', '', text)
 path.write_text(text)
 PY
   (cd "${target}" && git init -q && git config user.email test@example.invalid && git config user.name test && git add . && git commit -qm baseline)

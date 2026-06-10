@@ -14,10 +14,10 @@ entries:
     debian_variant: trixie
     cnpg_tag: "18-standard-trixie"
     cnpg_digest: ""
-    timescaledb_version: "2.27.2"
-    timescaledb_package_version: "2.27.2"
-    toolkit_version: "1.22.0"
-    toolkit_package_version: "1.22.0"
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
     publish: true
     experimental: false

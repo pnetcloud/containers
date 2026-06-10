@@ -1,0 +1,6 @@
+x-paths:
+  - &ctx ./vendor
+services:
+  app:
+    build:
+      context: *ctx

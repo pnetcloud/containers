@@ -1,0 +1,11 @@
+schema_version: "1"
+image:
+  registry: ghcr.io
+  repository: pnetcloud/cloudnative-pg-timescaledb
+  current_major: "18"
+  primary_debian_variant: trixie
+allowed:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: ["trixie", "bookworm"]
+  platforms: ["linux/amd64", "linux/arm64"]
+entries: []

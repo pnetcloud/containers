@@ -181,8 +181,19 @@ grep -Fq 'run --rm --entrypoint /bin/sh' "${capture}" || {
 }
 rm -rf "${tmpdir}"
 
-expect_make_error 65 "production smoke skipped until publishable" "publishable smoke target|skipped:" smoke PG=18 DEBIAN=trixie CHECKS=container
-expect_make_error 65 "sql smoke skipped until publishable" "publishable SQL smoke target|skipped:" smoke PG=18 DEBIAN=trixie CHECKS=sql
+SMOKE_METADATA="${METADATA_FIXTURE}" SMOKE_CONTAINER_FIXTURE="${FIXTURE_DIR}/valid-container.json" CHECKS=container \
+  make -C "${ROOT_DIR}" smoke PG=18 DEBIAN=trixie >/tmp/story-3-4-production-smoke.out
+grep -Fq 'PASS container smoke image=local/pg18-trixie:skeleton PG=18 DEBIAN=trixie' /tmp/story-3-4-production-smoke.out || {
+  diag "make smoke production valid fixture" "${FIXTURE_DIR}/valid-container.json" "PASS marker" "$(cat /tmp/story-3-4-production-smoke.out)" "Production PG18 trixie must be smokeable once publishable."
+  exit 1
+}
+
+SMOKE_METADATA="${METADATA_FIXTURE}" SMOKE_SQL_FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/sql/fixtures/valid-sql-smoke.sql" CHECKS=sql \
+  make -C "${ROOT_DIR}" smoke PG=18 DEBIAN=trixie >/tmp/story-3-4-production-sql-smoke.out
+grep -Fq 'PASS SQL smoke image=local/pg18-trixie:skeleton PG=18 DEBIAN=trixie' /tmp/story-3-4-production-sql-smoke.out || {
+  diag "make smoke production SQL valid fixture" "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/sql/fixtures/valid-sql-smoke.sql" "PASS marker" "$(cat /tmp/story-3-4-production-sql-smoke.out)" "Production PG18 trixie SQL smoke must be runnable once publishable."
+  exit 1
+}
 expect_make_error 64 "unknown smoke checks rejected" "one of container, sql" smoke PG=18 DEBIAN=trixie CHECKS=network
 
 expect_fail "wrong Debian release" "check: Debian release.*expected: 'trixie'.*actual: 'bookworm'" env SMOKE_METADATA="${METADATA_FIXTURE}" SMOKE_CONTAINER_FIXTURE="${FIXTURE_DIR}/wrong-debian-release.json" "${SCRIPT_DIR}/smoke-test.sh" 18 trixie

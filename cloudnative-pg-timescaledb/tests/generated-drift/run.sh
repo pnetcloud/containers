@@ -120,7 +120,7 @@ import sys
 from pathlib import Path
 path = Path(sys.argv[1])
 payload = json.loads(path.read_text())
-payload["skipped"][1]["latest_eligible"] = False
+payload["include"] = payload["include"][:-1]
 path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 PY
 expect_fail "stale generated matrix" "matrix.json|committed output matches generated content|make generate" "${stale_matrix_root}"

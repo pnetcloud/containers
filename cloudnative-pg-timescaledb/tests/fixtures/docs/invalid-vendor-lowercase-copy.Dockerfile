@@ -1,0 +1,1 @@
+copy vendor/ /app/vendor/

@@ -67,5 +67,9 @@ if ! grep -Fq 'validate-tags.sh' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts
   diag "scan validate.sh" "cloudnative-pg-timescaledb/scripts/validate.sh" "make validate calls validate-tags.sh" "missing" "Wire tag validation into make validate."
   exit 1
 fi
+if ! grep -Fq 'TAG_VALIDATION_DATE="${TAG_VALIDATION_DATE:-${DATE:-20260609}}"' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate.sh"; then
+  diag "scan validate.sh" "cloudnative-pg-timescaledb/scripts/validate.sh" "make validate falls back from TAG_VALIDATION_DATE to DATE" "missing" "Keep update/generate/validate release date inputs aligned for automated immutable tags."
+  exit 1
+fi
 
 printf 'PASS story-1.4 tag validation fixtures\n'

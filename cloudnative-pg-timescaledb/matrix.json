@@ -1,9 +1,17 @@
 {
-  "include": [],
-  "skipped": [
+  "include": [
     {
+      "bake_target": "pg17-trixie",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609",
       "debian_variant": "trixie",
+      "digest": "",
+      "dockerfile": "cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile",
       "experimental": false,
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+      "intended_tags": [
+        "17",
+        "17-pg17.10-ts2.27.2-20260609"
+      ],
       "latest_eligible": false,
       "pg_major": "17",
       "pg_version": "17.10",
@@ -11,12 +19,25 @@
         "linux/amd64",
         "linux/arm64"
       ],
-      "publish": false,
-      "skip_reason": "Publish disabled until release gate enables image builds"
+      "provenance_ref": "",
+      "publish": true,
+      "sbom_ref": "",
+      "scan_result": "pending",
+      "signature_ref": ""
     },
     {
+      "bake_target": "pg18-trixie",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609",
       "debian_variant": "trixie",
+      "digest": "",
+      "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
       "experimental": false,
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+      "intended_tags": [
+        "18",
+        "18-pg18.4-ts2.27.2-20260609",
+        "latest"
+      ],
       "latest_eligible": true,
       "pg_major": "18",
       "pg_version": "18.4",
@@ -24,9 +45,64 @@
         "linux/amd64",
         "linux/arm64"
       ],
-      "publish": false,
-      "skip_reason": "Publish disabled until release gate enables image builds"
+      "provenance_ref": "",
+      "publish": true,
+      "sbom_ref": "",
+      "scan_result": "pending",
+      "signature_ref": ""
     },
+    {
+      "bake_target": "pg17-bookworm",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609-bookworm",
+      "debian_variant": "bookworm",
+      "digest": "",
+      "dockerfile": "cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile",
+      "experimental": false,
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+      "intended_tags": [
+        "17-bookworm",
+        "17-pg17.10-ts2.27.2-20260609-bookworm"
+      ],
+      "latest_eligible": false,
+      "pg_major": "17",
+      "pg_version": "17.10",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "provenance_ref": "",
+      "publish": true,
+      "sbom_ref": "",
+      "scan_result": "pending",
+      "signature_ref": ""
+    },
+    {
+      "bake_target": "pg18-bookworm",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609-bookworm",
+      "debian_variant": "bookworm",
+      "digest": "",
+      "dockerfile": "cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile",
+      "experimental": false,
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+      "intended_tags": [
+        "18-bookworm",
+        "18-pg18.4-ts2.27.2-20260609-bookworm"
+      ],
+      "latest_eligible": false,
+      "pg_major": "18",
+      "pg_version": "18.4",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "provenance_ref": "",
+      "publish": true,
+      "sbom_ref": "",
+      "scan_result": "pending",
+      "signature_ref": ""
+    }
+  ],
+  "skipped": [
     {
       "debian_variant": "trixie",
       "experimental": true,
@@ -39,32 +115,6 @@
       ],
       "publish": false,
       "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream support"
-    },
-    {
-      "debian_variant": "bookworm",
-      "experimental": false,
-      "latest_eligible": false,
-      "pg_major": "17",
-      "pg_version": "17.10",
-      "platforms": [
-        "linux/amd64",
-        "linux/arm64"
-      ],
-      "publish": false,
-      "skip_reason": "Publish disabled until release gate enables image builds"
-    },
-    {
-      "debian_variant": "bookworm",
-      "experimental": false,
-      "latest_eligible": false,
-      "pg_major": "18",
-      "pg_version": "18.4",
-      "platforms": [
-        "linux/amd64",
-        "linux/arm64"
-      ],
-      "publish": false,
-      "skip_reason": "Publish disabled until release gate enables image builds"
     },
     {
       "debian_variant": "bookworm",

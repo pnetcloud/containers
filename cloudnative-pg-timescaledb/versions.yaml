@@ -32,10 +32,11 @@ entries:
     pgaudit_source: base
     pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
-    publish: false
+    publish: true
     experimental: false
     latest_eligible: false
-    skip_reason: "Publish disabled until release gate enables image builds"
+    skip_reason: ""
+    tags: ["17", "17-pg17.10-ts2.27.2-20260609"]
   - pg_major: "18"
     pg_version: "18.4"
     debian_variant: trixie
@@ -52,10 +53,11 @@ entries:
     pgaudit_source: base
     pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
-    publish: false
+    publish: true
     experimental: false
     latest_eligible: true
-    skip_reason: "Publish disabled until release gate enables image builds"
+    skip_reason: ""
+    tags: ["18", "18-pg18.4-ts2.27.2-20260609", "latest"]
   - pg_major: "19beta1"
     pg_version: "19beta1"
     debian_variant: trixie
@@ -92,10 +94,11 @@ entries:
     pgaudit_source: base
     pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
-    publish: false
+    publish: true
     experimental: false
     latest_eligible: false
-    skip_reason: "Publish disabled until release gate enables image builds"
+    skip_reason: ""
+    tags: ["17-bookworm", "17-pg17.10-ts2.27.2-20260609-bookworm"]
   - pg_major: "18"
     pg_version: "18.4"
     debian_variant: bookworm
@@ -112,10 +115,11 @@ entries:
     pgaudit_source: base
     pgaudit_package_version: ""
     platforms: ["linux/amd64", "linux/arm64"]
-    publish: false
+    publish: true
     experimental: false
     latest_eligible: false
-    skip_reason: "Publish disabled until release gate enables image builds"
+    skip_reason: ""
+    tags: ["18-bookworm", "18-pg18.4-ts2.27.2-20260609-bookworm"]
   - pg_major: "19beta1"
     pg_version: "19beta1"
     debian_variant: bookworm

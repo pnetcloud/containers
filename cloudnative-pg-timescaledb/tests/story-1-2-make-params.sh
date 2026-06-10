@@ -92,14 +92,27 @@ run_expect_exit 64 "build script missing parameters" "${build_script}"
 run_expect_exit 65 "build script unsupported PostgreSQL" "${build_script}" 16 trixie
 run_expect_exit 65 "build script unsupported Alpine" "${build_script}" 18 alpine
 run_expect_exit 65 "build script unsupported bullseye" "${build_script}" 18 bullseye
-run_expect_exit 65 "build script valid skipped until publishable" "${build_script}" 18 trixie
 run_expect_exit 65 "build script experimental skipped until publishable" "${build_script}" 19beta1 bookworm
+
+tmpdir="$(mktemp -d)"
+fake_docker="${tmpdir}/docker"
+cat >"${fake_docker}" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+if [[ "$*" == buildx\ bake* ]]; then
+  exit 0
+fi
+printf 'unexpected docker args: %s\n' "$*" >&2
+exit 2
+SH
+chmod +x "${fake_docker}"
+run_expect_exit 0 "build script stable production row is publishable" env DOCKER_BIN="${fake_docker}" "${build_script}" 18 trixie
 
 run_make_error 64 "build Make target missing parameters" build
 run_make_error 65 "build Make target unsupported PostgreSQL" build PG=16 DEBIAN=trixie
 run_make_error 65 "build Make target unsupported Alpine" build PG=18 DEBIAN=alpine
 run_make_error 65 "build Make target unsupported bullseye" build PG=18 DEBIAN=bullseye
-run_make_error 65 "build Make target valid skipped until publishable" build PG=18 DEBIAN=trixie
+run_expect_exit 0 "build Make target stable production row is publishable" env DOCKER_BIN="${fake_docker}" make --no-print-directory -C "${ROOT_DIR}" build PG=18 DEBIAN=trixie
 run_make_error 65 "build Make target experimental skipped until publishable" build PG=19beta1 DEBIAN=bookworm
 
 for target in smoke; do
@@ -108,18 +121,20 @@ for target in smoke; do
   run_expect_exit 65 "${target} script unsupported PostgreSQL" "${script}" 16 trixie
   run_expect_exit 65 "${target} script unsupported Alpine" "${script}" 18 alpine
   run_expect_exit 65 "${target} script unsupported bullseye" "${script}" 18 bullseye
-  run_expect_exit 65 "${target} script valid skipped until publishable" "${script}" 18 trixie
   run_expect_exit 65 "${target} script experimental skipped until publishable" "${script}" 19beta1 bookworm
-  run_expect_exit 65 "${target} script SQL skipped until publishable" env CHECKS=sql "${script}" 18 trixie
+  run_expect_exit 0 "${target} script stable production container smoke is publishable" env SMOKE_METADATA="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/bake/fixtures/metadata/valid-publishable-targets.yaml" SMOKE_CONTAINER_FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/container/fixtures/valid-container.json" "${script}" 18 trixie
+  run_expect_exit 0 "${target} script stable production SQL smoke is publishable" env SMOKE_METADATA="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/bake/fixtures/metadata/valid-publishable-targets.yaml" CHECKS=sql SMOKE_SQL_FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/sql/fixtures/valid-sql-smoke.sql" "${script}" 18 trixie
 
   run_make_error 64 "${target} Make target missing parameters" "${target}"
   run_make_error 65 "${target} Make target unsupported PostgreSQL" "${target}" PG=16 DEBIAN=trixie
   run_make_error 65 "${target} Make target unsupported Alpine" "${target}" PG=18 DEBIAN=alpine
   run_make_error 65 "${target} Make target unsupported bullseye" "${target}" PG=18 DEBIAN=bullseye
-  run_make_error 65 "${target} Make target valid skipped until publishable" "${target}" PG=18 DEBIAN=trixie CHECKS=container
   run_make_error 65 "${target} Make target experimental skipped until publishable" "${target}" PG=19beta1 DEBIAN=bookworm CHECKS=container
-  run_make_error 65 "${target} Make target SQL skipped until publishable" "${target}" PG=18 DEBIAN=trixie CHECKS=sql
+  run_expect_exit 0 "${target} Make target stable production container smoke is publishable" env SMOKE_METADATA="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/bake/fixtures/metadata/valid-publishable-targets.yaml" SMOKE_CONTAINER_FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/container/fixtures/valid-container.json" make --no-print-directory -C "${ROOT_DIR}" "${target}" PG=18 DEBIAN=trixie CHECKS=container
+  run_expect_exit 0 "${target} Make target stable production SQL smoke is publishable" env SMOKE_METADATA="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/bake/fixtures/metadata/valid-publishable-targets.yaml" SMOKE_SQL_FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke/sql/fixtures/valid-sql-smoke.sql" make --no-print-directory -C "${ROOT_DIR}" "${target}" PG=18 DEBIAN=trixie CHECKS=sql
 done
+
+rm -rf "${tmpdir}"
 
 run_expect_exit 2 "unrecognized target" make -C "${ROOT_DIR}" does-not-exist
 

@@ -13,7 +13,7 @@ jobs:
       - run: |
           set -Eeuo pipefail
           candidate_ref="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-pg18-trixie-amd64"
-          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl --sbom=true --provenance=mode=max "${BAKE_TARGET}" --set "${BAKE_TARGET}.context=." --set "${BAKE_TARGET}.tags=${candidate_ref}" --set "${BAKE_TARGET}.output=type=registry,push=true"
+          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl --sbom=true --provenance=mode=max "${BAKE_TARGET}" --set "${BAKE_TARGET}.tags=${candidate_ref}" --set "${BAKE_TARGET}.output=type=registry,push=true"
           docker buildx imagetools inspect "${candidate_ref}" --raw > candidate.raw.json
           expected_platform="linux/amd64"
           python3 -c 'manifest.get("platform"); print("attestation-manifest")' || true

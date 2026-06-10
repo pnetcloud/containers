@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+
+sys.dont_write_bytecode = True
+
+from tag_policy import generated_tags
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -14,6 +19,7 @@ RESOLVE_SCRIPT = ROOT / "cloudnative-pg-timescaledb" / "scripts" / "resolve-vers
 GENERATE_SCRIPT = ROOT / "cloudnative-pg-timescaledb" / "scripts" / "generate.sh"
 BARMAN_PLUGIN_SCRIPT = ROOT / "cloudnative-pg-timescaledb" / "scripts" / "lib" / "barman-plugin.sh"
 SUMMARY_PATH = Path("/tmp") / "cloudnative-pg-timescaledb-update-summary.json"
+DEFAULT_TAG_DATE = "20260609"
 RESOLVER_FIELDS = [
     "pg_version",
     "cnpg_tag",
@@ -165,7 +171,17 @@ def render_metadata(data):
         lines.append(f"  - pg_major: {quote_value(entry['pg_major'])}")
         for field in field_order[1:]:
             lines.append(f"    {field}: {quote_value(entry[field])}")
+        if "tags" in entry:
+            lines.append(f"    tags: {quote_value(entry['tags'])}")
     return "\n".join(lines) + "\n"
+
+
+def materialize_tags(data, release_date):
+    for entry in data["entries"]:
+        if entry["publish"]:
+            entry["tags"] = generated_tags(entry, release_date)
+        else:
+            entry.pop("tags", None)
 
 
 def validate_invariants(data, command, artifact):
@@ -268,13 +284,16 @@ def update_entries(data, cnpg, packages):
 
 def update_barman_plugin(data, reference):
     old = {field: data.get("barman_plugin", {}).get(field, "") for field in BARMAN_FIELDS}
+    updated_at_utc = reference["checked_at_utc"]
+    if old["release"] == reference["release"] and old["updated_at_utc"]:
+        updated_at_utc = old["updated_at_utc"]
     data["barman_plugin"] = {
         "release": reference["release"],
         "manifest_url": reference["manifest_url"],
         "plugin_image": reference["plugin_image"],
         "sidecar_image": reference["sidecar_image"],
         "source_url": reference["source_url"],
-        "updated_at_utc": reference["checked_at_utc"],
+        "updated_at_utc": updated_at_utc,
     }
     new = {field: data["barman_plugin"][field] for field in BARMAN_FIELDS}
     changed_fields = {field: {"old": old[field], "new": new[field]} for field in BARMAN_FIELDS if old[field] != new[field]}
@@ -339,6 +358,7 @@ def build_parser():
     parser.add_argument("--fixtures", help="Fixture root containing cnpg/ and packages/ inventories.")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--summary", default=str(SUMMARY_PATH))
+    parser.add_argument("--tag-date", default=os.environ.get("TAG_VALIDATION_DATE") or os.environ.get("DATE") or DEFAULT_TAG_DATE, help="UTC release date used to materialize deterministic image tags.")
     parser.add_argument("--generate", action="store_true", help="Run generators after metadata update.")
     return parser
 
@@ -362,6 +382,7 @@ def main(argv):
     barman_reference = run_json([str(BARMAN_PLUGIN_SCRIPT), "--json"], command, metadata)
     updated = update_entries(data, cnpg, packages)
     barman_plugin = update_barman_plugin(data, barman_reference)
+    materialize_tags(data, args.tag_date)
     validate_invariants(data, command, metadata)
     after_text = render_metadata(data)
     changed = before_text != after_text

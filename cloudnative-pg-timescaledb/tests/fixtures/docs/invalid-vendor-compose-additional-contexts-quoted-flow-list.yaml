@@ -1,0 +1,4 @@
+services:
+  app:
+    build:
+      additional_contexts: ["deps=./vendor/examples"]

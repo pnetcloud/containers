@@ -94,7 +94,7 @@ for row in payload["targets"]:
     match = re.fullmatch(r"pg(.+)-(trixie|bookworm)", row["name"])
     if not match:
         fail("target name uses pg<major>-<debian>", row["name"], "Encode PostgreSQL major and Debian variant in every target name.")
-    if row["context"] not in {".", "./"} and not row["context"].startswith("./"):
+    if row["context"] not in {".", "./", "cloudnative-pg-timescaledb"} and not row["context"].startswith("./"):
         fail("target context is checkout/path context", row["context"], "Use local checkout context, not Docker Buildx default Git context.")
     forbidden_context = ["{{defaultContext}}", "http://", "https://", "git://", "github.com/"]
     if any(marker in row["context"] for marker in forbidden_context):
@@ -169,8 +169,8 @@ grep -q 'target "pg18-trixie"' "${tmp_bake}" || {
   rm -f "${tmp_bake}"
   exit 1
 }
-grep -q 'context = "."' "${tmp_bake}" || {
-  diag "generate-bake publishable fixture" "${tmp_bake}" "checkout/path context" "missing" "Use local checkout context for Buildx Bake."
+grep -q 'context = "cloudnative-pg-timescaledb"' "${tmp_bake}" || {
+  diag "generate-bake publishable fixture" "${tmp_bake}" "cloudnative-pg-timescaledb checkout/path context" "missing" "Use the project subdirectory as local checkout context for Buildx Bake."
   rm -f "${tmp_bake}"
   exit 1
 }

@@ -309,6 +309,14 @@ def bake_target(entry):
     return f"pg{entry['pg_major']}-{entry['debian_variant']}"
 
 
+def bake_context_path():
+    return "cloudnative-pg-timescaledb"
+
+
+def bake_hcl_dockerfile_path(entry):
+    return f"generated/{entry['pg_major']}/{entry['debian_variant']}/Dockerfile"
+
+
 def image_ref(data, entry):
     registry = data["image"]["registry"]
     repo = data["image"]["repository"]
@@ -356,8 +364,8 @@ def bake_summary(entries, bake_file="cloudnative-pg-timescaledb/docker-bake.hcl"
         "targets": [
             {
                 "name": bake_target(entry),
-                "context": ".",
-                "dockerfile": dockerfile_path(entry),
+                "context": bake_context_path(),
+                "dockerfile": bake_hcl_dockerfile_path(entry),
                 "platforms": entry["platforms"],
                 "publish": entry["publish"],
                 "experimental": entry["experimental"],
@@ -937,8 +945,8 @@ def render_bake(entries):
         lines.extend(
             [
                 f"target \"{bake_target(entry)}\" {{",
-                "  context = \".\"",
-                f"  dockerfile = \"{dockerfile_path(entry)}\"",
+                f"  context = \"{bake_context_path()}\"",
+                f"  dockerfile = \"{bake_hcl_dockerfile_path(entry)}\"",
                 "  platforms = [" + ", ".join(json.dumps(platform) for platform in entry["platforms"]) + "]",
                 f"  tags = [\"local/{bake_target(entry)}:skeleton\"]",
                 "  labels = {",

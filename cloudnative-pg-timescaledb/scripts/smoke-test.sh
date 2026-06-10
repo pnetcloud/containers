@@ -308,6 +308,21 @@ def require_sql(image_ref, artifact, transcript, check, expected, actual, remedi
         exit_with_message(1, "smoke-test sql", artifact, image_ref, check, repr(expected), repr(actual), remediation)
 
 
+def require_sql_server_version(image_ref, artifact, transcript, expected, actual):
+    if actual is not None and re.match(rf"^{re.escape(expected)}(?:\s|\(|$)", actual):
+        return
+    exit_with_message(
+        1,
+        "smoke-test sql",
+        artifact,
+        image_ref,
+        "SHOW server_version",
+        f"{expected!r} optionally followed by distro package details",
+        repr(actual),
+        "Start the PostgreSQL server version declared in metadata.",
+    )
+
+
 def require_sql_present(image_ref, artifact, transcript, check, actual, remediation):
     if actual in {None, "", "missing", "failed"}:
         exit_with_message(1, "smoke-test sql", artifact, image_ref, check, "present/non-empty result", repr(actual), remediation)
@@ -418,7 +433,7 @@ def run_sql_checks(entry, transcript):
     artifact = sql_fixture or image_ref
     canonical_preload = "timescaledb,pgaudit"
     require_sql(image_ref, artifact, transcript, "SELECT version()", "ok", sql_value(transcript, "select.version"), "Ensure the test PostgreSQL instance accepts basic SQL queries.")
-    require_sql(image_ref, artifact, transcript, "SHOW server_version", entry["pg_version"], sql_value(transcript, "show.server_version"), "Start the PostgreSQL server version declared in metadata.")
+    require_sql_server_version(image_ref, artifact, transcript, entry["pg_version"], sql_value(transcript, "show.server_version"))
     require_sql(image_ref, artifact, transcript, "shared_preload_libraries", canonical_preload, sql_value(transcript, "show.shared_preload_libraries"), f"Start SQL smoke with shared_preload_libraries={canonical_preload}.")
     if expected_platform:
         runtime_arch = sql_value(transcript, "runtime_architecture")

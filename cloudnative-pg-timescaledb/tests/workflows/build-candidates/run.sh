@@ -73,10 +73,10 @@ require("docker/build-push-action" not in text and "defaultContext" not in text,
 require("actions/checkout@" in text, "workflow checks out repository before generated-file builds", "checkout missing", "Generated Dockerfiles and Bake files must come from checkout path context.")
 require("qemu-user-static" in text and "update-binfmts --enable qemu-aarch64" in text, "workflow prepares arm64 emulation for per-platform smoke", "qemu/binfmt setup missing", "Enable qemu-aarch64 before running arm64 candidate smoke on ubuntu-latest.")
 require("docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl" in text, "candidate job uses Docker Buildx Bake", "Buildx Bake command missing", "Build release candidates through generated Bake targets.")
+require('.context=.' not in text, "candidate job does not override generated Bake context to repository root", "stale .context=. override found", "Use the generated cloudnative-pg-timescaledb Bake context so generated Dockerfiles can COPY project-local scripts.")
 require('imagetools inspect "${candidate_ref}" --raw' in text and "expected_platform" in text and 'manifest.get("platform")' in text, "workflow extracts per-platform digest from raw manifest data", "raw platform digest extraction missing", "Do not record a top-level index digest as a single-platform digest.")
 require("--sbom=true" in text and "--provenance=mode=max" in text, "candidate Buildx Bake emits SBOM and provenance attestations", "attestation flags missing", "Build the candidate index with BuildKit attestations before release evidence signing.")
 require("attestation-manifest" in text, "candidate workflow checks BuildKit attestation manifests exist", "attestation manifest check missing", "Fail candidate metadata when BuildKit does not attach SBOM/provenance attestations.")
-require('.context=.' in text, "Bake context override is checkout path '.'", "context override missing", "Reject default Git context for generated-file builds.")
 require("output=type=registry,push=true" in text, "candidate job pushes candidate refs to registry", "registry push output missing", "Push only candidate references for downstream gates.")
 require("candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" in text, "candidate refs are run-scoped", "run-scoped candidate tag missing", "Do not push rolling or final release tags in Story 4.2.")
 require("${IMAGE}:latest" not in text and ":latest" not in text, "candidate job does not push latest", "latest reference found", "Leave latest promotion to later publish stories.")
@@ -91,6 +91,12 @@ require(container_line and sql_line and upload_line and container_line < upload_
 require("validate-candidate-metadata.py --file" in text, "workflow validates candidate metadata before upload", "metadata validator missing", "Reject incomplete or inconsistent candidate artifacts in the build job.")
 require("actions/upload-artifact@" in text and "release-candidate-${{ matrix.bake_target }}" in text, "candidate metadata artifact is uploaded", "artifact upload missing", "Expose immutable candidate metadata to downstream release stories.")
 require("packages: write" in text, "candidate job has explicit GHCR push permission", "packages write missing", "Use job-level least privilege for GHCR candidate pushes.")
+publish_match = re.search(r"\n  publish:\n(?P<body>[\s\S]+?)(?:\n  [A-Za-z0-9_-]+:|\Z)", text)
+require(publish_match, "build workflow has publish job", "publish job missing", "Final tag promotion must be explicit and guarded.")
+publish_body = publish_match.group("body")
+for marker in ["github.event_name == 'workflow_dispatch'", "github.ref == 'refs/heads/main'", "startsWith(github.ref, 'refs/tags/')"]:
+    require(marker in publish_body, f"publish job is guarded by {marker}", publish_body[:500], "Restrict final tag promotion to manual, main, or tag release contexts.")
+require("needs.matrix.outputs.has_include == 'true'" in publish_body, "publish job still requires non-empty generated matrix", publish_body[:500], "Publish only generated publishable rows.")
 PY
 }
 

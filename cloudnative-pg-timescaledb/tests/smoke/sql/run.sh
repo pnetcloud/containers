@@ -102,7 +102,7 @@ printf '%s\n' "$*" >>"${SMOKE_SQL_DOCKER_CAPTURE}"
 if [[ "$1" == "run" ]]; then
   cat <<'KV'
 select.version=ok
-show.server_version=18.4
+show.server_version=18.4 (Debian 18.4-1.pgdg13+1)
 show.shared_preload_libraries=timescaledb,pgaudit
 library.timescaledb=present
 create.timescaledb=ok
@@ -210,7 +210,12 @@ grep -Fq 'PASS SQL smoke image=local/pg18-trixie:skeleton PG=18 DEBIAN=trixie' /
   exit 1
 }
 
-expect_make_error 65 "production SQL smoke skipped until publishable" "publishable SQL smoke target|skipped:" smoke PG=18 DEBIAN=trixie CHECKS=sql
+SMOKE_METADATA="${METADATA_FIXTURE}" SMOKE_SQL_FIXTURE="${FIXTURE_DIR}/valid-sql-smoke.sql" CHECKS=sql \
+  make -C "${ROOT_DIR}" smoke PG=18 DEBIAN=trixie >/tmp/story-3-5-production-sql.out
+grep -Fq 'PASS SQL smoke image=local/pg18-trixie:skeleton PG=18 DEBIAN=trixie' /tmp/story-3-5-production-sql.out || {
+  diag "make smoke SQL production valid fixture" "${FIXTURE_DIR}/valid-sql-smoke.sql" "PASS marker" "$(cat /tmp/story-3-5-production-sql.out)" "Production PG18 trixie SQL smoke must be runnable once publishable."
+  exit 1
+}
 
 expect_fail "missing TimescaleDB extension" "check: CREATE EXTENSION timescaledb.*actual: 'missing'" env SMOKE_METADATA="${METADATA_FIXTURE}" SMOKE_SQL_FIXTURE="${FIXTURE_DIR}/missing-timescaledb-extension.sql" CHECKS=sql "${SCRIPT_DIR}/smoke-test.sh" 18 trixie
 expect_fail "wrong TimescaleDB version" "check: pg_extension.extversion timescaledb.*expected: '2.27.2'.*actual: '2.26.0'" env SMOKE_METADATA="${METADATA_FIXTURE}" SMOKE_SQL_FIXTURE="${FIXTURE_DIR}/wrong-timescaledb-version.sql" CHECKS=sql "${SCRIPT_DIR}/smoke-test.sh" 18 trixie

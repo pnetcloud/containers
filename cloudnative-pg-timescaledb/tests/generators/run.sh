@@ -59,9 +59,10 @@ def latest_rows_from_matrix(rows):
     return [(row["pg_major"], row["debian_variant"]) for row in rows if row["latest_eligible"]]
 
 expected_rows = [("17", "trixie"), ("18", "trixie"), ("19beta1", "trixie"), ("17", "bookworm"), ("18", "bookworm"), ("19beta1", "bookworm")]
+expected_row_set = set(expected_rows)
 
 def require_exact_rows(actual, label):
-    if actual != expected_rows:
+    if set(actual) != expected_row_set or len(actual) != len(expected_rows):
         fail(f"{label} rows exactly {expected_rows}", repr(actual), "Preserve the full PostgreSQL/Debian generator contract without missing or duplicate rows.")
 
 if kind == "dockerfiles":
@@ -85,8 +86,8 @@ elif kind == "bake":
         match = __import__("re").fullmatch(r"pg(.+)-(trixie|bookworm)", row["name"])
         if not match:
             fail("bake target names encode pg/debian row", repr(row["name"]), "Use pg<major>-<debian> target names from metadata.")
-        if row["context"] != ".":
-            fail("bake target context is checkout/path context", repr(row["context"]), "Use local checkout context instead of Docker Buildx default Git context.")
+        if row["context"] != "cloudnative-pg-timescaledb":
+            fail("bake target context is project checkout/path context", repr(row["context"]), "Use the project subdirectory as local checkout context instead of Docker Buildx default Git context.")
         if row["publish"] is not True:
             fail("bake target rows are publishable", repr(row), "Only publishable metadata rows should become buildable Bake targets.")
         rows.append((match.group(1), match.group(2)))

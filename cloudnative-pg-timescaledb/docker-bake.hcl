@@ -2,5 +2,61 @@
 # Local build targets are generated from versions.yaml publishable entries.
 group "default" {
   targets = [
+    "pg17-trixie",
+    "pg18-trixie",
+    "pg17-bookworm",
+    "pg18-bookworm",
   ]
+}
+
+target "pg17-trixie" {
+  context = "cloudnative-pg-timescaledb"
+  dockerfile = "generated/17/trixie/Dockerfile"
+  platforms = ["linux/amd64", "linux/arm64"]
+  tags = ["local/pg17-trixie:skeleton"]
+  labels = {
+    "org.opencontainers.image.version" = "17"
+    "io.pnet.pg-major" = "17"
+    "io.pnet.debian-variant" = "trixie"
+    "io.pnet.publish" = "true"
+  }
+}
+
+target "pg18-trixie" {
+  context = "cloudnative-pg-timescaledb"
+  dockerfile = "generated/18/trixie/Dockerfile"
+  platforms = ["linux/amd64", "linux/arm64"]
+  tags = ["local/pg18-trixie:skeleton"]
+  labels = {
+    "org.opencontainers.image.version" = "18"
+    "io.pnet.pg-major" = "18"
+    "io.pnet.debian-variant" = "trixie"
+    "io.pnet.publish" = "true"
+  }
+}
+
+target "pg17-bookworm" {
+  context = "cloudnative-pg-timescaledb"
+  dockerfile = "generated/17/bookworm/Dockerfile"
+  platforms = ["linux/amd64", "linux/arm64"]
+  tags = ["local/pg17-bookworm:skeleton"]
+  labels = {
+    "org.opencontainers.image.version" = "17"
+    "io.pnet.pg-major" = "17"
+    "io.pnet.debian-variant" = "bookworm"
+    "io.pnet.publish" = "true"
+  }
+}
+
+target "pg18-bookworm" {
+  context = "cloudnative-pg-timescaledb"
+  dockerfile = "generated/18/bookworm/Dockerfile"
+  platforms = ["linux/amd64", "linux/arm64"]
+  tags = ["local/pg18-bookworm:skeleton"]
+  labels = {
+    "org.opencontainers.image.version" = "18"
+    "io.pnet.pg-major" = "18"
+    "io.pnet.debian-variant" = "bookworm"
+    "io.pnet.publish" = "true"
+  }
 }

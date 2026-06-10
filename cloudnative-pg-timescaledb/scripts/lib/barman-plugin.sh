@@ -4,6 +4,7 @@ set -Eeuo pipefail
 barman_plugin_resolve_reference() {
   python3 - "$@" <<'PY'
 import argparse
+from datetime import date
 import json
 import os
 from pathlib import Path
@@ -68,7 +69,7 @@ def fetch_latest(checked_at):
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--json", action="store_true")
-parser.add_argument("--checked-at-utc", default=os.environ.get("BARMAN_PLUGIN_CHECKED_AT_UTC", "2026-06-09"))
+parser.add_argument("--checked-at-utc", default=os.environ.get("BARMAN_PLUGIN_CHECKED_AT_UTC", date.today().isoformat()))
 args = parser.parse_args()
 fixture = os.environ.get("BARMAN_PLUGIN_FIXTURE", "")
 payload = load_fixture(fixture) if fixture else fetch_latest(args.checked_at_utc)
