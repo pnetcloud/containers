@@ -230,6 +230,10 @@ run_orchestration() {
   }
 
   run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" BARMAN_PLUGIN_FIXTURE="${barman_plugin_fixture}" make --no-print-directory update "UPDATE_ARGS=--fixtures ${update_fixture_root} --json"
+  if [[ -n "$(git -C "${checkout}" status --porcelain --untracked-files=all)" ]]; then
+    git -C "${checkout}" reset --hard HEAD >/dev/null
+    git -C "${checkout}" clean -fd >/dev/null
+  fi
   run_step "make generate" env DATE="${date_value}" make --no-print-directory generate
   run_step "make validate" env DATE="${date_value}" make --no-print-directory validate
   run_step "make matrix" make --no-print-directory matrix

@@ -225,6 +225,10 @@ for arg in "${args[@]:1}"; do
   esac
 done
 printf 'make %s PG=%s DEBIAN=%s PLATFORM=%s CHECKS=%s\n' "${target}" "${pg}" "${debian}" "${PLATFORM:-}" "${CHECKS:-}" >> "${RELEASE_REHEARSAL_CAPTURE:?}"
+if [[ "${target}" == "update" && "${RELEASE_REHEARSAL_DIRTY_UPDATE:-0}" == "1" ]]; then
+  mkdir -p cloudnative-pg-timescaledb/generated
+  printf 'dirty update marker\n' > cloudnative-pg-timescaledb/generated/dirty-update-marker
+fi
 if [[ "${target}" == "matrix" ]]; then
   printf '{"include":[{"pg_major":"18","debian_variant":"trixie","publish":true,"platforms":["linux/amd64","linux/arm64"]}],"skipped":[]}\n'
 fi
@@ -267,6 +271,23 @@ for token in \
     exit 1
   fi
 done
+
+dirty_update_capture="${orchestration_tmp}/dirty-update-commands.log"
+dirty_update_project="${orchestration_tmp}/dirty-project"
+dirty_update_report="${dirty_update_project}/dirty-update-report.md"
+prepare_orchestration_project "${dirty_update_project}"
+RELEASE_REHEARSAL_DIRTY_UPDATE=1 RELEASE_REHEARSAL_CAPTURE="${dirty_update_capture}" PATH="${orchestration_bin}:${PATH}" \
+  WORKFLOW_RUN_URL=https://github.com/pnetcloud/containers/actions/runs/1234567890 \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${dirty_update_project}" --report "${dirty_update_report}" >/tmp/story-5-9-dirty-update.out
+if [[ -e "${dirty_update_project}/cloudnative-pg-timescaledb/generated/dirty-update-marker" ]]; then
+  diag "release rehearsal dirty update reset" "${dirty_update_project}/cloudnative-pg-timescaledb/generated/dirty-update-marker" "marker removed before validate" "still exists" "Reset the rehearsal checkout after make update before running clean-checkout validation gates."
+  exit 1
+fi
+if ! grep -Fq 'make validate' "${dirty_update_capture}"; then
+  diag "release rehearsal dirty update reset" "${dirty_update_capture}" "validate runs after dirty update reset" "$(cat "${dirty_update_capture}")" "Reset update output and continue the clean-checkout validation path."
+  exit 1
+fi
+rm -f "${dirty_update_report}"
 
 # shellcheck disable=SC2016
 for token in \
