@@ -60,6 +60,13 @@ Remaining proof gap: Stories 4.4, 4.5, and 4.6 are implementation-complete but s
 
 Follow-up validation on 2026-06-10 found a regression in the latest remote `Build Release Candidates` run for commit `c92c5d3`: all four PG17/PG18 `trixie`/`bookworm` candidate build and smoke jobs completed successfully, then the workflow failed because `security-scan.yml` attempted to upload a SARIF artifact that the scanner had not produced. Resolution in progress: Story 4.3 now requires explicit `scanner_failed` output, deterministic SARIF diagnostic evidence before artifact upload, fail-closed scan gate behavior, and no CodeQL SARIF upload when SARIF generation failed.
 
+Updated 2026-06-10: remote GitHub Actions evidence now proves `Validate` and `Build Release Candidates` succeeded on latest `main` commit `73b793b14c16f07d391eb05f62c235d7381b8464` after SARIF upload hardening:
+
+- `Validate`: `https://github.com/pnetcloud/containers/actions/runs/27294485168`, status `completed`, conclusion `success`.
+- `Build Release Candidates`: `https://github.com/pnetcloud/containers/actions/runs/27294485301`, status `completed`, conclusion `success`.
+
+Resolution: CodeQL SARIF upload is non-blocking and summarized from the upload step outcome, while vulnerability scanning remains fail-closed in the scan job. Candidate builds, smoke checks, vulnerability scans, SARIF upload jobs, release evidence, tag validation, and publish rehearsal jobs all completed successfully in the latest build run.
+
 ### Epic 5
 
 Subagent validation found three final-proof gaps:
@@ -74,14 +81,26 @@ Resolution:
 - Story 5.9 now requires release rehearsal hard-fail fixtures for Alpine, `bullseye`, and unsupported Debian variants.
 - Story 5.9 now requires actual `release-rehearsal.yml` `workflow_dispatch` evidence from the same repository workflow run, with URL, status, and successful conclusion.
 
+Updated 2026-06-10: remote GitHub Actions evidence proves `release-rehearsal.yml` completed successfully on commit `1edcbdec254efede25a122897d14f85a33a2fb69`:
+
+- `Release Rehearsal`: `https://github.com/pnetcloud/containers/actions/runs/27291928457`, status `completed`, conclusion `success`.
+
+That run executed the dry-run/staging release rehearsal path, including build/smoke orchestration and upload of the generated rehearsal report.
+
 ## Next Execution Step
 
-Current blocker is Story 5.9 plus remote workflow availability.
+Use the lean execution plan in `_bmad-output/implementation-artifacts/execution-plan-20260610.md` for the active loop. The objective is unchanged, but the execution loop is now narrower: fix one remote blocker, run the smallest local test that proves that blocker, push, and dispatch only the affected workflow.
 
-Current implementation blocker before re-checking Story 5.9 proof: push the SARIF failure hardening and confirm a new `Build Release Candidates` run succeeds end-to-end. The previous remote failure was after successful image build/smoke, so the remaining CI blocker is security-scan artifact handling, not Docker build or extension smoke behavior.
+Current remote blocker status:
 
-Do not close the final release proof until these external checks exist from the same repository:
+- `Release Rehearsal` dry-run workflow is green on the current commit line.
+- `Validate` is green on latest `main`.
+- `Build Release Candidates` is green on latest `main`, including candidate builds, smoke checks, vulnerability scans, SARIF upload jobs, release evidence, tag validation, and publish rehearsal jobs.
 
-- `update.yml` visible in GitHub Actions API and validated by at least one real `workflow_dispatch` no-op or controlled autocommit run.
-- `release-rehearsal.yml` visible in GitHub Actions API and validated by `gh workflow run`, `gh run watch`, and `gh run view --json url,status,conclusion,headSha` with conclusion `success`.
+Do not close the final release proof until these external checks exist from the same repository and preferably the same commit line:
+
+- `Validate` completed successfully.
+- `Build Release Candidates` completed successfully after build, smoke, vulnerability scan, and artifact/evidence collection.
+- `release-rehearsal.yml` completed successfully via `workflow_dispatch`, with URL, status, conclusion, and head SHA recorded.
+- `update.yml` is visible in GitHub Actions API and validated by at least one real `workflow_dispatch` no-op or controlled autocommit run.
 - GHCR/staging publish evidence proves final tags, `latest=18-trixie`, SBOM/provenance/signature verification, and non-empty trixie/bookworm catalogs for real manifest-list digests.
