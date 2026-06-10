@@ -29,7 +29,7 @@ jobs:
           cloudnative-pg-timescaledb/scripts/validate-matrix-json.py --json "${matrix_json}"
           has_include="$(python3 -c 'import json,sys; print("true" if json.loads(sys.argv[1]).get("include") else "false")' "${matrix_json}")"
           build_matrix="$(python3 -c 'import json,sys; payload=json.loads(sys.argv[1]); print(json.dumps({"include": payload.get("include", [])}, separators=(",", ":"), sort_keys=True))' "${matrix_json}")"
-          skipped_summary="$(python3 -c 'import json,sys; payload=json.loads(sys.argv[1]); rows=payload.get("skipped", []); print("none" if not rows else "; ".join(f"{row.get('pg_major')}-{row.get('debian_variant')}: {row.get('skip_reason')}" for row in rows))' "${matrix_json}")"
+          skipped_summary="$(python3 -c 'import json,sys; payload=json.loads(sys.argv[1]); rows=payload.get("skipped", []); print("none" if not rows else "; ".join("{}-{}: {}".format(row.get("pg_major"), row.get("debian_variant"), row.get("skip_reason")) for row in rows))' "${matrix_json}")"
           {
             printf 'matrix=%s\n' "${matrix_json}"
             printf 'build_matrix=%s\n' "${build_matrix}"

@@ -71,6 +71,8 @@ def first_line(pattern):
 require("pull_request:" not in text, "candidate GHCR push workflow excludes pull_request trigger", "pull_request present", "Keep write-token candidate publishing on push/workflow_dispatch only; validate.yml covers PRs.")
 require("docker/build-push-action" not in text and "defaultContext" not in text, "Buildx/Bake uses checkout path context, not default Git context", "default Git context marker found", "Use checkout plus docker buildx bake CLI from the repository workspace.")
 require("actions/checkout@" in text, "workflow checks out repository before generated-file builds", "checkout missing", "Generated Dockerfiles and Bake files must come from checkout path context.")
+if "skipped_summary=\"$(python3 -c" in text:
+    require("row.get(\"pg_major\")" in text and "row.get('pg_major')" not in text, "matrix skipped summary inline Python is shell-quoted safely", "unsafe single-quoted row.get found", "Do not put single quotes inside a single-quoted python3 -c workflow command.")
 require("qemu-user-static" in text and "update-binfmts --enable qemu-aarch64" in text, "workflow prepares arm64 emulation for per-platform smoke", "qemu/binfmt setup missing", "Enable qemu-aarch64 before running arm64 candidate smoke on ubuntu-latest.")
 require("docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl" in text, "candidate job uses Docker Buildx Bake", "Buildx Bake command missing", "Build release candidates through generated Bake targets.")
 require('.context=.' not in text, "candidate job does not override generated Bake context to repository root", "stale .context=. override found", "Use the generated cloudnative-pg-timescaledb Bake context so generated Dockerfiles can COPY project-local scripts.")
