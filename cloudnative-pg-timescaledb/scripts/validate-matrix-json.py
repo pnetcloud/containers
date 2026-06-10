@@ -55,14 +55,28 @@ def validate(payload, artifact):
             if not isinstance(tag, str) or not DOCKER_TAG_RE.fullmatch(tag):
                 fail(artifact, f"include[{idx}].intended_tags use Docker tag grammar", repr(tag), "Regenerate matrix tags from validated tag policy output.")
         candidate_ref = row["candidate_ref"]
-        immutable_tags = [tag for tag in intended_tags if "-pg" in tag and "-ts" in tag]
+        suffix = "" if row["debian_variant"] == "trixie" else f"-{row['debian_variant']}"
+        immutable_re = re.compile(
+            rf"{re.escape(str(row['pg_major']))}-pg{re.escape(str(row['pg_version']))}-ts[A-Za-z0-9_.-]+-[0-9]{{8}}{re.escape(suffix)}"
+        )
+        immutable_tags = [tag for tag in intended_tags if isinstance(tag, str) and immutable_re.fullmatch(tag)]
         if len(immutable_tags) != 1:
-            fail(artifact, f"include[{idx}].intended_tags include exactly one immutable tag", repr(intended_tags), "Emit one immutable candidate tag per matrix row.")
+            fail(artifact, f"include[{idx}].intended_tags include exactly one policy immutable tag", repr(intended_tags), "Emit one immutable candidate tag matching the row PostgreSQL, Debian variant, TimescaleDB version, and release date.")
         expected_candidate_ref = f"{row['image']}:{immutable_tags[0]}"
         if not isinstance(candidate_ref, str) or "@" in candidate_ref or candidate_ref != expected_candidate_ref:
             fail(artifact, f"include[{idx}].candidate_ref equals image:immutable-tag", repr(candidate_ref), f"Use {expected_candidate_ref!r}; digest refs and recomputed tags are not valid candidate refs.")
         if not DOCKER_TAG_RE.fullmatch(immutable_tags[0]):
             fail(artifact, f"include[{idx}].candidate_ref tag uses Docker tag grammar", repr(candidate_ref), "Use a Docker tag-safe immutable candidate reference.")
+        is_latest_owner = row["pg_major"] == "18" and row["debian_variant"] == "trixie" and row["experimental"] is False
+        if row["latest_eligible"] is True and not is_latest_owner:
+            fail(artifact, f"include[{idx}].latest_eligible only for non-experimental 18 trixie", repr(row), "Do not promote bookworm, PostgreSQL 17, or PostgreSQL 19 preview rows to latest.")
+        has_latest = "latest" in intended_tags
+        if has_latest != (row["latest_eligible"] is True):
+            fail(artifact, f"include[{idx}].latest tag matches latest_eligible", repr(row), "Emit latest exactly when the row is latest_eligible.")
+        if row["debian_variant"] == "trixie" and immutable_tags[0].endswith("-bookworm"):
+            fail(artifact, f"include[{idx}].trixie immutable tag has no Debian suffix", repr(immutable_tags[0]), "Primary trixie immutable tags omit the Debian suffix.")
+        if row["debian_variant"] != "trixie" and not immutable_tags[0].endswith(f"-{row['debian_variant']}"):
+            fail(artifact, f"include[{idx}].secondary immutable tag has Debian suffix", repr(immutable_tags[0]), "Secondary Debian variants must carry their suffix.")
 
 
 def main():

@@ -247,6 +247,48 @@ Path(output).write_text(json.dumps(payload, separators=(",", ":")))
 PY
 expect_command_fail "shared workflow validator rejects digest candidate refs" "candidate_ref equals image:immutable-tag" "${VALIDATE_MATRIX_JSON}" --file "${digest_candidate_matrix}"
 rm -f "${digest_candidate_matrix}"
+fake_immutable_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${fake_immutable_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["intended_tags"] = ["17", "foo-pgbar-tsbaz"]
+payload["include"][0]["candidate_ref"] = f"{payload['include'][0]['image']}:foo-pgbar-tsbaz"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects fake immutable tags" "policy immutable tag" "${VALIDATE_MATRIX_JSON}" --file "${fake_immutable_matrix}"
+rm -f "${fake_immutable_matrix}"
+bookworm_latest_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${bookworm_latest_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][1]["latest_eligible"] = True
+payload["include"][1]["intended_tags"].append("latest")
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects bookworm latest" "latest_eligible only" "${VALIDATE_MATRIX_JSON}" --file "${bookworm_latest_matrix}"
+rm -f "${bookworm_latest_matrix}"
+trixie_suffix_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${trixie_suffix_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["intended_tags"][1] = "18-pg18.4-ts2.27.2-20260609-bookworm"
+payload["include"][0]["candidate_ref"] = f"{payload['include'][0]['image']}:{payload['include'][0]['intended_tags'][1]}"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects trixie Debian suffix" "policy immutable tag|trixie immutable tag" "${VALIDATE_MATRIX_JSON}" --file "${trixie_suffix_matrix}"
+rm -f "${trixie_suffix_matrix}"
 expect_matrix_fail "missing required key" "missing .*digest" "${FIXTURE_DIR}/missing-required-key.json"
 expect_matrix_fail "19beta1 must be experimental" "19beta1 .*experimental" "${FIXTURE_DIR}/pg19beta1-not-experimental.json"
 expect_matrix_fail "bookworm cannot be latest" "latest_eligible only" "${FIXTURE_DIR}/bookworm-latest-eligible.json"
