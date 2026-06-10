@@ -155,21 +155,33 @@ def workflow_jobs(payload, path):
 def executable_run_text(run):
     executable = []
     heredoc_end = None
+    shell_block_depth = 0
     for line in run.splitlines():
         if heredoc_end:
             if line.strip() == heredoc_end:
                 heredoc_end = None
             continue
         uncommented = line.split("#", 1)[0]
-        stripped = uncommented.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if re.match(r"^(echo|printf)\b", stripped):
-            continue
-        heredoc_match = re.search(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?", stripped)
-        if heredoc_match:
-            heredoc_end = heredoc_match.group(1)
-        executable.append(uncommented)
+        for segment in uncommented.split(";"):
+            stripped = segment.strip()
+            if not stripped:
+                continue
+            if re.match(r"^(fi|done|esac)\b", stripped):
+                shell_block_depth = max(shell_block_depth - 1, 0)
+                continue
+            if shell_block_depth:
+                if re.match(r"^(if|while|until|case|for|select)\b", stripped):
+                    shell_block_depth += 1
+                continue
+            if re.match(r"^(echo|printf)\b", stripped):
+                continue
+            if re.match(r"^(if|while|until|case|for|select)\b", stripped):
+                shell_block_depth += 1
+                continue
+            heredoc_match = re.search(r"(?<!<)<<(?!<)-?\s*(['\"]?)([^'\"\s;]+)\1", stripped)
+            if heredoc_match:
+                heredoc_end = heredoc_match.group(2).lstrip("\\")
+            executable.append(stripped)
     return "\n".join(executable)
 
 
@@ -322,7 +334,15 @@ def readable_version_comment(lines, idx):
 
 
 def command_present(run_text, pattern):
-    return bool(re.search(pattern, run_text, re.MULTILINE))
+    for line in run_text.splitlines():
+        match = re.search(pattern, line)
+        if not match:
+            continue
+        suffix = line[match.end():]
+        if "||" in suffix:
+            continue
+        return True
+    return False
 
 
 def validate_workflow(path, policy):
@@ -343,7 +363,7 @@ def validate_workflow(path, policy):
             diag(path, "validate workflow runs actionlint through deterministic workflow discovery", "missing", "Use find .github/workflows -type f ... -print0 | sort -z | xargs -0 actionlint.")
         if not command_present(run_text, r"^\s*git\s+ls-files\s+'cloudnative-pg-timescaledb/scripts/\*\.sh'\s+'cloudnative-pg-timescaledb/scripts/\*\*/\*\.sh'\s+\|\s+sort\s+\|\s+xargs\s+shellcheck\b"):
             diag(path, "validate workflow runs shellcheck against git-tracked script list", "missing", "Use git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck.")
-        if not command_present(run_text, r"^\s*(sudo\s+)?apt-get\s+install\b[^\n]*\bshellcheck\b"):
+        if not command_present(run_text, r"^\s*(sudo\s+)?apt-get\s+install\b[^\n]*(^|\s)shellcheck(=[^\s;|&]+)?(?=\s|[;|&]|$)"):
             diag(path, "validate workflow installs or provides real shellcheck", "missing", "Install shellcheck before make validate; bash -n is not a sufficient CI gate.")
         if re.search(r"bash\s+-n", run_text) and "shellcheck" not in run_text:
             diag(path, "bash -n is not the CI shell validation gate", "bash -n only", "Run real shellcheck in CI.")

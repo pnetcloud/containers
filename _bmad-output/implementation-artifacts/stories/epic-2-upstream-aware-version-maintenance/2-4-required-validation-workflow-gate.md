@@ -179,6 +179,10 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for commented/echoed required commands inside `run:` blocks and conditional-only validation gates.
 - Addressed BMAD code-review pass 3 findings by excluding heredoc payload text from required gate matching, rejecting short-circuited required gates, requiring `apt-get install` to install `shellcheck`, and enforcing readable version comments for YAML-quoted pinned actions.
 - Added regression fixtures for heredoc-only gates, short-circuited gates, `apt-get install` without `shellcheck`, and quoted pinned actions without readable version comments.
+- Addressed BMAD code-review pass 4 findings by rejecting `|| true` failure masking on required gate lines, requiring `shellcheck` as an exact apt package token, skipping heredoc payloads with non-identifier delimiters, and ignoring required commands inside shell conditional blocks.
+- Added regression fixtures for masked-failure gates, `shellcheck-doc` only installs, dashed heredoc delimiters, and shell `if` conditional gate bodies.
+- Addressed BMAD code-review pass 5 findings by supporting one-line shell conditionals before real gates, preserving commands after closing shell block tokens, ignoring here-strings when detecting heredocs, supporting version-pinned `shellcheck=<version>` apt package tokens, and rejecting any `||` failure masking after required gate commands.
+- Added regression fixtures for valid inline shell conditionals, valid here-strings before gates, valid version-pinned `shellcheck` installs, and masked failures using `|| echo`.
 
 ### Validation Commands
 
@@ -198,6 +202,8 @@ Every implementation story must finish with a working repository state and must 
 - Workflow requirements: `validate.yml` exists and validates current plus future `update.yml`, `build.yml`, and `security-scan.yml` files when present.
 - Review follow-up: permission validation now covers YAML-valid job keys with comments, quoted IDs, flow-style mappings, and reusable workflow job-level `uses`; `validate.yml` command checks now ignore non-executable comments, display names, shell comments, output-only lines, conditional-only gates, heredoc payloads, and short-circuited commands.
 - Review follow-up: shellcheck installation evidence now requires `apt-get install` to install `shellcheck`, and readable version comment enforcement covers quoted pinned `uses:` values.
+- Review follow-up: required gates now remain blocking because masked-failure suffixes are not accepted, heredoc payload variants are ignored, and shell conditional block bodies do not satisfy unconditional gate checks.
+- Review follow-up: the shell text filter now avoids false failures for valid one-line conditionals, commands after block closers, here-strings, and version-pinned shellcheck packages while continuing to reject non-blocking required gate lines.
 
 ## File List
 
@@ -218,3 +224,5 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Addressed BMAD code-review findings for YAML job parsing, executable `validate.yml` command checks, and shellcheck evidence.
 - 2026-06-10: Hardened workflow validation for reusable workflows, conditional required gates, and commented/echoed required commands.
 - 2026-06-10: Hardened workflow validation for heredoc/short-circuit gate bypasses, explicit shellcheck installation, and quoted pinned action version comments.
+- 2026-06-10: Hardened workflow validation for masked failures, exact shellcheck package matching, dashed heredoc delimiters, and shell conditional bodies.
+- 2026-06-10: Hardened workflow validation for inline shell block parsing, here-strings, version-pinned shellcheck package tokens, generalized `||` masking, and matching positive fixtures.
