@@ -1,0 +1,8 @@
+name: invalid
+on:
+  push:
+jobs:
+  broken:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@not-a-sha

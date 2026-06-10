@@ -32,8 +32,6 @@ jobs:
       - name: Validate local gates
         run: make validate
       - name: Validate workflows with actionlint
-        run: actionlint .github/workflows/*.yml
+        run: find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z | xargs -0 actionlint
       - name: Validate shell scripts with shellcheck
-        run: |
-          set -Eeuo pipefail
-          find cloudnative-pg-timescaledb/scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck
+        run: git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck

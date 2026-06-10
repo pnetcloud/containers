@@ -23,7 +23,11 @@ if ((${#workflow_files[@]})); then
   run_optional_tool actionlint "${workflow_files[@]}"
 fi
 
-mapfile -d '' shell_scripts < <(find "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts" -type f -name '*.sh' -print0 | sort -z)
+if git -C "${ROOT_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  mapfile -d '' shell_scripts < <(git -C "${ROOT_DIR}" ls-files -z 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort -z | while IFS= read -r -d '' path; do printf '%s\0' "${ROOT_DIR}/${path}"; done)
+else
+  mapfile -d '' shell_scripts < <(find "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts" -type f -name '*.sh' -print0 | sort -z)
+fi
 if ((${#shell_scripts[@]})); then
   run_optional_tool shellcheck "${shell_scripts[@]}"
 fi
@@ -251,6 +255,14 @@ def validate_workflow(path, policy):
             diag(path, f"validate.yml triggers include {sorted(required)}", sorted(actual), "Add pull_request, push, and workflow_dispatch triggers.")
         if "make validate" not in text:
             diag(path, "validate workflow runs make validate", "missing", "Call make validate from validate.yml.")
+        if "find .github/workflows -type f" not in text or "xargs -0 actionlint" not in text:
+            diag(path, "validate workflow runs actionlint through deterministic workflow discovery", "missing", "Use find .github/workflows -type f ... -print0 | sort -z | xargs -0 actionlint.")
+        if "git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck" not in text:
+            diag(path, "validate workflow runs shellcheck against git-tracked script list", "missing", "Use git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck.")
+        if "shellcheck" not in text or "apt-get install" not in text:
+            diag(path, "validate workflow installs or provides real shellcheck", "missing", "Install shellcheck before make validate; bash -n is not a sufficient CI gate.")
+        if re.search(r"bash\s+-n", text) and "shellcheck" not in text:
+            diag(path, "bash -n is not the CI shell validation gate", "bash -n only", "Run real shellcheck in CI.")
     if "permissions" not in payload:
         diag(path, "workflow declares explicit top-level permissions", "missing", "Set top-level permissions to contents: read or {} to avoid repository default token scope.")
     top_permissions = permissions_from_value(payload.get("permissions"))

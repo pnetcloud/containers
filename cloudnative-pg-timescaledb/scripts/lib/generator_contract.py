@@ -601,8 +601,19 @@ def catalog_summary(data, entries, output_root="cloudnative-pg-timescaledb/catal
     return {"catalogs": catalogs}
 
 
-def docs_summary(entries, doc_path="cloudnative-pg-timescaledb/docs/generated/compatibility.md"):
+def docs_summary(entries, doc_path="cloudnative-pg-timescaledb/docs/generated/compatibility.md", has_barman_plugin=False):
+    docs_dir = Path(doc_path).parent
     table_path = (Path(doc_path).parent / "compatibility-table.md").as_posix()
+    manifest_paths = [
+        (doc_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "1.5", "metadata-rendered compatibility skeleton"),
+        (table_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "5.1", "metadata-rendered compatibility table"),
+        ((docs_dir / "release-candidate-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "4.2", "static generated schema documentation"),
+        ((docs_dir / "release-evidence-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "4.4", "static generated schema documentation"),
+        ((docs_dir / "matrix-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-matrix.sh", "4.1", "static generated matrix schema documentation"),
+    ]
+    metadata_path = "cloudnative-pg-timescaledb/versions.yaml"
+    if has_barman_plugin:
+        manifest_paths.append(((docs_dir / "barman-plugin-reference.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "2.7", "metadata-rendered Barman Cloud Plugin reference"))
     return {
         "docs": [
             {
@@ -613,7 +624,17 @@ def docs_summary(entries, doc_path="cloudnative-pg-timescaledb/docs/generated/co
                 "publishable_entries": sum(1 for entry in entries if entry["publish"]),
                 "experimental_entries": sum(1 for entry in entries if entry["experimental"]),
             }
-        ]
+        ],
+        "generated_docs_manifest": [
+            {
+                "path": path,
+                "generator_input": metadata_path,
+                "generator_command": command,
+                "owner_story": owner_story,
+                "deterministic_generation_mode": mode,
+            }
+            for path, command, owner_story, mode in manifest_paths
+        ],
     }
 
 
@@ -1023,7 +1044,7 @@ def run(kind, metadata, output, check, as_json, release_metadata=None, validate_
             print(f"generated release catalogs: {len(summary['catalogs'])}", file=sys.stderr)
     elif kind == "docs":
         doc_path = output or "cloudnative-pg-timescaledb/docs/generated/compatibility.md"
-        summary = docs_summary(entries, doc_path)
+        summary = docs_summary(entries, doc_path, "barman_plugin" in data)
         if check or not as_json:
             write_or_check(doc_path, render_docs(entries), check, command)
             table_path = (Path(doc_path).parent / "compatibility-table.md").as_posix()

@@ -7,6 +7,7 @@ TAG_VALIDATION_DATE="${TAG_VALIDATION_DATE:-20260609}"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-metadata.sh"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-tags.sh" --metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" --date "${TAG_VALIDATION_DATE}"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-generated.sh"
+"${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-docs.sh"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-barman-boundary.sh"
 "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/story-1-2-make-help.sh"
 STORY_1_2_VALIDATE_REENTRY=1 "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh"
@@ -98,5 +99,8 @@ if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs/verification/run.sh"
 fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs/maintainer/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs/maintainer/run.sh"
+fi
+if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs-validation/run.sh" ]]; then
+  "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs-validation/run.sh"
 fi
 printf 'PASS make validate Story 1.2 available gates\n'
