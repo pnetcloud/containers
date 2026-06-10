@@ -1998,6 +1998,7 @@ expect_fail() {
 
 git_product_files() {
   git -C "${ROOT_DIR}" ls-files -z --cached --others --exclude-standard -- \
+    '.github/workflows/**' \
     'cloudnative-pg-timescaledb/**' \
     'docs/generated-files.md' \
     ':(exclude)vendor/**' \
@@ -2719,14 +2720,27 @@ is_shebang_file "${FIXTURE_DIR}/docs/valid-extensionless-script.md" || {
 
 while IFS= read -r -d '' file; do
   case "${file}" in
-    cloudnative-pg-timescaledb/*|docs/generated-files.md)
+    .github/workflows/*|cloudnative-pg-timescaledb/*|docs/generated-files.md)
       ;;
     *)
-      diag "git_product_files scope" "${file}" "Story 1.1-owned product path" "unrelated repository path" "Limit Story 1.1 product scans to this image family and docs/generated-files.md."
+      diag "git_product_files scope" "${file}" "Story 1.1-owned product path" "unrelated repository path" "Limit Story 1.1 product scans to this image family, its workflows, and docs/generated-files.md."
       exit 1
       ;;
   esac
 done < <(git_product_files)
+
+workflow_scan_seen=0
+while IFS= read -r -d '' file; do
+  case "${file}" in
+    .github/workflows/*)
+      workflow_scan_seen=1
+      ;;
+  esac
+done < <(git_product_files)
+if [[ "${workflow_scan_seen}" != "1" ]]; then
+  diag "git_product_files workflow scope" ".github/workflows/**" "workflow files included in vendor misuse scan" "not scanned" "Include GitHub workflow files so Story 1.1 can reject workflow vendor/ build or runtime use."
+  exit 1
+fi
 
 while IFS= read -r -d '' file; do
   full_path="${ROOT_DIR}/${file}"
