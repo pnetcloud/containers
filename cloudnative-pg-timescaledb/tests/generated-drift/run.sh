@@ -272,6 +272,20 @@ prepare_contract_root "${stale_contract_root}"
 printf '\nContradictory hand edit.\n' >>"${stale_contract_root}/docs/generator-contracts.md"
 expect_direct_fail "stale generator contract docs" "generator-contracts.md matches current generator contract" "${VALIDATOR}" --contract-root "${stale_contract_root}"
 
+stale_schema_fixture_root="$(mktemp -d)"
+prepare_contract_root "${stale_schema_fixture_root}"
+python3 - "${stale_schema_fixture_root}/cloudnative-pg-timescaledb/tests/generators/fixtures/generate-matrix-valid.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["include"] = payload["include"][:-1]
+path.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n")
+PY
+expect_direct_fail "stale generator schema fixture" "generate-matrix-valid.json|generate-matrix.sh --json > cloudnative-pg-timescaledb/tests/generators/fixtures/generate-matrix-valid.json" "${VALIDATOR}" --contract-root "${stale_schema_fixture_root}"
+
 nonexec_contract_root="$(mktemp -d)"
 prepare_contract_root "${nonexec_contract_root}"
 chmod -x "${nonexec_contract_root}/cloudnative-pg-timescaledb/scripts/generate-matrix.sh"

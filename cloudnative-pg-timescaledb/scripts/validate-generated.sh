@@ -87,6 +87,38 @@ for path in "${required_paths[@]}"; do
   fi
 done
 
+validate_schema_fixture() {
+  local script="$1"
+  local fixture_rel="$2"
+  local fixture_path="${contract_root}/${fixture_rel}"
+  local actual_tmp stderr_tmp diff_tmp
+  actual_tmp="$(mktemp)"
+  stderr_tmp="$(mktemp)"
+  diff_tmp="$(mktemp)"
+  if ! "${SCRIPT_DIR}/${script}" --metadata "${metadata}" --json >"${actual_tmp}" 2>"${stderr_tmp}"; then
+    diag "validate-generated" "${fixture_rel}" "${script} --json exits 0 for schema fixture generation" "$(cat "${stderr_tmp}")" "Fix the owning generator before validating schema fixture drift."
+    rm -f "${actual_tmp}" "${stderr_tmp}" "${diff_tmp}"
+    exit 1
+  fi
+  if [[ -s "${stderr_tmp}" ]]; then
+    diag "validate-generated" "${fixture_rel}" "${script} --json emits machine JSON without stderr" "$(tr '\n' ' ' <"${stderr_tmp}")" "Keep --json success output machine-readable and diagnostics off stderr."
+    rm -f "${actual_tmp}" "${stderr_tmp}" "${diff_tmp}"
+    exit 1
+  fi
+  if ! diff -u "${fixture_path}" "${actual_tmp}" >"${diff_tmp}"; then
+    diag "validate-generated" "${fixture_rel}" "generator schema fixture matches ${script} --json output" "$(cat "${diff_tmp}")" "Run cloudnative-pg-timescaledb/scripts/${script} --json > ${fixture_rel}."
+    rm -f "${actual_tmp}" "${stderr_tmp}" "${diff_tmp}"
+    exit 1
+  fi
+  rm -f "${actual_tmp}" "${stderr_tmp}" "${diff_tmp}"
+}
+
+validate_schema_fixture "generate-dockerfiles.sh" "cloudnative-pg-timescaledb/tests/generators/fixtures/generate-dockerfiles-valid.json"
+validate_schema_fixture "generate-bake.sh" "cloudnative-pg-timescaledb/tests/generators/fixtures/generate-bake-valid.json"
+validate_schema_fixture "generate-matrix.sh" "cloudnative-pg-timescaledb/tests/generators/fixtures/generate-matrix-valid.json"
+validate_schema_fixture "generate-catalog.sh" "cloudnative-pg-timescaledb/tests/generators/fixtures/generate-catalog-valid.json"
+validate_schema_fixture "generate-docs.sh" "cloudnative-pg-timescaledb/tests/generators/fixtures/generate-docs-valid.json"
+
 validate_contract_docs() {
   local doc_path="${contract_root}/docs/generator-contracts.md"
   local expected_doc expected_diff

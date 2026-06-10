@@ -138,6 +138,9 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Re-ran `make generate`, `make validate`, `tests/generated-drift/run.sh`, shell syntax checks, and `git diff --check` successfully after expanded fixture coverage.
 - 2026-06-10: After release metadata/catalog autocommit landed, updated generated drift paths so committed digest-aware catalogs are checked with repository `release-metadata/*.json` when present, while metadata-only catalog JSON fixtures remain unchanged.
 - 2026-06-10: Updated generated-drift and Barman plugin test project preparation to copy committed release metadata alongside digest-aware catalogs, preventing false dirty no-op failures in fixture repositories.
+- 2026-06-10: Addressed BMAD review findings: `validate-generated.sh` disables Python bytecode writes so validation does not dirty a clean checkout, and generated-drift fixtures assert no `__pycache__` appears after validation.
+- 2026-06-10: Addressed BMAD acceptance review finding: `validate-generated.sh` now exact-checks Story 1.5 positive schema fixtures against the owning generator `--json` output and emits structured remediation commands for stale fixture content; generated-drift tests mutate `generate-matrix-valid.json` to prove the diagnostic.
+- 2026-06-10: Final validation passed after review remediation: `make generate`, `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh`, `bash cloudnative-pg-timescaledb/tests/generated-drift/run.sh`, `shellcheck -x cloudnative-pg-timescaledb/scripts/validate-generated.sh cloudnative-pg-timescaledb/tests/generated-drift/run.sh`, `git diff --check`, and full `make validate` with no Python bytecode cache left behind.
 
 ### Completion Notes
 
@@ -148,6 +151,8 @@ Every implementation story must finish with a working repository state and must 
 - Stale diagnostics identify the stale artifact path and include regeneration guidance from the owning generator contract.
 - Scope remains limited to Story 1.5 generator contracts and skeleton outputs; full buildable Dockerfile, final Bake, final matrix, digest-aware catalog, publish, and public docs drift behavior remain owned by later stories.
 - Release metadata aware catalog checks preserve the Story 1.5 metadata-only JSON contract while allowing committed `ClusterImageCatalog` YAML to stay digest-aware after successful publishes.
+- Validation paths set `PYTHONDONTWRITEBYTECODE=1` before importing generator helper modules, so drift validation does not mutate the checkout with Python bytecode.
+- Story 1.5 positive generator schema fixtures are now drift-checked as generated artifacts; stale fixture content fails with the fixture path and the exact `generate-*.sh --json > fixture` regeneration command.
 
 ### Validation Commands
 
@@ -159,6 +164,8 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/tests/barman-plugin/run.sh` PASS
 - `make validate` PASS
 - `git diff --check` PASS
+- `shellcheck -x cloudnative-pg-timescaledb/scripts/validate-generated.sh cloudnative-pg-timescaledb/tests/generated-drift/run.sh` PASS
+- `test ! -e cloudnative-pg-timescaledb/scripts/lib/__pycache__` PASS after `validate-generated.sh` and full `make validate`
 
 ## File List
 
@@ -178,3 +185,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Hardened generated drift validation after code review for orphan generated artifacts and missing option values.
 - 2026-06-09: Expanded generated-drift fixture coverage after acceptance review for contract docs, stale Bake/catalog/docs, missing contract artifacts, and non-executable generators.
 - 2026-06-10: Made generated catalog drift checks release-metadata aware after digest-aware catalogs became committed release artifacts.
+- 2026-06-10: Hardened generated drift validation after BMAD review for bytecode-free validation and stale generator schema fixture diagnostics.

@@ -2,7 +2,7 @@
 title: Lean Execution Plan
 date: 2026-06-10
 scope: CloudNativePG TimescaleDB image automation implementation
-status: reduced-loop-current
+status: reduced-loop-active
 ---
 
 # Lean Execution Plan
@@ -11,19 +11,21 @@ status: reduced-loop-current
 
 Finish the current BMAD implementation goal without unnecessary loop overhead while preserving the non-negotiable quality bar: GitHub Actions must pass, GHCR images must be published and anonymously pullable, generated release metadata must be committed, and digest-aware ClusterImageCatalog manifests must reflect published image digests.
 
+This plan intentionally treats BMAD as a traceability and decision framework. It does not require a full BMAD loop, per-story subagent pass, or broad validation run for every small correction.
+
 ## Current Ground Truth
 
 - Story files exist for all 35 stories under `_bmad-output/implementation-artifacts/stories/`; they do not need to be regenerated unless a real requirement contradiction is found.
 - The story validation review exists at `_bmad-output/implementation-artifacts/stories/story-validation-review-20260609.md`; it remains the baseline and should not be rerun after every implementation edit.
-- Local branch `codex/bmad-cloudnativepg-timescaledb-execution` is fast-forwarded to `origin/main` commit `6d60a05`.
+- Local branch `codex/bmad-cloudnativepg-timescaledb-execution` contains the release automation baseline plus the later generator/matrix/docs contract hardening commits.
 - Commit `8ae4462` added release metadata and catalog autocommit automation.
 - Commit `6d60a05` is the bot autocommit that added `cloudnative-pg-timescaledb/release-metadata/*.json` and updated digest-aware catalogs.
 - `Validate` passed on GitHub Actions run `27298379342` for commit `8ae446225c72fe26a87f8172f1d6da014668005b`.
 - `Build Release Candidates` passed on GitHub Actions run `27298379390` for commit `8ae446225c72fe26a87f8172f1d6da014668005b`; the run included candidate builds, smoke checks, vulnerability scans, SARIF upload handling, release evidence, tag validation, final publish, public anonymous pull verification, and the release metadata/catalog autocommit job.
 - The bot commit produced four release metadata JSON files and non-empty `catalog-standard-trixie.yaml` / `catalog-standard-bookworm.yaml` files.
 - Verified release tags include `latest`, `18`, and `18-pg18.4-ts2.27.2-20260609` pointing to the same PG18 trixie digest.
-- The remaining local worktree is a separate generator/matrix/docs contract slice. It must not be mixed into unrelated release workflow commits.
-- Current known local blocker in that slice: catalog drift checks need to use committed release metadata when checking committed digest-aware catalog YAML.
+- The generator/matrix/docs contract slice has remote green evidence on the feature branch. Remaining local work, if any, is treated as a small follow-up and must stay separate from release workflow behavior.
+- Current local worktree contains a focused generated-drift/schema-fixture validation hardening follow-up. It should be checked with targeted local tests before any commit.
 
 ## Reduced Loop Rules
 
@@ -40,6 +42,13 @@ Normal inner loop:
 7. Record run URL, SHA, status, and conclusion when the workflow proves acceptance criteria.
 
 Do not run full BMAD validation, all story validations, all subagent reviews, or full local validation after every small edit.
+
+Loop budget from this point:
+
+- One implementation slice gets one local targeted loop.
+- One remote workflow observation is enough when the changed area maps cleanly to that workflow.
+- One focused review pass is enough at a shared contract or final evidence boundary.
+- If a failure repeats twice in the same area, stop broadening the loop and isolate the failing contract directly.
 
 Run a broader gate only when one of these is true:
 
@@ -66,6 +75,19 @@ Subagents are useful only for bounded independent checks:
 
 Subagents are not used for routine shell edits, fixture updates, status checks, or every commit.
 
+Default no-subagent cases:
+
+- Documentation-only status updates.
+- Fixture changes where a deterministic test proves the fixture contract.
+- Shell script hygiene changes covered by shellcheck and an existing local test.
+- GitHub Actions status collection.
+
+Required review cases:
+
+- Release workflow publish/tag behavior changes.
+- Matrix eligibility changes that can affect `latest` or PG19 experimental status.
+- Final Story 5.9 evidence closure.
+
 ## Execution Order From Here
 
 ### 0. Completed Remote Evidence
@@ -81,48 +103,41 @@ Status: completed.
 
 No extra rerun is needed for these proofs unless a later commit touches release workflow behavior.
 
-### 1. Current Slice: Generator, Matrix, And Generated-Drift Contracts
+### 1. Current Follow-Up: Generated-Drift Schema Fixture Guard
 
 Status: in progress locally.
 
-Goal: finish the current dirty generator/matrix/docs contract slice without disturbing the already-proven release workflow.
+Goal: finish the current small generated-drift follow-up without reopening the whole generator/matrix/docs contract slice.
 
 Scope:
 
-- Generator metadata shape validation.
-- Matrix skipped-row contract, including `bake_target` / `skipped_marker` behavior.
-- Matrix uniqueness and schema validation.
-- Generated docs and release rehearsal report drift validation.
-- Tests and fixtures for the above.
-- Catalog check behavior after release metadata exists in the repository.
+- `validate-generated.sh` should prove Story 1.5 positive generator schema fixtures still match their owning `generate-*.sh --json` outputs.
+- Generated-drift tests should include one stale schema fixture case with a precise remediation command.
+- Validation should remain bytecode-free and should not leave `__pycache__` behind.
 
-Known required fix:
+Out of scope:
 
-- `generate-catalog --check` paths that compare committed catalog YAML must pass `--release-metadata cloudnative-pg-timescaledb/release-metadata` when release metadata JSON exists.
-- Keep the metadata-only `generate-catalog --json` contract available for fixture and schema tests.
+- Reworking release publish/autocommit behavior.
+- Revalidating every story file.
+- Running a subagent review unless targeted checks expose an ambiguous contract issue.
 
 Targeted checks for this slice:
 
-- `bash cloudnative-pg-timescaledb/tests/generators/run.sh`
-- `bash cloudnative-pg-timescaledb/tests/matrix/run.sh`
 - `bash cloudnative-pg-timescaledb/tests/generated-drift/run.sh`
 - `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh`
-- `bash cloudnative-pg-timescaledb/scripts/validate-docs.sh`
-- `bash cloudnative-pg-timescaledb/tests/bake/run.sh`
-- `bash cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh`
-- `bash cloudnative-pg-timescaledb/tests/update/run.sh`
+- `shellcheck -x cloudnative-pg-timescaledb/scripts/validate-generated.sh cloudnative-pg-timescaledb/tests/generated-drift/run.sh`
 - `git diff --check`
 
 Commit rule:
 
-- Stage only the generator/matrix/docs contract files that belong to this slice.
+- Stage only the generated-drift/schema-fixture files and matching story/process documentation that belong to this follow-up.
 - Do not include unrelated workflow release metadata files.
 - Decide separately whether the untracked root `.gitignore` is intentional repo hygiene or should remain unstaged.
 
 Remote gate after commit:
 
 - Push feature branch and observe `Validate` first.
-- Do not dispatch `Build Release Candidates` unless the committed slice changes build, matrix, catalog, release evidence, or publish behavior in a way that local tests cannot fully prove.
+- Do not dispatch `Build Release Candidates` for this follow-up unless the final diff unexpectedly touches build, matrix, catalog, release evidence, or publish behavior.
 
 ### 2. Update Workflow No-Op Proof
 
@@ -130,7 +145,7 @@ Status: pending only if touched.
 
 Goal: keep scheduled/manual update automation no-op safe now that release metadata exists.
 
-Run this only if the current slice changes update, generated catalog drift, release metadata, or generated output behavior.
+Run this only if a later slice changes update, generated catalog drift, release metadata, or generated output behavior.
 
 Targeted checks:
 
@@ -144,7 +159,7 @@ Remote gate:
 
 ### 3. Final Story 5.9 Evidence Closure
 
-Status: pending after current slice is clean.
+Status: pending after current follow-up is clean and the feature branch has the needed green `Validate` evidence.
 
 Goal: close the goal with a compact evidence record, not a full revalidation spiral.
 
@@ -175,6 +190,14 @@ Allowed actions:
 - Mark only evidence-backed items as `done`; otherwise keep statuses conservative.
 
 Do not block implementation on this cleanup.
+
+## Practical Next-Step Queue
+
+1. Finish the current generated-drift/schema-fixture follow-up with the targeted checks listed above.
+2. Commit and push only that follow-up if the checks pass.
+3. Observe `Validate` on the feature branch; skip release-candidate build unless release behavior changed.
+4. Move directly to final Story 5.9 evidence closure if the branch is green and no release contract files changed.
+5. Use one focused review for Story 5.9 evidence against the original constraints, then stop.
 
 ## Explicitly Deferred
 
