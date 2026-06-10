@@ -2,23 +2,26 @@
 title: Lean Execution Plan
 date: 2026-06-10
 scope: CloudNativePG TimescaleDB image automation implementation
-status: updated
+status: reduced-loop-current
 ---
 
 # Lean Execution Plan
 
 ## Objective
 
-Finish the current BMAD implementation goal with less loop overhead while preserving the main quality bar: GitHub Actions must pass and the repository must prove working CloudNativePG TimescaleDB images, release rehearsal, and publication automation.
+Finish the current BMAD implementation goal with less loop overhead while preserving the main quality bar: GitHub Actions must pass, GHCR images must be published and pullable, and the repository must retain digest-aware release metadata and catalogs generated from successful publication.
 
 ## Current Ground Truth
 
 - Story files already exist for all 35 stories under `_bmad-output/implementation-artifacts/stories/`.
 - The story validation review already captured the user constraints and does not need to be rerun in full for every small CI fix.
-- Latest pushed `main` evidence is commit `73b793b14c16f07d391eb05f62c235d7381b8464`.
-- `Validate` passed on GitHub Actions for `73b793b14c16f07d391eb05f62c235d7381b8464`.
-- `Build Release Candidates` passed on GitHub Actions for `73b793b14c16f07d391eb05f62c235d7381b8464` after SARIF upload hardening.
+- Latest pushed `main` evidence is commit `574485e011d780ec2d9c257a9b338107c4d4f9f6`.
+- `Validate` passed on GitHub Actions for `574485e011d780ec2d9c257a9b338107c4d4f9f6`.
+- `Build Release Candidates` passed on GitHub Actions for `574485e011d780ec2d9c257a9b338107c4d4f9f6`, including build, smoke, security scan, release evidence, tag validation, final publish, and public anonymous pull verification.
 - `Release Rehearsal` passed on GitHub Actions for commit `1edcbdec254efede25a122897d14f85a33a2fb69`, which is on the current commit line.
+- `Update Metadata` passed on GitHub Actions for `574485e011d780ec2d9c257a9b338107c4d4f9f6`; resolver and catalog autocommit paths were no-op because no repository release metadata existed yet.
+- GHCR already contains public tags, including `latest` and `18-pg18.4-ts2.27.2-20260609` pointing to the same digest, plus stable PG17/PG18 trixie/bookworm tags.
+- Current remaining proof gap: `cloudnative-pg-timescaledb/release-metadata/*.json` is not committed to the repo, so the generated digest-aware catalogs remain empty skeletons.
 - The local worktree contains unrelated generator/matrix changes, so commits must be narrowly staged.
 
 ## Reduced Loop Rules
@@ -37,9 +40,11 @@ Do not rerun all BMAD validation, all stories, or full local validation after ev
 Use full BMAD/code-review validation only when one of these gates is reached:
 
 - A full epic boundary is completed.
-- Both release workflows are green on the same commit.
+- Release metadata persistence and catalog generation are proven on the same commit as a successful publish run.
 - A change touches shared generation, matrix, tag policy, or release evidence contracts.
 - A remote workflow succeeds but the evidence does not prove the story acceptance criteria.
+
+For the current remaining work, the target validation loop is one implementation pass, one focused local test pass, one push, one `Validate` run, one `Build Release Candidates` run, and one verification that the build workflow created the expected autocommit. Do not run per-story subagent validation again unless a test or CI result contradicts story acceptance criteria.
 
 ## Subagent Policy
 
@@ -51,6 +56,13 @@ Use subagents only for bounded review tasks where independence adds value:
 
 Do not use subagents for every shell edit, every commit, or every rerun. That creates redundant loops without improving confidence.
 
+For this final phase, use at most one focused review pass after the release metadata autocommit implementation is locally validated. The review scope is limited to:
+
+- workflow permission blast radius,
+- autocommit allowlist/staging safety,
+- recursion prevention,
+- evidence that catalogs are generated from published digest metadata.
+
 ## Current Execution Order
 
 ### 0. Completed Remote Blockers
@@ -59,26 +71,60 @@ Do not use subagents for every shell edit, every commit, or every rerun. That cr
 - `Validate` now passes on latest `main`.
 - `Build Release Candidates` now passes on latest `main`, including candidate builds, smoke checks, vulnerability scans, SARIF upload jobs, release evidence, tag validation, and publish rehearsal jobs.
 
-### 1. Update Workflow Proof
+### 1. Release Metadata Persistence and Catalog Autocommit
 
-Goal: prove scheduled/manual update automation and controlled autocommit behavior from the real GitHub Actions workflow.
+Goal: persist successful publish metadata from `.github/workflows/build.yml` into repository release metadata files, generate non-empty digest-aware catalogs, and autocommit only allowlisted release metadata/catalog paths.
 
-Minimal checks before remote dispatch:
+Implementation slice:
 
-- Inspect `.github/workflows/update.yml` and its story tests.
-- Run only update/autocommit workflow tests if implementation changes are required.
+- Add a post-publish job in `.github/workflows/build.yml` that needs `matrix` and `publish`.
+- Run it only when publish is eligible: `workflow_dispatch`, `main`, or release tag refs.
+- Grant only `contents: write` for this job; keep default workflow permission read-only.
+- Download all `ghcr-release-metadata-*` artifacts from the publish matrix.
+- Materialize them into `cloudnative-pg-timescaledb/release-metadata/*.json`.
+- Run `generate-catalog.sh --release-metadata cloudnative-pg-timescaledb/release-metadata`.
+- Validate `catalog-standard-trixie.yaml` and `catalog-standard-bookworm.yaml`.
+- Stage only paths from `cloudnative-pg-timescaledb/config/release-metadata-autocommit-allowlist.txt`.
+- Run `validate-autocommit-staging.sh` before commit.
+- Commit with a recursion-safe message such as `chore(cnpg-timescaledb): update release metadata and catalogs`.
+- No-op cleanly when downloaded metadata produces no diff.
 
-Remote check:
+Targeted local checks:
 
-- Dispatch `update.yml` in a no-op or controlled dry-run/autocommit-safe mode.
-- Record URL, head SHA, status, conclusion, and whether it made no commit or made only allowlisted generated-file changes.
+- `bash cloudnative-pg-timescaledb/tests/catalog/run.sh`
+- `bash cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh`
+- `bash cloudnative-pg-timescaledb/scripts/validate-workflows.sh`
+- `git diff --check -- .github/workflows/build.yml cloudnative-pg-timescaledb/workflow-policy.yaml cloudnative-pg-timescaledb/config/release-metadata-autocommit-allowlist.txt cloudnative-pg-timescaledb/tests/catalog/run.sh cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh`
 
 Exit criteria:
 
-- `update.yml` is visible in GitHub Actions and has at least one successful controlled run.
-- Any autocommit path is constrained by the repository allowlist and does not include secrets, vendor input, or unrelated files.
+- `Validate` passes on the pushed commit.
+- `Build Release Candidates` passes on the pushed commit.
+- A follow-up bot commit appears only if release metadata/catalog files changed.
+- The committed `release-metadata/*.json` files correspond to published GHCR digests.
+- Both stable catalogs are non-empty and validate against current catalog rules.
+- No vendor, secret, runtime artifact, or unrelated dirty generator/matrix file is staged or committed by the autocommit job.
 
-### 2. Release Rehearsal Blocker
+Status: next.
+
+### 2. Update Workflow Proof
+
+Goal: keep scheduled/manual metadata resolver automation proven without treating its catalog no-op as a failure.
+
+Current evidence:
+
+- `Update Metadata` manual dispatch passed for `574485e011d780ec2d9c257a9b338107c4d4f9f6`.
+- The resolver autocommit was no-op.
+- The catalog autocommit was no-op because repository release metadata was absent.
+
+Exit criteria:
+
+- No further `update.yml` work is required until release metadata exists in the repo.
+- After the build workflow persists release metadata, run `Update Metadata` only once if needed to prove scheduled/catalog regeneration remains no-op-safe.
+
+Status: blocked by Step 1, not by workflow failure.
+
+### 3. Release Rehearsal Blocker
 
 Goal: make `release-rehearsal.yml` pass in dry-run mode from `main`.
 
@@ -105,7 +151,7 @@ Exit criteria:
 
 Status: completed on commit `1edcbdec254efede25a122897d14f85a33a2fb69`.
 
-### 3. SARIF Upload Blocker
+### 4. SARIF Upload Blocker
 
 Goal: make `Build Release Candidates` pass end-to-end when vulnerability scanning succeeds, without making CodeQL SARIF upload an image release gate.
 
@@ -134,7 +180,7 @@ Exit criteria:
 
 Status: completed on commit `73b793b14c16f07d391eb05f62c235d7381b8464`.
 
-### 4. Generator/Matrix Dirty Worktree Line
+### 5. Generator/Matrix Dirty Worktree Line
 
 Goal: decide whether the current generator/matrix local changes belong to Story 1.5/1.6 or should be parked.
 
@@ -149,21 +195,23 @@ Minimal checks when that line resumes:
 - Generated drift tests only.
 - Matrix validation tests only.
 
-### 5. Final Integration Proof
+### 6. Final Integration Proof
 
-Run this only after the two remote blockers are fixed on the same commit line.
+Run this only after release metadata persistence is proven on the same commit line as a successful publish run.
 
 Required checks:
 
-- One clean full validation pass from a controlled tree.
-- One focused BMAD/code-review pass against release workflows and Story 5.9 evidence.
-- Final evidence update with GitHub Actions URLs, status, conclusion, and head SHA.
+- One clean full validation pass from a controlled tree or a green `Validate` run on the pushed commit.
+- One focused review pass against release workflows, autocommit safety, and Story 5.9 evidence.
+- Final evidence update with GitHub Actions URLs, status, conclusion, head SHA, generated bot commit SHA if present, and GHCR digest/tag checks.
 
 Exit criteria:
 
 - `Validate` is green.
 - `Build Release Candidates` is green.
 - `Release Rehearsal` is green.
+- Repository release metadata exists for published stable rows.
+- Stable catalogs are non-empty and digest-aware.
 - The evidence proves real/staging image release behavior, `latest=18-trixie`, Debian `trixie`/`bookworm` only, no Alpine, and Barman Cloud Plugin boundary.
 
 ## What Is Explicitly Deferred

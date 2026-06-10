@@ -779,3 +779,78 @@ jobs:
           path: publish/output/${{ matrix.bake_target }}/ghcr-release-metadata.json
           if-no-files-found: error
           retention-days: 30
+
+  release_metadata_autocommit:
+    name: Commit release metadata and catalogs
+    needs:
+      - matrix
+      - publish
+    if: "${{ needs.matrix.outputs.has_include == 'true' && startsWith(github.ref, 'refs/heads/') && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && !(github.actor == 'github-actions[bot]' && github.event_name == 'push' && contains(github.event.head_commit.message, 'chore(cnpg-timescaledb): update release metadata and catalogs')) }}"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: ghcr-release-metadata-*
+          path: release-metadata-autocommit/input
+      - name: Materialize release metadata and catalogs
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --prune --depth=1 origin "${GITHUB_REF_NAME}"
+          git checkout -B "${GITHUB_REF_NAME}" "origin/${GITHUB_REF_NAME}"
+
+          metadata_dir="cloudnative-pg-timescaledb/release-metadata"
+          mkdir -p "${metadata_dir}"
+          find "${metadata_dir}" -type f -name '*.json' -delete
+
+          mapfile -d '' metadata_files < <(find release-metadata-autocommit/input -type f -name ghcr-release-metadata.json -print0 | sort -z)
+          if ((${#metadata_files[@]} == 0)); then
+            printf 'No ghcr-release-metadata artifacts were downloaded.\n' >&2
+            exit 1
+          fi
+          for metadata_file in "${metadata_files[@]}"; do
+            python3 - "${metadata_file}" "${metadata_dir}" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          source = Path(sys.argv[1])
+          output_dir = Path(sys.argv[2])
+          payload = json.loads(source.read_text())
+          record_id = payload.get("release_metadata_record_id")
+          if not isinstance(record_id, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", record_id):
+              raise SystemExit(f"invalid release_metadata_record_id in {source}: {record_id!r}")
+          tags = payload.get("final_tags")
+          if not isinstance(tags, list) or not tags:
+              raise SystemExit(f"missing final_tags in {source}")
+          target = output_dir / f"{record_id.replace(':', '-')}.json"
+          if target.exists():
+              raise SystemExit(f"duplicate release metadata record id: {record_id}")
+          target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+          print(target)
+          PY
+          done
+
+          cloudnative-pg-timescaledb/scripts/generate-catalog.sh --release-metadata "${metadata_dir}"
+          while IFS= read -r catalog_file; do
+            cloudnative-pg-timescaledb/scripts/generate-catalog.sh --release-metadata "${metadata_dir}" --validate-catalog "${catalog_file}"
+          done < <(find cloudnative-pg-timescaledb/catalog -maxdepth 1 -type f -name 'catalog-standard-*.yaml' | sort)
+
+          AUTOCOMMIT_ALLOWLIST=cloudnative-pg-timescaledb/config/release-metadata-autocommit-allowlist.txt cloudnative-pg-timescaledb/scripts/autocommit-stage.sh
+          AUTOCOMMIT_ALLOWLIST=cloudnative-pg-timescaledb/config/release-metadata-autocommit-allowlist.txt cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh
+          if git diff --cached --quiet; then
+            printf 'No release metadata or catalog changes to commit.\n'
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(cnpg-timescaledb): update release metadata and catalogs'
+          git push origin "HEAD:${GITHUB_REF_NAME}"

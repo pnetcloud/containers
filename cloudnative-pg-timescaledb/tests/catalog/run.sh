@@ -5,7 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 FIXTURE_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/catalog/fixtures"
 GENERATOR="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/generate-catalog.sh"
 WORKFLOW="${ROOT_DIR}/.github/workflows/update.yml"
+BUILD_WORKFLOW="${ROOT_DIR}/.github/workflows/build.yml"
 ALLOWLIST="${ROOT_DIR}/cloudnative-pg-timescaledb/config/catalog-autocommit-allowlist.txt"
+RELEASE_METADATA_ALLOWLIST="${ROOT_DIR}/cloudnative-pg-timescaledb/config/release-metadata-autocommit-allowlist.txt"
 
 diag() {
   printf 'command: %s\nartifact: %s\nexpected: %s\nactual: %s\nremediation: %s\n' "$@" >&2
@@ -198,6 +200,100 @@ print("PASS catalog autocommit workflow")
 PY
 }
 
+validate_release_metadata_autocommit_workflow() {
+  local workflow="$1"
+  local allowlist="$2"
+  python3 - "${workflow}" "${allowlist}" "${ROOT_DIR}/cloudnative-pg-timescaledb/workflow-policy.yaml" <<'PY'
+import json
+import sys
+from pathlib import Path
+import yaml
+
+workflow = Path(sys.argv[1])
+allowlist = Path(sys.argv[2])
+policy = Path(sys.argv[3])
+payload = yaml.safe_load(workflow.read_text())
+command = "validate release metadata autocommit workflow"
+
+
+def fail(artifact, expected, actual, remediation):
+    raise SystemExit(
+        f"command: {command}\n"
+        f"artifact: {artifact}\n"
+        f"expected: {expected}\n"
+        f"actual: {actual}\n"
+        f"remediation: {remediation}"
+    )
+
+
+jobs = payload.get("jobs") if isinstance(payload, dict) else None
+if not isinstance(jobs, dict):
+    fail(workflow, "workflow has jobs mapping", type(jobs).__name__, "Keep build.yml parseable for structured workflow validation.")
+job = jobs.get("release_metadata_autocommit")
+if not isinstance(job, dict):
+    fail(workflow, "release_metadata_autocommit job exists", "missing", "Persist successful publish metadata back to the repository.")
+for name, value in jobs.items():
+    perms = value.get("permissions", {}) if isinstance(value, dict) else {}
+    if isinstance(perms, dict) and perms.get("contents") == "write" and name != "release_metadata_autocommit":
+        fail(workflow, "build.yml contents: write is restricted to release metadata autocommit", name, "Do not grant repository write permission to unrelated build jobs.")
+if job.get("permissions", {}).get("contents") != "write":
+    fail(workflow, "release_metadata_autocommit has contents: write", job.get("permissions"), "The metadata persistence job needs repository write permission for allowlisted generated files only.")
+needs = job.get("needs", [])
+if isinstance(needs, str):
+    needs = [needs]
+for required_need in ["matrix", "publish"]:
+    if required_need not in needs:
+        fail(workflow, f"release_metadata_autocommit waits for {required_need}", needs, "Only persist metadata after the matrix is known and publish has completed.")
+job_if = str(job.get("if", ""))
+for marker in [
+    "refs/heads/main",
+    "workflow_dispatch",
+    "startsWith(github.ref, 'refs/heads/')",
+    "github-actions[bot]",
+    "head_commit.message",
+    "chore(cnpg-timescaledb): update release metadata and catalogs",
+]:
+    if marker not in job_if:
+        fail(workflow, f"release_metadata_autocommit job-level guard contains {marker}", job_if, "Constrain writes to branch release runs and prevent generated metadata commit recursion.")
+steps_text = json.dumps(job.get("steps", []), sort_keys=True)
+required_markers = [
+    "ghcr-release-metadata-*",
+    "release-metadata-autocommit/input",
+    "release_metadata_record_id",
+    "cloudnative-pg-timescaledb/release-metadata",
+    "-type f -name '*.json' -delete",
+    "generate-catalog.sh --release-metadata",
+    "catalog-standard-*.yaml",
+    "cloudnative-pg-timescaledb/config/release-metadata-autocommit-allowlist.txt",
+    "autocommit-stage.sh",
+    "validate-autocommit-staging.sh",
+    "git diff --cached --quiet",
+    "No release metadata or catalog changes to commit.",
+    "git fetch --no-tags --prune --depth=1 origin",
+    "git checkout -B",
+    "git push origin",
+]
+for marker in required_markers:
+    if marker not in steps_text:
+        fail(workflow, f"release_metadata_autocommit contains {marker}", "missing", "Keep release metadata persistence allowlisted, digest-aware, branch-safe, and no-op safe.")
+if "git add cloudnative-pg-timescaledb/" in steps_text:
+    fail(workflow, "release_metadata_autocommit stages only through the release metadata allowlist", "raw git add found", "Use autocommit-stage.sh with RELEASE_METADATA allowlist only.")
+expected = {
+    "cloudnative-pg-timescaledb/release-metadata/*.json",
+    "cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml",
+    "cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml",
+}
+actual = {line.split("#", 1)[0].strip() for line in allowlist.read_text().splitlines() if line.split("#", 1)[0].strip()}
+if actual != expected:
+    fail(allowlist, "release metadata allowlist contains exactly release metadata JSON and the two stable catalog manifests", sorted(actual), "Do not allow release metadata autocommit to stage docs, workflows, vendor trees, secrets, or runtime artifacts.")
+policy_text = policy.read_text()
+for marker in ["job: release_metadata_autocommit", "permission: \"contents: write\"", "owner_story: 4.6"]:
+    if marker not in policy_text:
+        fail(policy, f"workflow policy contains {marker}", "missing", "Record the Story 4.6 build.yml permission exception.")
+print("PASS release metadata autocommit workflow")
+PY
+}
+
 validate_empty_diff_fixture() {
   local fixture="$1"
   python3 - "${fixture}" <<'PY'
@@ -329,6 +425,7 @@ materialize_release_metadata "${experimental_dir}" experimental
 expect_fail "pg19beta1 in stable catalog" "experimental PostgreSQL" "${GENERATOR}" --release-metadata "${experimental_dir}" --validate-catalog "${pg19_catalog}"
 
 validate_catalog_workflow "${WORKFLOW}" "${ALLOWLIST}"
+validate_release_metadata_autocommit_workflow "${BUILD_WORKFLOW}" "${RELEASE_METADATA_ALLOWLIST}"
 expect_fail "missing catalog allowlist entry" "two stable catalog manifests" validate_catalog_workflow "${WORKFLOW}" "${FIXTURE_DIR}/missing-catalog-allowlist.txt"
 expect_fail "catalog autocommit stages unlisted path" "allowlist|raw git add|autocommit" validate_catalog_workflow "${FIXTURE_DIR}/catalog-autocommit-stages-unlisted-path.yml" "${ALLOWLIST}"
 expect_fail "catalog autocommit missing empty diff no-op" "empty catalog diff" validate_empty_diff_fixture "${FIXTURE_DIR}/catalog-autocommit-diff-empty.txt"

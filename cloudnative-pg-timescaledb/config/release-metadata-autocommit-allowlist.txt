@@ -1,0 +1,3 @@
+cloudnative-pg-timescaledb/release-metadata/*.json
+cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
+cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml

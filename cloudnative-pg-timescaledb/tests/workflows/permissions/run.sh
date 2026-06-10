@@ -129,6 +129,11 @@ permission_allowlist:
     permission: "packages: write"
     reason: Promote validated GHCR final tags after release gates pass
     owner_story: 4.5
+  - workflow: .github/workflows/build.yml
+    job: release_metadata_autocommit
+    permission: "contents: write"
+    reason: Commit release metadata and digest-aware catalogs after successful publish
+    owner_story: 4.6
   - workflow: .github/workflows/security-scan.yml
     job: upload_sarif
     permission: "security-events: write"

@@ -33,3 +33,9 @@ jobs:
       packages: write
     steps:
       - run: true
+  release_metadata_autocommit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: true
