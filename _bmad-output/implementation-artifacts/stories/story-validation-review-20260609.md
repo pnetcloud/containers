@@ -58,6 +58,8 @@ Updated 2026-06-10: remote GitHub Actions evidence now proves `Validate` and `Bu
 
 Remaining proof gap: Stories 4.4, 4.5, and 4.6 are implementation-complete but still need real/staging release evidence before they can be treated as product release proof: actual cosign verification against a digest, staging/final publish metadata with promoted tags, and non-empty catalogs generated from real release metadata.
 
+Follow-up validation on 2026-06-10 found a regression in the latest remote `Build Release Candidates` run for commit `c92c5d3`: all four PG17/PG18 `trixie`/`bookworm` candidate build and smoke jobs completed successfully, then the workflow failed because `security-scan.yml` attempted to upload a SARIF artifact that the scanner had not produced. Resolution in progress: Story 4.3 now requires explicit `scanner_failed` output, deterministic SARIF diagnostic evidence before artifact upload, fail-closed scan gate behavior, and no CodeQL SARIF upload when SARIF generation failed.
+
 ### Epic 5
 
 Subagent validation found three final-proof gaps:
@@ -75,6 +77,8 @@ Resolution:
 ## Next Execution Step
 
 Current blocker is Story 5.9 plus remote workflow availability.
+
+Current implementation blocker before re-checking Story 5.9 proof: push the SARIF failure hardening and confirm a new `Build Release Candidates` run succeeds end-to-end. The previous remote failure was after successful image build/smoke, so the remaining CI blocker is security-scan artifact handling, not Docker build or extension smoke behavior.
 
 Do not close the final release proof until these external checks exist from the same repository:
 

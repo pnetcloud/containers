@@ -38,6 +38,7 @@ jobs:
     outputs:
       scan_result: ${{ steps.evaluate.outputs.scan_result }}
       sarif_path: ${{ steps.paths.outputs.sarif_path }}
+      scanner_failed: ${{ steps.scan.outputs.scanner_failed }}
       failed: ${{ steps.evaluate.outputs.failed }}
     steps:
       # actions/checkout v4.2.2
@@ -123,7 +124,9 @@ jobs:
           bash /tmp/security-scan-commands.sh
           scanner_status="$?"
           set -e
+          scanner_failed=false
           if [[ "${scanner_status}" != "0" ]]; then
+            scanner_failed=true
             python3 - "${CANDIDATE_METADATA}" "${JSON_DIR}" <<'PY'
           import json
           import sys
@@ -142,11 +145,55 @@ jobs:
               path.write_text(json.dumps(payload, sort_keys=True) + "\n")
           PY
           fi
+          if [[ ! -s "${SARIF_PATH}" ]]; then
+            scanner_failed=true
+            python3 - "${SARIF_PATH}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          path.parent.mkdir(parents=True, exist_ok=True)
+          payload = {
+              "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+              "version": "2.1.0",
+              "runs": [
+                  {
+                      "tool": {
+                          "driver": {
+                              "name": "Trivy",
+                              "informationUri": "https://github.com/aquasecurity/trivy",
+                              "rules": [],
+                          }
+                      },
+                      "results": [],
+                      "invocations": [
+                          {
+                              "executionSuccessful": False,
+                              "toolExecutionNotifications": [
+                                  {
+                                      "level": "error",
+                                      "message": {
+                                          "text": "SARIF output is missing; vulnerability scanner or SARIF generation failed."
+                                      },
+                                  }
+                              ],
+                          }
+                      ],
+                  }
+              ],
+          }
+          path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+          PY
+          fi
+          printf 'scanner_failed=%s\n' "${scanner_failed}" >> "${GITHUB_OUTPUT}"
       - id: evaluate
         name: Evaluate vulnerability policy
         env:
           CANDIDATE_METADATA: ${{ steps.paths.outputs.candidate_metadata }}
           JSON_DIR: ${{ steps.paths.outputs.json_dir }}
+          SARIF_PATH: ${{ steps.paths.outputs.sarif_path }}
+          SCANNER_FAILED: ${{ steps.scan.outputs.scanner_failed }}
           SUMMARY_PATH: ${{ steps.paths.outputs.summary_path }}
         run: |
           set -Eeuo pipefail
@@ -177,6 +224,24 @@ jobs:
           PY
           done < <(find "${JSON_DIR}" -type f -name '*.json' ! -name '*.summary.json' | sort)
           mv "${summary_tmp}" "${SUMMARY_PATH}"
+          if [[ "${SCANNER_FAILED}" == "true" ]]; then
+            failed=1
+          fi
+          if [[ ! -s "${SARIF_PATH}" ]]; then
+            printf 'command: evaluate vulnerability policy\nartifact: %s\nexpected: SARIF output exists before artifact upload\nactual: missing\nremediation: Fail closed and create SARIF diagnostics before upload-artifact runs.\n' "${SARIF_PATH}" >&2
+            failed=1
+          elif ! python3 - "${SARIF_PATH}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text())
+          if payload.get("version") != "2.1.0" or not isinstance(payload.get("runs"), list):
+              raise SystemExit("SARIF must be version 2.1.0 with runs[]")
+          PY
+          then
+            failed=1
+          fi
           if [[ "${failed}" == "0" ]]; then
             printf 'scan_result=passed\nfailed=false\n' >> "${GITHUB_OUTPUT}"
           else
@@ -216,7 +281,10 @@ jobs:
           export SBOM_STATUS="n/a"
           export PROVENANCE_STATUS="n/a"
           export SIGNATURE_STATUS="n/a"
-          if [[ '${{ steps.evaluate.outputs.failed }}' == 'true' ]]; then
+          if [[ '${{ steps.scan.outputs.scanner_failed }}' == 'true' ]]; then
+            export SUMMARY_STATUS="failure"
+            export FAILURE_REASON="vulnerability scanner or SARIF generation failed"
+          elif [[ '${{ steps.evaluate.outputs.failed }}' == 'true' ]]; then
             export SUMMARY_STATUS="failure"
             export FAILURE_REASON="vulnerability scan failed policy gate"
           else
@@ -270,7 +338,7 @@ jobs:
   upload_sarif:
     name: Upload vulnerability SARIF ${{ inputs.pg_major }} ${{ inputs.debian_variant }}
     needs: scan
-    if: always()
+    if: always() && needs.scan.outputs.scanner_failed == 'false'
     runs-on: ubuntu-latest
     permissions:
       actions: read
