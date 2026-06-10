@@ -163,15 +163,24 @@ run_orchestration() {
   run_step() {
     local label="$1"
     shift
+    local -a command=("$@")
+    if [[ "${#command[@]}" == "0" ]]; then
+      diag "release-rehearsal" "${label}" "step has a command" "empty argv" "Wire the release rehearsal step to an explicit command array."
+      exit 64
+    fi
     step_index=$((step_index + 1))
     local log_slug log
     log_slug="$(slug "${label}")"
     log="${logs_dir}/$(printf '%02d-%s.log' "${step_index}" "${log_slug}")"
     local start end status
     start="$(date -u +%s)"
+    printf 'release rehearsal step %02d: %s\n' "${step_index}" "${label}" >&2
+    printf '+ ' >&2
+    printf '%q ' "${command[@]}" >&2
+    printf '\n' >&2
     set +e
-    (cd "${checkout}" && "$@") >"${log}" 2>&1
-    status="$?"
+    (cd "${checkout}" && "${command[@]}") 2>&1 | tee "${log}"
+    status="${PIPESTATUS[0]}"
     set -e
     end="$(date -u +%s)"
     printf '%s\t%s\t%s\t%s\t%s\n' "${step_index}" "${label}" "${status}" "$((end - start))" "${log}" >> "${commands_file}"
