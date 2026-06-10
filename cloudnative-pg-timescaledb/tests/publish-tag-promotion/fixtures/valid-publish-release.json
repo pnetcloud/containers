@@ -1,0 +1,154 @@
+{
+  "candidate_metadata": [
+    {
+      "bake_target": "pg18-trixie",
+      "candidate_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-123-1-pg18-trixie-index",
+      "debian_variant": "trixie",
+      "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
+      "expected_platform": "linux/amd64",
+      "experimental": false,
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+      "index_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "intended_tags": [
+        "18",
+        "18-pg18.4-ts2.27.2-20260609",
+        "latest"
+      ],
+      "latest_eligible": true,
+      "pg_major": "18",
+      "pg_version": "18.4",
+      "platform": "linux/amd64",
+      "platform_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "platform_digests": {
+        "linux/amd64": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "linux/arm64": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "publish": true,
+      "runtime_architecture": "amd64",
+      "smoke_architecture_status": "passed",
+      "smoke_container_status": "passed",
+      "smoke_sql_status": "passed"
+    },
+    {
+      "bake_target": "pg18-trixie",
+      "candidate_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-123-1-pg18-trixie-index",
+      "debian_variant": "trixie",
+      "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
+      "expected_platform": "linux/arm64",
+      "experimental": false,
+      "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+      "index_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "intended_tags": [
+        "18",
+        "18-pg18.4-ts2.27.2-20260609",
+        "latest"
+      ],
+      "latest_eligible": true,
+      "pg_major": "18",
+      "pg_version": "18.4",
+      "platform": "linux/arm64",
+      "platform_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "platform_digests": {
+        "linux/amd64": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "linux/arm64": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "publish": true,
+      "runtime_architecture": "arm64",
+      "smoke_architecture_status": "passed",
+      "smoke_container_status": "passed",
+      "smoke_sql_status": "passed"
+    }
+  ],
+  "gates": {
+    "candidate_build": "passed",
+    "provenance": "present",
+    "sbom": "present",
+    "signature": "present",
+    "smoke_container": "passed",
+    "smoke_sql": "passed",
+    "tag_validation": "passed",
+    "verification": "passed",
+    "vulnerability_scan": "passed"
+  },
+  "release_evidence": {
+    "candidate_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "cosign_certificate_issuer": "https://token.actions.githubusercontent.com",
+    "expected_certificate_identity": "https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main",
+    "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+    "index_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "per_digest_evidence": [
+      {
+        "attestation_path": "attestations/index.raw.json",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provenance_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#provenance",
+        "sbom_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#sbom",
+        "signature_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#signature",
+        "signed_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "verification_identity": "https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main",
+        "verification_issuer": "https://token.actions.githubusercontent.com",
+        "verification_path": "verification/sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+        "verification_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#verification",
+        "verified": true
+      },
+      {
+        "attestation_path": "attestations/index.raw.json",
+        "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "provenance_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:1111111111111111111111111111111111111111111111111111111111111111#provenance",
+        "sbom_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:1111111111111111111111111111111111111111111111111111111111111111#sbom",
+        "signature_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:1111111111111111111111111111111111111111111111111111111111111111#signature",
+        "signed_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "verification_identity": "https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main",
+        "verification_issuer": "https://token.actions.githubusercontent.com",
+        "verification_path": "verification/sha256-1111111111111111111111111111111111111111111111111111111111111111.json",
+        "verification_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:1111111111111111111111111111111111111111111111111111111111111111#verification",
+        "verified": true
+      },
+      {
+        "attestation_path": "attestations/index.raw.json",
+        "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "provenance_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:2222222222222222222222222222222222222222222222222222222222222222#provenance",
+        "sbom_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:2222222222222222222222222222222222222222222222222222222222222222#sbom",
+        "signature_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:2222222222222222222222222222222222222222222222222222222222222222#signature",
+        "signed_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "verification_identity": "https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main",
+        "verification_issuer": "https://token.actions.githubusercontent.com",
+        "verification_path": "verification/sha256-2222222222222222222222222222222222222222222222222222222222222222.json",
+        "verification_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:2222222222222222222222222222222222222222222222222222222222222222#verification",
+        "verified": true
+      }
+    ],
+    "platform_digests": {
+      "linux/amd64": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "linux/arm64": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "scan_result": "passed",
+    "verified": true
+  },
+  "release_metadata_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scan_summary": [
+    {
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-123-1-pg18-trixie-index",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "failure_reason": "",
+      "intended_tag": "18-pg18.4-ts2.27.2-20260609",
+      "scan_result": "passed"
+    },
+    {
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:candidate-123-1-pg18-trixie-index",
+      "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "failure_reason": "",
+      "intended_tag": "18-pg18.4-ts2.27.2-20260609",
+      "scan_result": "passed"
+    }
+  ]
+}

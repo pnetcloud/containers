@@ -8,7 +8,7 @@
   "expected_platform": "linux/amd64",
   "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
   "index_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "intended_tags": ["19beta1-pg19beta1-tsunresolved-20260609"],
+  "intended_tags": ["19beta1", "19beta1-pg19beta1-tsunresolved-20260609"],
   "latest_eligible": false,
   "pg_major": "19beta1",
   "pg_version": "19beta1",

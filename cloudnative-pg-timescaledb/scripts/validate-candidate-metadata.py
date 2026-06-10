@@ -91,8 +91,14 @@ def validate_record(command, artifact, record, index):
         require(record[field] == "passed", command, artifact, f"record[{index}].{field} is passed", repr(record[field]), "Only emit publish-path candidate metadata after every smoke gate passes.")
 
     require(record["publish"] is True, command, artifact, f"record[{index}].publish is true", repr(record["publish"]), "Exclude skipped metadata rows from candidate publish jobs.")
-    require(record["experimental"] is False, command, artifact, f"record[{index}].experimental is false", repr(record["experimental"]), "Do not send experimental PostgreSQL preview rows into the publish path.")
     require(isinstance(record["intended_tags"], list) and record["intended_tags"], command, artifact, f"record[{index}].intended_tags is a non-empty array", repr(record["intended_tags"]), "Carry final tags as metadata only; do not push them in the candidate job.")
+    if record["experimental"] is True:
+        normal_tags = [tag for tag in record["intended_tags"] if tag in {record["pg_major"], f"{record['pg_major']}-{record['debian_variant']}", "latest"}]
+        require(record["pg_major"] == "19beta1", command, artifact, f"record[{index}].experimental publish path is limited to PostgreSQL 19 preview", record["pg_major"], "Only PostgreSQL 19 preview rows may enter the experimental publish path.")
+        require(not normal_tags, command, artifact, f"record[{index}].experimental intended_tags contain no normal rolling/latest tags", normal_tags, "Experimental candidates may carry only immutable preview tags.")
+        require(all(tag.startswith(f"{record['pg_major']}-pg{record['pg_version']}-ts") for tag in record["intended_tags"]), command, artifact, f"record[{index}].experimental intended_tags are immutable preview tags", record["intended_tags"], "Use immutable experimental tags for PostgreSQL preview rows.")
+    else:
+        require(record["experimental"] is False, command, artifact, f"record[{index}].experimental is boolean false for stable rows", repr(record["experimental"]), "Stable candidate rows must not be marked experimental.")
     forbidden_refs = {f"{record['image']}:{tag}" for tag in record["intended_tags"]}
     require(record["candidate_ref"] not in forbidden_refs and ":latest" not in record["candidate_ref"], command, artifact, f"record[{index}].candidate_ref is candidate-only, not a final tag", record["candidate_ref"], "Use a candidate-scoped tag or digest reference for the release candidate.")
 

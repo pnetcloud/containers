@@ -113,7 +113,7 @@ done
 expect_fail "missing per-platform smoke digest coverage" "platform_digests keys exactly match platforms" "${METADATA_VALIDATOR}" --file "${FIXTURE_DIR}/missing-platform-smoke.json"
 expect_fail "missing per-platform metadata record" "records cover every declared platform" "${METADATA_VALIDATOR}" --file "${FIXTURE_DIR}/missing-platform-record.json"
 expect_fail "wrong runtime architecture" "runtime architecture maps" "${METADATA_VALIDATOR}" --file "${FIXTURE_DIR}/wrong-runtime-architecture.json"
-expect_fail "experimental row enters publish path" "experimental is false" "${METADATA_VALIDATOR}" --file "${FIXTURE_DIR}/experimental-enters-publish-path.json"
+expect_fail "experimental row enters publish path with normal tag" "normal rolling/latest" "${METADATA_VALIDATOR}" --file "${FIXTURE_DIR}/experimental-enters-publish-path.json"
 
 validate_workflow_candidate_gate "${WORKFLOW}"
 expect_fail "default Git context workflow" "checkout path context" validate_workflow_candidate_gate "${FIXTURE_DIR}/default-git-context.yml"

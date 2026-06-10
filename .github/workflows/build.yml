@@ -75,7 +75,7 @@ jobs:
           INTENDED_TAGS_JSON: ${{ toJSON(matrix.intended_tags) }}
         run: |
           set -Eeuo pipefail
-          if [[ "${PUBLISH}" != "true" || "${EXPERIMENTAL}" == "true" ]]; then
+          if [[ "${PUBLISH}" != "true" ]]; then
             printf 'Refusing publish path for PG=%s DEBIAN=%s publish=%s experimental=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${PUBLISH}" "${EXPERIMENTAL}" >&2
             exit 1
           fi
@@ -400,5 +400,186 @@ jobs:
         with:
           name: release-evidence-${{ matrix.bake_target }}
           path: release-evidence/output/${{ matrix.bake_target }}
+          if-no-files-found: error
+          retention-days: 30
+
+  tag_validation:
+    name: Tag validation ${{ matrix.pg_major }} ${{ matrix.debian_variant }}
+    needs:
+      - matrix
+      - candidate
+      - security_scan
+      - release_evidence
+    if: ${{ needs.matrix.outputs.has_include == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.build_matrix) }}
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-candidate-${{ matrix.bake_target }}
+          path: tag-validation/input/candidate
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: vulnerability-scan-summary-${{ matrix.bake_target }}
+          path: tag-validation/input/scan-summary
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-evidence-${{ matrix.bake_target }}
+          path: tag-validation/input/release-evidence
+      - name: Validate final tag policy and write release gate metadata
+        env:
+          CANDIDATE_METADATA: tag-validation/input/candidate/release-candidate.json
+          SCAN_SUMMARY: tag-validation/input/scan-summary/vulnerability-scan-summary.json
+          RELEASE_EVIDENCE: tag-validation/input/release-evidence/release-evidence.json
+          RELEASE_DATE: 20260609
+          OUTPUT_DIR: tag-validation/output/${{ matrix.bake_target }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${OUTPUT_DIR}"
+          cloudnative-pg-timescaledb/scripts/validate-tags.sh --metadata cloudnative-pg-timescaledb/versions.yaml --date "${RELEASE_DATE}"
+          cloudnative-pg-timescaledb/scripts/validate-publish-gates.sh \
+            --candidate-metadata "${CANDIDATE_METADATA}" \
+            --release-evidence "${RELEASE_EVIDENCE}" \
+            --scan-summary "${SCAN_SUMMARY}" \
+            --tag-validation-status passed \
+            --gate-output "${OUTPUT_DIR}/release-gate-metadata.json"
+      # actions/upload-artifact v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-gate-metadata-${{ matrix.bake_target }}
+          path: tag-validation/output/${{ matrix.bake_target }}/release-gate-metadata.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish tags ${{ matrix.pg_major }} ${{ matrix.debian_variant }}
+    needs:
+      - matrix
+      - candidate
+      - security_scan
+      - release_evidence
+      - tag_validation
+    if: ${{ needs.matrix.outputs.has_include == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.matrix.outputs.build_matrix) }}
+    steps:
+      # actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-candidate-${{ matrix.bake_target }}
+          path: publish/input/candidate
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: vulnerability-scan-summary-${{ matrix.bake_target }}
+          path: publish/input/scan-summary
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-evidence-${{ matrix.bake_target }}
+          path: publish/input/release-evidence
+      # actions/download-artifact v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-gate-metadata-${{ matrix.bake_target }}
+          path: publish/input/release-gate-metadata
+      - name: Login to GHCR for final tag promotion
+        run: |
+          set -Eeuo pipefail
+          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - id: publish_metadata
+        name: Validate gates and promote final tags
+        env:
+          CANDIDATE_METADATA: publish/input/candidate/release-candidate.json
+          SCAN_SUMMARY: publish/input/scan-summary/vulnerability-scan-summary.json
+          RELEASE_EVIDENCE: publish/input/release-evidence/release-evidence.json
+          RELEASE_GATE_METADATA: publish/input/release-gate-metadata/release-gate-metadata.json
+          OUTPUT_DIR: publish/output/${{ matrix.bake_target }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${OUTPUT_DIR}"
+          metadata_path="${OUTPUT_DIR}/ghcr-release-metadata.json"
+          cloudnative-pg-timescaledb/scripts/validate-publish-gates.sh \
+            --candidate-metadata "${CANDIDATE_METADATA}" \
+            --release-evidence "${RELEASE_EVIDENCE}" \
+            --scan-summary "${SCAN_SUMMARY}" \
+            --release-gate-metadata "${RELEASE_GATE_METADATA}" \
+            --output "${metadata_path}"
+          python3 - "${metadata_path}" <<'PY' > "${OUTPUT_DIR}/promote-tags.sh"
+          import json
+          import shlex
+          import sys
+          from pathlib import Path
+
+          metadata = json.loads(Path(sys.argv[1]).read_text())
+          source = f"{metadata['image']}@{metadata['published_digest']}"
+          print("set -Eeuo pipefail")
+          for tag in metadata["final_tags"]:
+              target = f"{metadata['image']}:{tag}"
+              print("docker buildx imagetools create " + shlex.quote(source) + " -t " + shlex.quote(target))
+          PY
+          bash "${OUTPUT_DIR}/promote-tags.sh"
+          python3 - "${metadata_path}" <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          import sys
+          from pathlib import Path
+
+          metadata = json.loads(Path(sys.argv[1]).read_text())
+          print(f"image={metadata['image']}")
+          print(f"release_metadata_record_id={metadata['release_metadata_record_id']}")
+          print(f"release_metadata_ref={metadata['release_metadata_ref']}")
+          print(f"published_digest={metadata['published_digest']}")
+          print(f"promotion_status={metadata['promotion_status']}")
+          print("final_tags=" + ",".join(metadata["final_tags"]))
+          PY
+      - name: Write publish summary
+        env:
+          METADATA_PATH: publish/output/${{ matrix.bake_target }}/ghcr-release-metadata.json
+        run: |
+          set -Eeuo pipefail
+          {
+            printf '## GHCR publish\n\n'
+            python3 - "${METADATA_PATH}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          metadata = json.loads(Path(sys.argv[1]).read_text())
+          print(f"- Image: `{metadata['image']}`")
+          print(f"- Published digest: `{metadata['published_digest']}`")
+          print(f"- Release metadata record: `{metadata['release_metadata_record_id']}`")
+          print(f"- Promotion status: `{metadata['promotion_status']}`")
+          print(f"- Scan result: `{metadata['scan_result']}`")
+          print(f"- Verified: `{metadata['verified']}`")
+          print(f"- Certificate identity: `{metadata['cosign_certificate_identity']}`")
+          print(f"- OIDC issuer: `{metadata['cosign_certificate_issuer']}`")
+          for tag in metadata["final_tags"]:
+              print(f"- Tag: `{metadata['image']}:{tag}`")
+          print(f"- SBOM: `{metadata['sbom_ref']}`")
+          print(f"- Provenance: `{metadata['provenance_ref']}`")
+          print(f"- Signature: `{metadata['signature_ref']}`")
+          PY
+          } >> "${GITHUB_STEP_SUMMARY}"
+      # actions/upload-artifact v4.6.2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ghcr-release-metadata-${{ matrix.bake_target }}
+          path: publish/output/${{ matrix.bake_target }}/ghcr-release-metadata.json
           if-no-files-found: error
           retention-days: 30
