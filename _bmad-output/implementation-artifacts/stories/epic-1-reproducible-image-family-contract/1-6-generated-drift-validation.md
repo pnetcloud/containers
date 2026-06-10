@@ -3,7 +3,7 @@ storyId: 1.6
 storyKey: 1-6-generated-drift-validation
 epic: 1
 title: 'Generated Drift Validation'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: 801c4e9
