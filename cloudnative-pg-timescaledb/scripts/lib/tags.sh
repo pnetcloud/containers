@@ -106,9 +106,17 @@ except ValueError:
     fail("valid UTC calendar date in YYYYMMDD", release_date, "Use a real UTC calendar date.")
 
 try:
-    data = parse_yaml_subset(path.read_text())
+    data = parse_yaml_subset(path.read_text(encoding="utf-8"))
 except FileNotFoundError:
     fail("metadata file exists", str(path), "Create the metadata file before validating tags.")
+except IsADirectoryError:
+    fail("metadata file is a regular UTF-8 YAML file", str(path), "Pass a metadata YAML file path, not a directory.")
+except PermissionError as exc:
+    fail("metadata file is readable", repr(exc), "Fix file permissions before validating tags.")
+except UnicodeDecodeError as exc:
+    fail("metadata file is UTF-8 text", repr(exc), "Write tag metadata files as UTF-8 YAML text.")
+except OSError as exc:
+    fail("metadata file is readable", repr(exc), "Fix the metadata file path or filesystem error before validating tags.")
 
 required_top = {"schema_version", "image", "allowed", "entries"}
 optional_top = {"barman_plugin"}
@@ -162,6 +170,8 @@ for idx, entry in enumerate(entries):
             fail(f"entries[{idx}].{field} is boolean", type(entry[field]).__name__, f"Use true or false for {field}.")
     if "tags" in entry and (not isinstance(entry["tags"], list) or any(not isinstance(tag, str) for tag in entry["tags"])):
         fail(f"entries[{idx}].tags is string list", repr(entry.get("tags")), "Use an inline YAML string list for expected tags.")
+    if "tags" in entry and entry["publish"] is not True:
+        fail(f"entries[{idx}].tags only present on publishable rows", repr(entry["tags"]), "Remove tags from skipped rows until publish: true.")
     if entry["pg_major"] not in expected_allowed["postgres_majors"]:
         fail("pg_major is one of 17, 18, 19beta1", repr(entry["pg_major"]), "Use only supported PostgreSQL lines; plain 19 is unsupported.")
     if entry["debian_variant"] not in expected_allowed["debian_variants"]:

@@ -10,10 +10,18 @@ release_date=""
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --metadata)
+      if [[ "$#" -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+        diag "validate-tags" "arguments" "--metadata <path>" "${2:-missing}" "Pass a non-empty metadata file path after --metadata."
+        exit 64
+      fi
       metadata_file="${2:-}"
       shift 2
       ;;
     --date)
+      if [[ "$#" -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+        diag "validate-tags" "arguments" "--date <YYYYMMDD>" "${2:-missing}" "Pass a non-empty UTC release date after --date."
+        exit 64
+      fi
       release_date="${2:-}"
       shift 2
       ;;
