@@ -18,6 +18,19 @@ ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18
 
 `latest` is convenience-only in v1 and points to PostgreSQL `18` on Debian `trixie`. Prefer explicit PostgreSQL major tags over `latest` in operator-managed manifests.
 
+## Image Tags
+
+Immutable `trixie` tags use `{major}-pg{pg_version}-ts{timescaledb_version}-{yyyymmdd}`, for example `18-pg18.4-ts2.27.2-20260609`. Secondary Debian `bookworm` tags append `-bookworm`, for example `18-pg18.4-ts2.27.2-20260609-bookworm`; rolling secondary tags also keep the OS suffix, such as `18-bookworm`.
+
+CloudNativePG `imageName` examples should use immutable or major-prefixed tags, not `latest`. `latest` is convenience-only for PostgreSQL `18` on Debian `trixie`; PostgreSQL `19beta1` is experimental and never receives `latest` or normal rolling tags. Experimental preview examples use immutable tags such as `19beta1-pg19beta1-ts2.27.2-20260609`.
+
+```yaml
+spec:
+  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609
+```
+
+See `docs/image-tags.md` in the repository root for detailed tag policy and CloudNativePG examples.
+
 The compatibility overview is generated from `cloudnative-pg-timescaledb/versions.yaml`:
 
 - `cloudnative-pg-timescaledb/docs/generated/compatibility.md`

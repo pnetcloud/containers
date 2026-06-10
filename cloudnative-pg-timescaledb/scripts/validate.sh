@@ -87,4 +87,7 @@ fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs/readme/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs/readme/run.sh"
 fi
+if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs/tags/run.sh" ]]; then
+  "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/docs/tags/run.sh"
+fi
 printf 'PASS make validate Story 1.2 available gates\n'

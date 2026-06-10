@@ -41,6 +41,13 @@ def reject(pattern, expected, remediation, flags=re.I | re.S):
     if match:
         fail(readme, expected, match.group(0), remediation)
 
+def reject_unless_negated(pattern, expected, remediation, flags=re.I | re.S):
+    for match in re.finditer(pattern, text, flags):
+        window = text[max(0, match.start() - 80):match.end()].lower()
+        if re.search(r"\b(?:never|not|no|without|must\s+not|do\s+not|does\s+not)\b", window):
+            continue
+        fail(readme, expected, match.group(0), remediation)
+
 def scalar(value):
     value = value.strip()
     if value.startswith('"') and value.endswith('"'):
@@ -129,7 +136,7 @@ for forbidden in ["Alpine", "bullseye", "Artifact Hub"]:
 reject(r"(?:Alpine|bullseye|Artifact Hub).{0,80}(?:in\s+scope|supported|published|included)", "forbidden platforms/metadata remain out of v1 scope", "Keep Alpine, bullseye, and Artifact Hub metadata out of scope.")
 reject(r"PostgreSQL\s+`?(?:9|10|11|12|13|14|15|16)`?.{0,80}(?:in\s+scope|supported|published|included)", "legacy PostgreSQL majors remain out of v1 scope", "Only document 17, 18, and experimental 19beta1 for v1.")
 reject(r"PostgreSQL\s+`?19(?:beta1)?`?.{0,80}(?:stable|production-ready|non-experimental)", "PostgreSQL 19 remains experimental", "Do not describe PG19 beta as stable or production-ready.")
-reject(r"`latest`.{0,120}(?:PostgreSQL\s+`?(?:17|19beta1)`?|Debian\s+`?bookworm`?)", "latest does not point to 17, 19beta1, or bookworm", "Keep latest targeting PostgreSQL 18 on Debian trixie only.")
+reject_unless_negated(r"`latest`.{0,100}(?:points\s+to|targets|tracks|can\s+point\s+to|published\s+for|receives?|gets?|uses?|includes?|available\s+for).{0,100}(?:PostgreSQL\s+`?(?:17|19beta1)`?|Debian\s+`?bookworm`?)", "latest does not point to 17, 19beta1, or bookworm", "Keep latest targeting PostgreSQL 18 on Debian trixie only.")
 reject(r"(?:primary\s+usage|primary\s+tag|primary\s+example).{0,80}`latest`|`latest`.{0,80}(?:primary\s+usage|primary\s+tag|primary\s+example)", "latest is not primary usage", "Use explicit PostgreSQL major tags as primary examples.")
 
 expected = render_table(load_entries(metadata))
