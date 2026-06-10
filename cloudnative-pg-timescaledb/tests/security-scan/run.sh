@@ -117,6 +117,7 @@ require("actions/upload-artifact@" in text and "vulnerability-scan-json" in text
 require("vulnerability-scan-sarif" in text and "upload-sarif@" in text, "workflow stores and uploads SARIF", "SARIF upload missing", "Upload SARIF when code scanning is enabled.")
 require("needs.scan.outputs.scanner_failed == 'false'" in text, "SARIF upload job skips scanner-generated diagnostic SARIF after scanner failure", "scanner_failed upload guard missing", "Do not run CodeQL SARIF upload when scanner or SARIF generation failed.")
 require("security-events: write" in text, "SARIF upload job has security-events write", "security-events write missing", "Grant code scanning upload permission only for SARIF upload.")
+require("continue-on-error: true" in text and "steps.upload_sarif.outcome" in text, "CodeQL SARIF upload is non-blocking and summarized from the upload step outcome", "blocking or untracked SARIF upload", "Do not fail a successful candidate scan solely because CodeQL upload is unavailable or not authorized.")
 require(not re.search(r"secrets\." , text), "workflow does not require explicit secrets", "secrets context used", "Use GitHub token only for same-repository candidate access.")
 PY
 }

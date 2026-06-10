@@ -358,13 +358,16 @@ jobs:
           name: vulnerability-scan-summary-${{ inputs.bake_target }}
           path: sarif-summary
       # github/codeql-action/upload-sarif v3.36.2
-      - uses: github/codeql-action/upload-sarif@8272c299f21ca24af15dfe9ac0971ba969e5e0d5
+      - id: upload_sarif
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@8272c299f21ca24af15dfe9ac0971ba969e5e0d5
         with:
           sarif_file: sarif/vulnerability-scan.sarif
       - name: Write SARIF upload summary
         if: always()
         env:
           SUMMARY_STATUS: ${{ job.status }}
+          UPLOAD_OUTCOME: ${{ steps.upload_sarif.outcome }}
         run: |
           set -Eeuo pipefail
           export IMAGE_REF="n/a" CANDIDATE_DIGEST="n/a"
@@ -383,7 +386,7 @@ jobs:
             )"
           fi
           export SARIF_PATH="sarif/vulnerability-scan.sarif"
-          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+          if [[ "${UPLOAD_OUTCOME}" == "success" ]]; then
             UPLOAD_STATUS="uploaded"
           else
             UPLOAD_STATUS="failed"
@@ -391,7 +394,7 @@ jobs:
           export UPLOAD_STATUS
           export SCAN_RESULT="${{ needs.scan.outputs.scan_result }}"
           export PUBLISHED_DIGEST="n/a"
-          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+          if [[ "${UPLOAD_OUTCOME}" == "success" ]]; then
             FAILURE_REASON="none"
           else
             FAILURE_REASON="SARIF upload failed; inspect job logs"
