@@ -74,6 +74,8 @@ require("actions/checkout@" in text, "workflow checks out repository before gene
 if "skipped_summary=\"$(python3 -c" in text:
     require("row.get(\"pg_major\")" in text and "row.get('pg_major')" not in text, "matrix skipped summary inline Python is shell-quoted safely", "unsafe single-quoted row.get found", "Do not put single quotes inside a single-quoted python3 -c workflow command.")
 require("qemu-user-static" in text and "update-binfmts --enable qemu-aarch64" in text, "workflow prepares arm64 emulation for per-platform smoke", "qemu/binfmt setup missing", "Enable qemu-aarch64 before running arm64 candidate smoke on ubuntu-latest.")
+if path.name == "build.yml":
+    require("Buildx bootstrap not ready yet" in text and "sleep 10" in text, "BuildKit bootstrap retries transient Docker Hub or runner network failures", "Buildx bootstrap retry missing", "Retry docker buildx inspect --bootstrap because pulling the BuildKit image can time out on GitHub runners.")
 require("docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl" in text, "candidate job uses Docker Buildx Bake", "Buildx Bake command missing", "Build release candidates through generated Bake targets.")
 require('.context=.' not in text, "candidate job does not override generated Bake context to repository root", "stale .context=. override found", "Use the generated cloudnative-pg-timescaledb Bake context so generated Dockerfiles can COPY project-local scripts.")
 require('imagetools inspect "${candidate_ref}" --raw' in text and "expected_platform" in text and 'manifest.get("platform")' in text, "workflow extracts per-platform digest from raw manifest data", "raw platform digest extraction missing", "Do not record a top-level index digest as a single-platform digest.")

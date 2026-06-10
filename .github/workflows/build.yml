@@ -58,7 +58,19 @@ jobs:
           sudo apt-get install -y --no-install-recommends binfmt-support qemu-user-static
           sudo update-binfmts --enable qemu-aarch64 || true
           docker buildx create --name "candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.bake_target }}" --use
-          docker buildx inspect --bootstrap
+          bootstrap_buildx() {
+            local attempt
+            for attempt in 1 2 3 4 5 6; do
+              if docker buildx inspect --bootstrap; then
+                return 0
+              fi
+              printf 'Buildx bootstrap not ready yet target=%s attempt=%s\n' '${{ matrix.bake_target }}' "${attempt}" >&2
+              sleep 10
+            done
+            printf 'Buildx bootstrap failed target=%s\n' '${{ matrix.bake_target }}' >&2
+            return 1
+          }
+          bootstrap_buildx
       - name: Login to GHCR
         run: |
           set -Eeuo pipefail
