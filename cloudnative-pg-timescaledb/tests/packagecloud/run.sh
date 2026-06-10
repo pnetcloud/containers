@@ -239,6 +239,27 @@ expect_fail "nonpublish skip reason missing arm64" \
   "${RESOLVER}" --check-packages --metadata "${nonpublish_incomplete_metadata}" --fixture-file "${FIXTURE_DIR}/missing-toolkit-nonpublish-skip.json"
 rm -f "${nonpublish_incomplete_metadata}"
 
+resolver_managed_missing_metadata="$(mktemp)"
+resolver_managed_json="$(mktemp)"
+write_metadata "${resolver_managed_missing_metadata}" "18" "trixie" "\"linux/amd64\", \"linux/arm64\"" "false" "false" "resolver:old-reason: stale"
+"${RESOLVER}" --check-packages --metadata "${resolver_managed_missing_metadata}" --fixture-file "${FIXTURE_DIR}/pg19beta1-cnpg-present-packages-missing.json" --preserve-manual-skip --json >"${resolver_managed_json}"
+python3 - "${resolver_managed_json}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+entry = json.loads(Path(sys.argv[1]).read_text())["entries"][0]
+reason = entry["skip_reason"]
+required = [
+    "timescaledb-2-postgresql-18 PostgreSQL 18 trixie linux/amd64 linux/arm64 missing packages while CNPG exists",
+    "timescaledb-toolkit-postgresql-18 PostgreSQL 18 trixie linux/amd64 linux/arm64 missing packages while CNPG exists",
+]
+missing = [fragment for fragment in required if fragment not in reason]
+if missing:
+    raise SystemExit(f"resolver-managed skip_reason missed package evidence: {missing}; actual={reason!r}")
+PY
+rm -f "${resolver_managed_missing_metadata}" "${resolver_managed_json}"
+
 pg19_metadata="$(mktemp)"
 write_metadata "${pg19_metadata}" "19beta1" "trixie" "\"linux/amd64\", \"linux/arm64\"" "false" "true" "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists"
 "${RESOLVER}" --check-packages --metadata "${pg19_metadata}" --fixture-file "${FIXTURE_DIR}/pg19beta1-cnpg-present-packages-missing.json" >/tmp/story-2-2-pg19.out

@@ -279,7 +279,7 @@ payload["packages"] = [
 path.write_text(json.dumps(payload, separators=(",", ":")))
 PY
 run_update "${resolver_skip_project}" "${bad_upstream}" "${base_tmp}/resolver-skip.out" "${base_tmp}/resolver-skip.err" || { diag "make update" "update-resolver-skip-reason" "exit 0" "$(cat "${base_tmp}/resolver-skip.err")" "Resolver-prefixed skip reasons should be updateable."; exit 1; }
-grep -Fq 'skip_reason: "timescaledb-toolkit-postgresql-18 PostgreSQL 18 bookworm linux/arm64 missing packages while CNPG exists"' "${resolver_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep resolver skip" "update-resolver-skip-reason" "package/platform skip reason updated" "missing" "Update resolver-prefixed skip reasons to package-specific evidence."; exit 1; }
+grep -Fq 'skip_reason: "resolver:package-unavailable: timescaledb-toolkit-postgresql-18 PostgreSQL 18 bookworm linux/arm64 missing packages while CNPG exists"' "${resolver_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep resolver skip" "update-resolver-skip-reason" "package/platform skip reason updated" "missing" "Update resolver-prefixed skip reasons to package-specific evidence."; exit 1; }
 
 hard_project="${base_tmp}/hard-fail"
 prepare_project "${hard_project}"

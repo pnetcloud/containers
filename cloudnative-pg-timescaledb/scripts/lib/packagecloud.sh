@@ -429,7 +429,11 @@ def contract_skip_reason(entry, package_name, platforms, detail):
     return f"{package_name} PostgreSQL {entry['pg_major']} {entry['debian_variant']} {platform_text} {detail}"
 
 
-def resolve_package(command, artifact, inventory, entry, package_type, preserve_manual_skip=False):
+def append_resolver_skip_reason(entry, package_name, platforms, detail):
+    entry.setdefault("_resolver_skip_reasons", []).append(contract_skip_reason(entry, package_name, platforms, detail))
+
+
+def resolve_package(command, artifact, inventory, entry, package_type, preserve_manual_skip=False, resolver_managed_skip=False):
     package_name = expected_package_name(package_type, entry["pg_major"])
     versions_by_platform = {}
     missing_platforms = []
@@ -450,8 +454,9 @@ def resolve_package(command, artifact, inventory, entry, package_type, preserve_
         missing_platform_names = [platform for platform, _arch in missing_platforms]
         if manual_skip_preserved(entry, preserve_manual_skip):
             return package_name, "", ""
-        if preserve_manual_skip and str(entry.get("skip_reason", "")).startswith("resolver:"):
-            entry["skip_reason"] = contract_skip_reason(entry, package_name, missing_platform_names, "missing packages while CNPG exists")
+        if resolver_managed_skip:
+            append_resolver_skip_reason(entry, package_name, missing_platform_names, "missing packages while CNPG exists")
+            return package_name, "", ""
         for platform, arch in missing_platforms:
             if not skip_reason_specific(entry["skip_reason"], package_name, entry, platform):
                 fail_entry(command, artifact, entry, package_type, platform, package_name, f"missing package for architecture {arch}; skip_reason={entry['skip_reason']!r}", "For publish: false, include package name, PostgreSQL major, Debian variant, and every missing platform in skip_reason.")
@@ -463,8 +468,9 @@ def resolve_package(command, artifact, inventory, entry, package_type, preserve_
             fail_entry(command, artifact, entry, package_type, ",".join(entry["platforms"]), package_name, f"mismatched package versions: {actual}", "Choose one package version available on every required platform.")
         if manual_skip_preserved(entry, preserve_manual_skip):
             return package_name, "", ""
-        if preserve_manual_skip and str(entry.get("skip_reason", "")).startswith("resolver:"):
-            entry["skip_reason"] = contract_skip_reason(entry, package_name, entry["platforms"], "mismatched package versions")
+        if resolver_managed_skip:
+            append_resolver_skip_reason(entry, package_name, entry["platforms"], "mismatched package versions")
+            return package_name, "", ""
         skip_tokens = set(re.split(r"[^A-Za-z0-9_./:+~-]+", entry["skip_reason"]))
         if package_name not in skip_tokens or "mismatched package versions" not in entry["skip_reason"]:
             fail_entry(command, artifact, entry, package_type, ",".join(entry["platforms"]), package_name, f"mismatched package versions: {actual}; skip_reason={entry['skip_reason']!r}", "For publish: false, include package name and mismatched package versions in skip_reason.")
@@ -494,8 +500,14 @@ def resolve_entries(command, artifact, data, inventory, preserve_manual_skip=Fal
             missing_platforms = sorted(required_platforms - platform_set)
             if missing_platforms and not all(platform in entry["skip_reason"] for platform in missing_platforms):
                 fail_entry(command, artifact, entry, "all", ",".join(entry["platforms"]), f"skip_reason names omitted platforms {missing_platforms}", entry["skip_reason"], "For publish: false with a reduced platform set, name every omitted required platform in skip_reason.")
-        ts_name, ts_pkg_version, ts_version = resolve_package(command, artifact, inventory, entry, "timescaledb", preserve_manual_skip)
-        tk_name, tk_pkg_version, tk_version = resolve_package(command, artifact, inventory, entry, "toolkit", preserve_manual_skip)
+        resolver_managed_skip = preserve_manual_skip and str(entry.get("skip_reason", "")).startswith("resolver:")
+        if resolver_managed_skip:
+            entry["_resolver_skip_reasons"] = []
+        ts_name, ts_pkg_version, ts_version = resolve_package(command, artifact, inventory, entry, "timescaledb", preserve_manual_skip, resolver_managed_skip)
+        tk_name, tk_pkg_version, tk_version = resolve_package(command, artifact, inventory, entry, "toolkit", preserve_manual_skip, resolver_managed_skip)
+        if resolver_managed_skip and entry["_resolver_skip_reasons"]:
+            entry["skip_reason"] = "resolver:package-unavailable: " + "; ".join(entry["_resolver_skip_reasons"])
+        entry.pop("_resolver_skip_reasons", None)
         results.append(
             {
                 "pg_major": entry["pg_major"],
