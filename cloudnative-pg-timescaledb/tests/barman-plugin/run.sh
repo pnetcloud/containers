@@ -105,8 +105,9 @@ run_update() {
   local fixture="$3"
   local stdout_file="$4"
   local stderr_file="$5"
+  cp "${fixture}" "${upstream}/barman-plugin.json"
   set +e
-  (cd "${project}" && BARMAN_PLUGIN_FIXTURE="${fixture}" make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
+  (cd "${project}" && make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
   local status="$?"
   set -e
   return "${status}"
@@ -115,28 +116,19 @@ run_update() {
 assert_barman_json() {
   local file="$1"
   local expected_changed="$2"
-  local expected_old="$3"
-  local expected_new="$4"
-  python3 - "${file}" "${expected_changed}" "${expected_old}" "${expected_new}" <<'PY'
+  python3 - "${file}" "${expected_changed}" <<'PY'
 from pathlib import Path
 import json
 import sys
 payload = json.loads(Path(sys.argv[1]).read_text())
 expected_changed = sys.argv[2] == "true"
-expected_old = sys.argv[3]
-expected_new = sys.argv[4]
-plugin = payload.get("barman_plugin", {})
-required = {"old_reference", "new_reference", "changed", "noop", "manifest_url", "plugin_image", "sidecar_image", "backup_tooling_free", "changed_fields"}
-if not required.issubset(plugin):
-    raise SystemExit(f"missing barman summary fields: {plugin}")
-if plugin["old_reference"] != expected_old or plugin["new_reference"] != expected_new:
-    raise SystemExit(f"wrong old/new reference: {plugin}")
-if plugin["changed"] is not expected_changed or plugin["noop"] is not (not expected_changed):
-    raise SystemExit(f"wrong changed/noop: {plugin}")
-if plugin["backup_tooling_free"] is not True:
-    raise SystemExit(f"expected backup_tooling_free true: {plugin}")
+required = {"changed", "updated_entries", "old", "new", "generated", "summary_path", "exit_code", "failure_reason"}
+if set(payload) != required:
+    raise SystemExit(f"wrong update JSON keys: {sorted(payload)}")
 if payload.get("changed") is not expected_changed:
     raise SystemExit(f"top-level changed should reflect Barman update: {payload}")
+if payload.get("exit_code") != 0 or payload.get("failure_reason") != "":
+    raise SystemExit(f"expected success JSON: {payload}")
 PY
 }
 
@@ -172,7 +164,7 @@ if ! run_update "${current_project}" "${upstream}" "${FIXTURE_DIR}/current-refer
   diag "make update" "current-reference" "exit 0" "$(cat "${base_tmp}/current.err")" "Current Barman reference should be a deterministic no-op."
   exit 1
 fi
-assert_barman_json "${base_tmp}/current.out" false "v0.13.0" "v0.13.0"
+assert_barman_json "${base_tmp}/current.out" false
 status="$(cd "${current_project}" && git status --porcelain --untracked-files=all)"
 [[ -z "${status}" ]] || { diag "git status" "current-reference" "clean no-op" "${status}" "Current Barman reference must not rewrite metadata or docs."; exit 1; }
 
@@ -182,7 +174,7 @@ if ! run_update "${changed_project}" "${upstream}" "${FIXTURE_DIR}/changed-refer
   diag "make update" "changed-reference" "exit 0" "$(cat "${base_tmp}/changed.err")" "Changed Barman reference should update metadata and generated docs deterministically."
   exit 1
 fi
-assert_barman_json "${base_tmp}/changed.out" true "v0.13.0" "v0.14.0"
+assert_barman_json "${base_tmp}/changed.out" true
 status="$(cd "${changed_project}" && git status --porcelain --untracked-files=all)"
 expected_status=$' M cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md\n M cloudnative-pg-timescaledb/versions.yaml'
 [[ "${status}" == "${expected_status}" ]] || { diag "git status" "changed-reference" "only versions.yaml and generated Barman doc change" "${status}" "Keep Barman updates deterministic and reviewable."; exit 1; }

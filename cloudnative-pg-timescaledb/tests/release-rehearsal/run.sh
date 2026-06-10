@@ -197,6 +197,8 @@ done
 prepare_orchestration_project() {
   local project="$1"
   mkdir -p "${project}/cloudnative-pg-timescaledb/scripts"
+  mkdir -p "${project}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json" "${project}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json"
   printf 'SHELL := /usr/bin/env bash\n' > "${project}/Makefile"
   # shellcheck disable=SC2016
   printf '#!/usr/bin/env bash\nset -Eeuo pipefail\nprintf "validate-docs\\n" >> "${RELEASE_REHEARSAL_CAPTURE:?}"\n' > "${project}/cloudnative-pg-timescaledb/scripts/validate-docs.sh"

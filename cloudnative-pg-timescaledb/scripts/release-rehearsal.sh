@@ -192,6 +192,7 @@ run_orchestration() {
   ln -s "${checkout}/cloudnative-pg-timescaledb/tests/cnpg-resolver/fixtures" "${update_fixture_root}/cnpg"
   ln -s "${checkout}/cloudnative-pg-timescaledb/tests/packagecloud/fixtures" "${update_fixture_root}/packages"
   barman_plugin_fixture="${checkout}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json"
+  cp "${barman_plugin_fixture}" "${update_fixture_root}/barman-plugin.json"
   local commands_file="${logs_dir}/commands.tsv"
   local last_log_file=""
   : > "${commands_file}"
@@ -229,7 +230,7 @@ run_orchestration() {
     fi
   }
 
-  run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" BARMAN_PLUGIN_FIXTURE="${barman_plugin_fixture}" make --no-print-directory update "UPDATE_ARGS=--fixtures ${update_fixture_root} --json"
+  run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" make --no-print-directory update "UPDATE_ARGS=--fixtures ${update_fixture_root} --json"
   if [[ -n "$(git -C "${checkout}" status --porcelain --untracked-files=all)" ]]; then
     git -C "${checkout}" reset --hard HEAD >/dev/null
     git -C "${checkout}" clean -fd >/dev/null

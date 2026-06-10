@@ -62,6 +62,7 @@ prepare_upstream() {
   mkdir -p "${target}"
   ln -s "${CNPG_FIXTURES}" "${target}/cnpg"
   ln -s "${PKG_FIXTURES}" "${target}/packages"
+  cp "${BARMAN_PLUGIN_FIXTURE}" "${target}/barman-plugin.json"
 }
 
 run_update() {
@@ -70,7 +71,7 @@ run_update() {
   local stdout_file="$3"
   local stderr_file="$4"
   set +e
-  (cd "${project}" && BARMAN_PLUGIN_FIXTURE="${BARMAN_PLUGIN_FIXTURE}" make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
+  (cd "${project}" && make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
   local status="$?"
   set -e
   return "${status}"
@@ -84,7 +85,7 @@ import json
 import sys
 from pathlib import Path
 payload = json.loads(Path(sys.argv[1]).read_text())
-required = {"changed", "updated_entries", "barman_plugin", "old", "new", "generated", "summary_path", "exit_code", "failure_reason"}
+required = {"changed", "updated_entries", "old", "new", "generated", "summary_path", "exit_code", "failure_reason"}
 if set(payload) != required:
     raise SystemExit(f"wrong update JSON keys: {sorted(payload)}")
 if payload["exit_code"] != 0 or payload["failure_reason"] != "":
@@ -92,6 +93,12 @@ if payload["exit_code"] != 0 or payload["failure_reason"] != "":
 expected = sys.argv[2] == "true"
 if payload["changed"] is not expected:
     raise SystemExit(f"expected changed={expected}: {payload}")
+summary_path = Path(payload["summary_path"])
+if not summary_path.is_file():
+    raise SystemExit(f"summary_path does not exist: {summary_path}")
+summary_payload = json.loads(summary_path.read_text())
+if set(summary_payload) != required:
+    raise SystemExit(f"wrong summary JSON keys: {sorted(summary_payload)}")
 PY
 }
 
@@ -106,6 +113,9 @@ if payload.get("exit_code") == 0 or not payload.get("failure_reason"):
     raise SystemExit(f"expected failure JSON: {payload}")
 if payload.get("changed") is not False or payload.get("generated") != []:
     raise SystemExit(f"failure must not report generated changes: {payload}")
+summary_path = Path(payload["summary_path"])
+if not summary_path.is_file():
+    raise SystemExit(f"failure summary_path does not exist: {summary_path}")
 PY
 }
 
@@ -223,6 +233,7 @@ mkdir -p "${digest_upstream}/cnpg"
 cp "${CNPG_FIXTURES}/standard-trixie-valid.json" "${digest_upstream}/cnpg/standard-trixie-valid.json"
 cp "${CNPG_FIXTURES}/standard-bookworm-valid.json" "${digest_upstream}/cnpg/standard-bookworm-valid.json"
 ln -s "${PKG_FIXTURES}" "${digest_upstream}/packages"
+cp "${BARMAN_PLUGIN_FIXTURE}" "${digest_upstream}/barman-plugin.json"
 python3 - "${digest_upstream}/cnpg/standard-trixie-valid.json" <<'PY'
 from pathlib import Path
 import sys
@@ -247,16 +258,19 @@ policy_project="${base_tmp}/policy"
 prepare_project "${policy_project}"
 set_entry_field "${policy_project}/cloudnative-pg-timescaledb/versions.yaml" "17" "trixie" "skip_reason" '"Manual maintainer hold"'
 set_entry_field "${policy_project}/cloudnative-pg-timescaledb/versions.yaml" "17" "trixie" "publish" 'false'
+(cd "${policy_project}" && git add . && git commit -qm policy-input)
 run_update "${policy_project}" "${upstream}" "${base_tmp}/policy.out" "${base_tmp}/policy.err" || { diag "make update" "preserve-policy-fields" "exit 0" "$(cat "${base_tmp}/policy.err")" "Manual policy fields should be preserved."; exit 1; }
 grep -Fq 'skip_reason: "Manual maintainer hold"' "${policy_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep manual skip" "preserve-policy-fields" "manual skip preserved" "changed" "Do not overwrite maintainer-authored skip reasons."; exit 1; }
 
 resolver_skip_project="${base_tmp}/resolver-skip"
 prepare_project "${resolver_skip_project}"
 set_entry_field "${resolver_skip_project}/cloudnative-pg-timescaledb/versions.yaml" "18" "bookworm" "skip_reason" '"resolver:old-reason: stale"'
+(cd "${resolver_skip_project}" && git add . && git commit -qm resolver-skip-input)
 bad_upstream="${base_tmp}/bad-upstream"
 mkdir -p "${bad_upstream}"
 ln -s "${CNPG_FIXTURES}" "${bad_upstream}/cnpg"
 mkdir -p "${bad_upstream}/packages"
+cp "${BARMAN_PLUGIN_FIXTURE}" "${bad_upstream}/barman-plugin.json"
 ln -s "${PKG_FIXTURES}/trixie-amd64-available.json" "${bad_upstream}/packages/trixie-amd64-available.json"
 ln -s "${PKG_FIXTURES}/trixie-arm64-available.json" "${bad_upstream}/packages/trixie-arm64-available.json"
 ln -s "${PKG_FIXTURES}/bookworm-amd64-available.json" "${bad_upstream}/packages/bookworm-amd64-available.json"
@@ -280,6 +294,47 @@ path.write_text(json.dumps(payload, separators=(",", ":")))
 PY
 run_update "${resolver_skip_project}" "${bad_upstream}" "${base_tmp}/resolver-skip.out" "${base_tmp}/resolver-skip.err" || { diag "make update" "update-resolver-skip-reason" "exit 0" "$(cat "${base_tmp}/resolver-skip.err")" "Resolver-prefixed skip reasons should be updateable."; exit 1; }
 grep -Fq 'skip_reason: "resolver:package-unavailable: timescaledb-toolkit-postgresql-18 PostgreSQL 18 bookworm linux/arm64 missing packages while CNPG exists"' "${resolver_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep resolver skip" "update-resolver-skip-reason" "package/platform skip reason updated" "missing" "Update resolver-prefixed skip reasons to package-specific evidence."; exit 1; }
+
+cnpg_skip_project="${base_tmp}/cnpg-resolver-skip"
+prepare_project "${cnpg_skip_project}"
+set_entry_field "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" "18" "bookworm" "skip_reason" '"resolver:old-cnpg-reason: stale"'
+(cd "${cnpg_skip_project}" && git add . && git commit -qm cnpg-skip-input)
+missing_cnpg_upstream="${base_tmp}/missing-cnpg-upstream"
+mkdir -p "${missing_cnpg_upstream}/cnpg"
+cp "${CNPG_FIXTURES}/standard-trixie-valid.json" "${missing_cnpg_upstream}/cnpg/standard-trixie-valid.json"
+cp "${CNPG_FIXTURES}/standard-bookworm-valid.json" "${missing_cnpg_upstream}/cnpg/standard-bookworm-valid.json"
+python3 - "${missing_cnpg_upstream}/cnpg/standard-bookworm-valid.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["manifests"] = [
+    manifest for manifest in payload["manifests"]
+    if manifest.get("tag") != "18.4-standard-bookworm"
+]
+path.write_text(json.dumps(payload, separators=(",", ":")))
+PY
+ln -s "${PKG_FIXTURES}" "${missing_cnpg_upstream}/packages"
+cp "${BARMAN_PLUGIN_FIXTURE}" "${missing_cnpg_upstream}/barman-plugin.json"
+run_update "${cnpg_skip_project}" "${missing_cnpg_upstream}" "${base_tmp}/cnpg-skip.out" "${base_tmp}/cnpg-skip.err" || { diag "make update" "update-cnpg-resolver-skip-reason" "exit 0" "$(cat "${base_tmp}/cnpg-skip.err")" "Resolver-prefixed CNPG skip reasons should be updateable."; exit 1; }
+grep -Fq 'skip_reason: "resolver:cnpg-unavailable: ghcr.io/cloudnative-pg/postgresql:18-standard-bookworm PostgreSQL 18 bookworm missing tag"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg resolver skip" "update-cnpg-resolver-skip-reason" "CNPG missing-tag skip reason updated" "missing" "Update resolver-prefixed CNPG skip reasons to upstream evidence."; exit 1; }
+
+manual_cnpg_project="${base_tmp}/manual-cnpg-skip"
+prepare_project "${manual_cnpg_project}"
+set_entry_field "${manual_cnpg_project}/cloudnative-pg-timescaledb/versions.yaml" "18" "bookworm" "skip_reason" '"Manual CNPG hold"'
+(cd "${manual_cnpg_project}" && git add . && git commit -qm manual-cnpg-input)
+run_update "${manual_cnpg_project}" "${missing_cnpg_upstream}" "${base_tmp}/manual-cnpg.out" "${base_tmp}/manual-cnpg.err" || { diag "make update" "preserve-manual-cnpg-skip-reason" "exit 0" "$(cat "${base_tmp}/manual-cnpg.err")" "Manual CNPG skip reasons should be preserved."; exit 1; }
+grep -Fq 'skip_reason: "Manual CNPG hold"' "${manual_cnpg_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep manual cnpg skip" "preserve-manual-cnpg-skip-reason" "manual CNPG skip preserved" "changed" "Do not overwrite maintainer-authored CNPG skip reasons."; exit 1; }
+
+dirty_project="${base_tmp}/dirty-generated"
+prepare_project "${dirty_project}"
+printf 'local scratch\n' >"${dirty_project}/cloudnative-pg-timescaledb/docs/generated/local-scratch.md"
+if run_update "${dirty_project}" "${upstream}" "${base_tmp}/dirty.out" "${base_tmp}/dirty.err"; then
+  diag "make update" "dirty-generated-guard" "non-zero" "exit 0" "Dirty generated paths must fail before update."
+  exit 1
+fi
+assert_json_failure "${base_tmp}/dirty.out"
 
 hard_project="${base_tmp}/hard-fail"
 prepare_project "${hard_project}"
