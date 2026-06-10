@@ -52,7 +52,15 @@ PY
 dockerfile="$(${PYTHON:-python3} - "${selection}" <<'PY'
 import json
 import sys
-print(json.loads(sys.argv[1]).get("row", {}).get("dockerfile", ""))
+row = json.loads(sys.argv[1]).get("row", {})
+print(row.get("dockerfile", ""))
+PY
+)"
+
+skipped_marker="$(${PYTHON:-python3} - "${selection}" <<'PY'
+import json
+import sys
+print(json.loads(sys.argv[1]).get("row", {}).get("skipped_marker", ""))
 PY
 )"
 
@@ -73,7 +81,7 @@ import sys
 print(json.loads(sys.argv[1])["row"].get("skip_reason", ""))
 PY
 )"
-    diag "make build PG=${pg} DEBIAN=${debian}" "${metadata}" "publishable Bake target ${target}" "skipped: ${skip_reason}; target=${target}; dockerfile=${dockerfile}; context=${context}; platform=${platform}; PG=${pg}; DEBIAN=${debian}" "Resolve and mark the combination publishable before local image builds, or choose a publishable PG/DEBIAN row."
+    diag "make build PG=${pg} DEBIAN=${debian}" "${metadata}" "publishable Bake target ${target}" "skipped: ${skip_reason}; target=${target}; skipped_marker=${skipped_marker}; context=${context}; platform=${platform}; PG=${pg}; DEBIAN=${debian}" "Resolve and mark the combination publishable before local image builds, or choose a publishable PG/DEBIAN row."
     exit "${EXIT_UNSUPPORTED}"
     ;;
   platform-missing)

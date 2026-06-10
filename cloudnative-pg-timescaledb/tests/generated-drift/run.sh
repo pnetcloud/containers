@@ -14,6 +14,9 @@ prepare_fixture() {
   mkdir -p "${target}/docs/generated"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/generated" "${target}/generated"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/catalog" "${target}/catalog"
+  if [[ -d "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" ]]; then
+    cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" "${target}/release-metadata"
+  fi
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docker-bake.hcl" "${target}/docker-bake.hcl"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/matrix.json" "${target}/matrix.json"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/compatibility.md" "${target}/docs/generated/compatibility.md"
@@ -143,6 +146,27 @@ expect_direct_fail() {
   rm -f "${tmp}"
 }
 
+prepare_generate_check_project() {
+  local target="$1"
+  mkdir -p "${target}/cloudnative-pg-timescaledb" "${target}/docs"
+  cp "${ROOT_DIR}/Makefile" "${target}/Makefile"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts" "${target}/cloudnative-pg-timescaledb/scripts"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/templates" "${target}/cloudnative-pg-timescaledb/templates"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/config" "${target}/cloudnative-pg-timescaledb/config"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/generated" "${target}/cloudnative-pg-timescaledb/generated"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/catalog" "${target}/cloudnative-pg-timescaledb/catalog"
+  if [[ -d "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" ]]; then
+    cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" "${target}/cloudnative-pg-timescaledb/release-metadata"
+  fi
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/docs" "${target}/cloudnative-pg-timescaledb/docs"
+  mkdir -p "${target}/cloudnative-pg-timescaledb/tests/release-rehearsal"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures" "${target}/cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${target}/cloudnative-pg-timescaledb/versions.yaml"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docker-bake.hcl" "${target}/cloudnative-pg-timescaledb/docker-bake.hcl"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/matrix.json" "${target}/cloudnative-pg-timescaledb/matrix.json"
+  cp "${ROOT_DIR}/docs/generator-contracts.md" "${target}/docs/generator-contracts.md"
+}
+
 test -d "${FIXTURE_DIR}/clean" || { diag "test -d clean fixture" "${FIXTURE_DIR}/clean" "fixture directory exists" "missing" "Restore clean generated-drift fixture directory."; exit 1; }
 test -d "${FIXTURE_DIR}/stale" || { diag "test -d stale fixture" "${FIXTURE_DIR}/stale" "fixture directory exists" "missing" "Restore stale generated-drift fixture directory."; exit 1; }
 
@@ -193,6 +217,16 @@ prepare_fixture "${stale_failure_catalog_root}"
 printf '\n<!-- hand edit that must be regenerated -->\n' >>"${stale_failure_catalog_root}/docs/generated/failure-reason-catalog.md"
 expect_fail "stale generated failure reason catalog" "failure-reason-catalog.md|committed output matches generated content|make generate" "${stale_failure_catalog_root}"
 
+stale_rehearsal_report_root="$(mktemp -d)"
+prepare_fixture "${stale_rehearsal_report_root}"
+printf '\n<!-- hand edit that must be regenerated -->\n' >>"${stale_rehearsal_report_root}/docs/generated/release-rehearsal-report.md"
+expect_fail "stale generated release rehearsal report" "release-rehearsal-report.md|committed output matches generated content|make generate" "${stale_rehearsal_report_root}"
+
+stale_generate_check_root="$(mktemp -d)"
+prepare_generate_check_project "${stale_generate_check_root}"
+printf '\n<!-- hand edit that must be regenerated -->\n' >>"${stale_generate_check_root}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md"
+expect_direct_fail "make generate check detects stale release rehearsal report" "release-rehearsal-report.md|committed output matches generated content|make generate" make --no-print-directory -C "${stale_generate_check_root}" generate GENERATE_ARGS=--check
+
 orphan_dockerfile_root="$(mktemp -d)"
 prepare_fixture "${orphan_dockerfile_root}"
 mkdir -p "${orphan_dockerfile_root}/generated/99/trixie"
@@ -229,7 +263,7 @@ expect_direct_fail "missing generator contract docs" "Story 1.5 generator contra
 stale_contract_root="$(mktemp -d)"
 prepare_contract_root "${stale_contract_root}"
 printf '\nContradictory hand edit.\n' >>"${stale_contract_root}/docs/generator-contracts.md"
-expect_direct_fail "stale generator contract docs" "generator-contracts.md matches Story 1.5 generator contract" "${VALIDATOR}" --contract-root "${stale_contract_root}"
+expect_direct_fail "stale generator contract docs" "generator-contracts.md matches current generator contract" "${VALIDATOR}" --contract-root "${stale_contract_root}"
 
 nonexec_contract_root="$(mktemp -d)"
 prepare_contract_root "${nonexec_contract_root}"

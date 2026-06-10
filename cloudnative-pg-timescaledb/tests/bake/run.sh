@@ -76,11 +76,18 @@ if not isinstance(payload["targets"], list) or not isinstance(payload["skipped"]
 
 skipped_names = set()
 for row in payload["skipped"]:
-    require_keys(row, {"pg_major", "debian_variant", "name", "dockerfile", "publish", "experimental", "skip_reason"}, "skipped row")
+    skipped_keys = {"pg_major", "debian_variant", "name", "skipped_marker", "publish", "experimental", "skip_reason"}
+    require_keys(row, skipped_keys, "skipped row")
+    extra = sorted(set(row) - skipped_keys)
+    if extra:
+        fail("skipped rows expose only marker fields", repr(row), "Do not expose buildable Dockerfile paths for skipped Bake rows.")
     if row["publish"] is not False:
         fail("skipped rows have publish=false", repr(row), "Do not mark skipped combinations as publishable.")
     if not row["skip_reason"]:
         fail("skipped rows carry skip_reason", repr(row), "Explain why omitted combinations are not buildable.")
+    expected_marker = f"cloudnative-pg-timescaledb/generated/{row['pg_major']}/{row['debian_variant']}/Dockerfile.skipped.json"
+    if row["skipped_marker"] != expected_marker:
+        fail("skipped rows expose metadata-derived non-buildable marker", repr(row), f"Use skipped_marker={expected_marker!r}.")
     skipped_names.add(row["name"])
 
 target_names = set()
@@ -157,6 +164,19 @@ expect_command_fail() {
 
 json_compare "publishable bake json" "${FIXTURE_DIR}/valid-publishable-targets.json" "${SCRIPT_DIR}/generate-bake.sh" --metadata "${METADATA_FIXTURE}" --json
 validate_bake_summary "${FIXTURE_DIR}/valid-publishable-targets.json"
+wrong_skipped_marker_fixture="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-targets.json" "${wrong_skipped_marker_fixture}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"][0]["skipped_marker"] = "cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_summary_fail "wrong skipped marker rejected" "${wrong_skipped_marker_fixture}" "non-buildable marker"
+rm -f "${wrong_skipped_marker_fixture}"
 expect_summary_fail "skipped row leaked into targets" "${FIXTURE_DIR}/skipped-combination.json" "skipped combinations are omitted"
 expect_summary_fail "default git context rejected" "${FIXTURE_DIR}/default-git-context.json" "checkout/path context|default Git context"
 expect_summary_fail "publish output rejected" "${FIXTURE_DIR}/publish-output-enabled.json" "does not push or publish"

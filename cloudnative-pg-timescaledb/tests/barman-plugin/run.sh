@@ -12,10 +12,16 @@ prepare_project() {
   local target="$1"
   mkdir -p "${target}/cloudnative-pg-timescaledb" "${target}/docs"
   cp "${ROOT_DIR}/Makefile" "${target}/Makefile"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/config" "${target}/cloudnative-pg-timescaledb/config"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts" "${target}/cloudnative-pg-timescaledb/scripts"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/templates" "${target}/cloudnative-pg-timescaledb/templates"
+  mkdir -p "${target}/cloudnative-pg-timescaledb/tests/release-rehearsal"
+  cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures" "${target}/cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/generated" "${target}/cloudnative-pg-timescaledb/generated"
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/catalog" "${target}/cloudnative-pg-timescaledb/catalog"
+  if [[ -d "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" ]]; then
+    cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" "${target}/cloudnative-pg-timescaledb/release-metadata"
+  fi
   cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/docs" "${target}/cloudnative-pg-timescaledb/docs"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${target}/cloudnative-pg-timescaledb/versions.yaml"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docker-bake.hcl" "${target}/cloudnative-pg-timescaledb/docker-bake.hcl"

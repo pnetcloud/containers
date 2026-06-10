@@ -386,6 +386,25 @@ generated_dir="${tmpdir}/generated-catalog"
 diff -u "${FIXTURE_DIR}/valid-trixie-catalog.yaml" "${generated_dir}/catalog-standard-trixie.yaml"
 diff -u "${FIXTURE_DIR}/valid-bookworm-catalog.yaml" "${generated_dir}/catalog-standard-bookworm.yaml"
 
+partial_dir="${tmpdir}/partial-release"
+materialize_release_metadata "${partial_dir}" valid
+rm -f "${partial_dir}/18-bookworm.json"
+expect_fail "partial release metadata" "every publishable stable PostgreSQL/Debian row|18-bookworm" "${GENERATOR}" --release-metadata "${partial_dir}" --output "${tmpdir}/partial-generated-catalog"
+
+empty_record_id_dir="${tmpdir}/empty-record-id-release"
+materialize_release_metadata "${empty_record_id_dir}" valid
+python3 - "${empty_record_id_dir}/18-trixie.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["release_metadata_record_id"] = ""
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+expect_fail "empty release metadata record id" "release_metadata_record_id.*sha256" "${GENERATOR}" --release-metadata "${empty_record_id_dir}" --output "${tmpdir}/empty-record-id-generated-catalog"
+
 "${GENERATOR}" --release-metadata "${release_dir}" --validate-catalog "${valid_trixie}"
 "${GENERATOR}" --release-metadata "${release_dir}" --validate-catalog "${valid_bookworm}"
 

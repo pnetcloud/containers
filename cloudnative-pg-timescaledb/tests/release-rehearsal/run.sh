@@ -4,7 +4,11 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCRIPT="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/release-rehearsal.sh"
 FIXTURE_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures"
-REPORT="${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md"
+REPORT="$(mktemp)"
+cleanup() {
+  rm -f "${REPORT}"
+}
+trap cleanup EXIT
 WORKFLOW="${ROOT_DIR}/.github/workflows/release-rehearsal.yml"
 
 diag() {
@@ -235,7 +239,7 @@ orchestration_tmp="$(mktemp -d)"
 orchestration_project="${orchestration_tmp}/project"
 orchestration_bin="${orchestration_tmp}/bin"
 orchestration_capture="${orchestration_tmp}/commands.log"
-orchestration_report="${orchestration_tmp}/release-rehearsal-report.md"
+orchestration_report="${orchestration_project}/release-rehearsal-report.md"
 prepare_orchestration_project "${orchestration_project}"
 prepare_orchestration_shims "${orchestration_bin}"
 
@@ -243,6 +247,7 @@ RELEASE_REHEARSAL_CAPTURE="${orchestration_capture}" PATH="${orchestration_bin}:
   WORKFLOW_RUN_URL=https://github.com/pnetcloud/containers/actions/runs/1234567890 \
   "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" --report "${orchestration_report}" >/tmp/story-5-9-orchestration.out
 
+# shellcheck disable=SC2016
 for token in \
   'make update' \
   'make generate' \
@@ -263,6 +268,7 @@ for token in \
   fi
 done
 
+# shellcheck disable=SC2016
 for token in \
   '# Release Rehearsal Report' \
   'Mode: `dry-run`' \
@@ -273,6 +279,7 @@ for token in \
     exit 1
   fi
 done
+rm -f "${orchestration_report}"
 
 default_report_capture="${orchestration_tmp}/default-report-commands.log"
 RELEASE_REHEARSAL_CAPTURE="${default_report_capture}" PATH="${orchestration_bin}:${PATH}" \
@@ -283,6 +290,59 @@ if ! grep -Fq 'report=cloudnative-pg-timescaledb/docs/generated/release-rehearsa
   diag "release rehearsal default report path" "/tmp/story-5-9-default-report.out" "default report path is the generated report file" "$(cat /tmp/story-5-9-default-report.out)" "Read the top-level release rehearsal report path from config before writing the default report."
   exit 1
 fi
+rm -f "${orchestration_project}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md"
+
+outside_report="${orchestration_tmp}/outside-report.md"
+set +e
+RELEASE_REHEARSAL_CAPTURE="${orchestration_tmp}/outside-report-commands.log" PATH="${orchestration_bin}:${PATH}" \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" --report "${outside_report}" >/tmp/story-5-9-outside-report.out 2>&1
+outside_status="$?"
+set -e
+if [[ "${outside_status}" == "0" ]]; then
+  diag "release rehearsal outside report path" "${outside_report}" "outside report path fails" "passed" "Keep release rehearsal reports inside the checked-out project."
+  exit 1
+fi
+if ! grep -Fq 'report path stays inside release rehearsal output root' /tmp/story-5-9-outside-report.out; then
+  diag "release rehearsal outside report path" "/tmp/story-5-9-outside-report.out" "structured containment diagnostic" "$(cat /tmp/story-5-9-outside-report.out)" "Reject report paths outside the checkout before writing release evidence."
+  exit 1
+fi
+
+deterministic_report_a="${orchestration_project}/deterministic-a.md"
+deterministic_report_b="${orchestration_project}/deterministic-b.md"
+deterministic_copy_a="${orchestration_tmp}/deterministic-a.md"
+deterministic_copy_b="${orchestration_tmp}/deterministic-b.md"
+RELEASE_REHEARSAL_CAPTURE="${orchestration_tmp}/deterministic-a-commands.log" PATH="${orchestration_bin}:${PATH}" \
+  WORKFLOW_RUN_URL=https://github.com/pnetcloud/containers/actions/runs/1234567890 \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" --report "${deterministic_report_a}" >/tmp/story-5-9-deterministic-a.out
+cp "${deterministic_report_a}" "${deterministic_copy_a}"
+rm -f "${deterministic_report_a}"
+RELEASE_REHEARSAL_CAPTURE="${orchestration_tmp}/deterministic-b-commands.log" PATH="${orchestration_bin}:${PATH}" \
+  WORKFLOW_RUN_URL=https://github.com/pnetcloud/containers/actions/runs/1234567890 \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" --report "${deterministic_report_b}" >/tmp/story-5-9-deterministic-b.out
+cp "${deterministic_report_b}" "${deterministic_copy_b}"
+rm -f "${deterministic_report_b}"
+if ! diff -u "${deterministic_copy_a}" "${deterministic_copy_b}" >/tmp/story-5-9-deterministic-report.diff; then
+  diag "release rehearsal deterministic report" "${deterministic_copy_a} ${deterministic_copy_b}" "same inputs produce byte-identical report" "$(cat /tmp/story-5-9-deterministic-report.diff)" "Do not include elapsed time or temporary log paths in the committed release rehearsal report."
+  exit 1
+fi
+
+symlink_capture="${orchestration_tmp}/symlink-report-commands.log"
+symlink_target="${orchestration_tmp}/outside-report.md"
+ln -s "${symlink_target}" "${orchestration_project}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md"
+set +e
+RELEASE_REHEARSAL_CAPTURE="${symlink_capture}" PATH="${orchestration_bin}:${PATH}" \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" >/tmp/story-5-9-symlink-report.out 2>&1
+symlink_status="$?"
+set -e
+if [[ "${symlink_status}" == "0" ]]; then
+  diag "release rehearsal report symlink" "${orchestration_project}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md" "symlink report path fails" "passed" "Do not follow report symlinks outside the checkout."
+  exit 1
+fi
+if ! grep -Eq 'report file is not a symlink|report path stays inside release rehearsal output root' /tmp/story-5-9-symlink-report.out; then
+  diag "release rehearsal report symlink" "/tmp/story-5-9-symlink-report.out" "structured symlink diagnostic" "$(cat /tmp/story-5-9-symlink-report.out)" "Reject report symlinks before writing release evidence."
+  exit 1
+fi
+rm -f "${orchestration_project}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md" "${symlink_target}"
 
 fail_capture="${orchestration_tmp}/fail-commands.log"
 set +e
