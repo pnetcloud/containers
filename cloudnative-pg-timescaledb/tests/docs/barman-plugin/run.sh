@@ -232,8 +232,8 @@ expect_boundary_fail "legacy doc cannot hide invalid later guidance behind an ea
 expect_boundary_fail "Dockerfile installs barman-cloud" "barman-cloud|legacy Barman" "${FIXTURE_DIR}/dockerfile-installs-barman-cloud"
 expect_boundary_fail "doc missing required plugin phrase" "${REQUIRED_PHRASE}" "${FIXTURE_DIR}/missing-plugin-phrase.md"
 
-if rg -n 'plugin-barman-cloud|CloudNativePG Barman Cloud Plugin|manifest.yaml' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/smoke-test.sh" "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke" >/tmp/story-3-6-smoke-plugin-scan.out; then
-  diag "rg plugin deployment in smoke checks" "cloudnative-pg-timescaledb/scripts/smoke-test.sh cloudnative-pg-timescaledb/tests/smoke" "smoke checks do not deploy or validate the Barman plugin" "$(cat /tmp/story-3-6-smoke-plugin-scan.out)" "Keep smoke checks focused on database runtime and extension behavior."
+if grep -REn 'plugin-barman-cloud|CloudNativePG Barman Cloud Plugin|manifest.yaml' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/smoke-test.sh" "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/smoke" >/tmp/story-3-6-smoke-plugin-scan.out; then
+  diag "grep plugin deployment in smoke checks" "cloudnative-pg-timescaledb/scripts/smoke-test.sh cloudnative-pg-timescaledb/tests/smoke" "smoke checks do not deploy or validate the Barman plugin" "$(cat /tmp/story-3-6-smoke-plugin-scan.out)" "Keep smoke checks focused on database runtime and extension behavior."
   exit 1
 fi
 

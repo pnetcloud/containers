@@ -7,7 +7,7 @@ USER root
 
 COPY scripts/verify-package-install.sh /usr/local/bin/verify-package-install
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 RUN set -eux; \
     case "trixie:${TARGETARCH}" in \
       trixie:amd64|trixie:arm64|bookworm:amd64|bookworm:arm64) ;; \

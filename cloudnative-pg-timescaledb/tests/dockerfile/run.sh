@@ -113,7 +113,9 @@ if grep -Eq 'system-|vendor/' "${dockerfile}"; then
   diag "grep forbidden" "${dockerfile}" "no system-* or vendor/ in generated Dockerfile" "$(grep -En 'system-|vendor/' "${dockerfile}")" "Use standard CNPG bases and no vendor runtime/build input."
   exit 1
 fi
-rg "FROM ghcr.io/cloudnative-pg/postgresql:.+@sha256:" "${output}" >/tmp/story-3-1-rg.out
+grep -RE "FROM ghcr.io/cloudnative-pg/postgresql:.+@sha256:" "${output}" >/tmp/story-3-1-from.out
+grep -Fq 'ARG TARGETARCH' "${dockerfile}" || { diag "grep TARGETARCH" "${dockerfile}" "BuildKit TARGETARCH arg is declared" "missing" "Expose BuildKit TARGETARCH inside the stage for multi-platform builds."; exit 1; }
+grep -Fq 'ARG TARGETARCH=amd64' "${dockerfile}" && { diag "grep TARGETARCH default" "${dockerfile}" "no default TARGETARCH" "ARG TARGETARCH=amd64" "Do not override BuildKit TARGETARCH during arm64 builds."; exit 1; }
 
 skipped_output="${tmp_root}/skipped"
 run_generate "${FIXTURE_DIR}/skipped-nonpublish-missing-cnpg-digest.yaml" "${skipped_output}" "${manifest}" >/tmp/story-3-1-skipped.out
