@@ -17,7 +17,7 @@ for script in make-help.sh update.sh generate.sh validate.sh matrix.sh bake-prin
   fi
 done
 
-for target in help update generate validate matrix bake-print catalog build smoke; do
+for target in help update generate validate matrix bake-print catalog build smoke release-rehearsal; do
   if ! grep -Eq "^${target}:" "${MAKEFILE}"; then
     diag "grep target ${target}" "Makefile" "target exists" "missing" "Expose the stable root Make target."
     exit 1
@@ -38,8 +38,8 @@ assert_make_recipe_delegates() {
   fi
   output="$(sed -e 's/[[:space:]]*$//' -e '/^$/d' "${tmp}")"
   rm -f "${tmp}"
-  if [[ "$(wc -l <<<"${output}")" != "1" || "${output}" != "${expected}" ]]; then
-    diag "make -n ${target}" "Makefile target ${target}" "exactly one delegated recipe line: ${expected}" "${output}" "Keep each root Make target as a thin facade over its matching script with no inline logic."
+  if [[ "$(wc -l <<<"${output}")" != "1" || "${output}" != *"${expected}"* ]]; then
+    diag "make -n ${target}" "Makefile target ${target}" "exactly one delegated recipe line containing: ${expected}" "${output}" "Keep each root Make target as a thin facade over its matching script with no inline logic."
     exit 1
   fi
 }
@@ -52,7 +52,79 @@ assert_make_recipe_delegates matrix "cloudnative-pg-timescaledb/scripts/matrix.s
 assert_make_recipe_delegates bake-print "cloudnative-pg-timescaledb/scripts/bake-print.sh"
 assert_make_recipe_delegates catalog "cloudnative-pg-timescaledb/scripts/catalog.sh"
 assert_make_recipe_delegates build 'cloudnative-pg-timescaledb/scripts/build.sh "18" "trixie"' PG=18 DEBIAN=trixie
-assert_make_recipe_delegates smoke 'CHECKS="" cloudnative-pg-timescaledb/scripts/smoke.sh "18" "trixie"' PG=18 DEBIAN=trixie
+assert_make_recipe_delegates smoke 'cloudnative-pg-timescaledb/scripts/smoke.sh "18" "trixie"' PG=18 DEBIAN=trixie
+assert_make_recipe_delegates release-rehearsal "cloudnative-pg-timescaledb/scripts/release-rehearsal.sh"
+
+for override in PROJECT_DIR SCRIPT_DIR; do
+  tmp="$(mktemp)"
+  if ! make --no-print-directory -n -C "${ROOT_DIR}" update "${override}=cloudnative-pg-timescaledb/scripts; echo injected #" >"${tmp}" 2>&1; then
+    output="$(cat "${tmp}")"
+    rm -f "${tmp}"
+    diag "make -n update ${override}=..." "Makefile constants" "project/script directory constants are non-overridable" "${output}" "Declare PROJECT_DIR and SCRIPT_DIR with override so command-line assignments cannot inject recipe text."
+    exit 1
+  fi
+  output="$(cat "${tmp}")"
+  rm -f "${tmp}"
+  if grep -Fq "injected" <<<"${output}"; then
+    diag "make -n update ${override}=..." "Makefile constants" "project/script directory constants are non-overridable" "${output}" "Declare PROJECT_DIR and SCRIPT_DIR with override so command-line assignments cannot inject recipe text."
+    exit 1
+  fi
+done
+
+assert_make_meta_rejected() {
+  local target="$1"
+  local marker="$2"
+  shift 2
+  local tmp status marker_state output
+  rm -f "${marker}"
+  tmp="$(mktemp)"
+  set +e
+  make --no-print-directory -C "${ROOT_DIR}" "${target}" "$@" >"${tmp}" 2>&1
+  status="$?"
+  set -e
+  marker_state="absent"
+  [[ ! -e "${marker}" ]] || marker_state="present"
+  if [[ "${status}" == "0" ]] || [[ "${marker_state}" != "absent" ]] || ! grep -Fq "Unsafe make variable" "${tmp}"; then
+    output="$(cat "${tmp}")"
+    rm -f "${tmp}" "${marker}"
+    diag "make ${target} ${*}" "Makefile variable expansion" "make rejects dollar-bearing user variables before recipe execution and no marker file is created" "exit ${status}, marker=${marker_state}, output=${output}" "Reject user-controlled Make variables that could trigger make-time shell/eval expansion; call delegated scripts directly for complex shell syntax."
+    exit 1
+  fi
+  rm -f "${tmp}" "${marker}"
+}
+
+# shellcheck disable=SC2016
+assert_make_meta_rejected update "/tmp/story-1-2-update-marker" 'UPDATE_ARGS=$(shell touch /tmp/story-1-2-update-marker; printf -- --help)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected generate "/tmp/story-1-2-generate-marker" 'GENERATE_ARGS=$(eval STORY_1_2_GENERATE_MARKER:=1)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected validate "/tmp/story-1-2-validate-marker" 'VALIDATE_ARGS=$(shell touch /tmp/story-1-2-validate-marker)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected matrix "/tmp/story-1-2-matrix-marker" 'MATRIX_ARGS=$(shell touch /tmp/story-1-2-matrix-marker)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected bake-print "/tmp/story-1-2-bake-marker" 'BAKE_PRINT_ARGS=$(shell touch /tmp/story-1-2-bake-marker)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected catalog "/tmp/story-1-2-catalog-marker" 'CATALOG_ARGS=$(shell touch /tmp/story-1-2-catalog-marker)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected build "/tmp/story-1-2-build-pg-marker" 'PG=$(shell touch /tmp/story-1-2-build-pg-marker; printf 18)' DEBIAN=trixie
+# shellcheck disable=SC2016
+assert_make_meta_rejected build "/tmp/story-1-2-build-args-marker" PG=18 DEBIAN=trixie 'BUILD_ARGS=$(shell touch /tmp/story-1-2-build-args-marker)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected smoke "/tmp/story-1-2-smoke-checks-marker" PG=18 DEBIAN=trixie 'CHECKS=$(shell touch /tmp/story-1-2-smoke-checks-marker; printf container)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected smoke "/tmp/story-1-2-smoke-args-marker" PG=18 DEBIAN=trixie 'SMOKE_ARGS=$(shell touch /tmp/story-1-2-smoke-args-marker)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected release-rehearsal "/tmp/story-1-2-release-marker" 'RELEASE_REHEARSAL_ARGS=$(shell touch /tmp/story-1-2-release-marker)'
+assert_make_meta_rejected update "/tmp/story-1-2-update-semi-marker" 'UPDATE_ARGS=--json; touch /tmp/story-1-2-update-semi-marker'
+assert_make_meta_rejected update "/tmp/story-1-2-update-newline-marker" $'UPDATE_ARGS=--json\ntouch /tmp/story-1-2-update-newline-marker'
+# shellcheck disable=SC2016
+assert_make_meta_rejected build "/tmp/story-1-2-build-backtick-marker" 'PG=`touch /tmp/story-1-2-build-backtick-marker; printf 18`' DEBIAN=trixie
+# shellcheck disable=SC2016
+assert_make_meta_rejected help "/tmp/story-1-2-date-marker" 'DATE=$(shell touch /tmp/story-1-2-date-marker; printf 20260609)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected help "/tmp/story-1-2-dry-run-marker" 'DRY_RUN=$(shell touch /tmp/story-1-2-dry-run-marker; printf 1)'
+# shellcheck disable=SC2016
+assert_make_meta_rejected help "/tmp/story-1-2-namespace-marker" 'STAGING_NAMESPACE=$(shell touch /tmp/story-1-2-namespace-marker; printf cnpg-system)'
 
 if grep -Eq 'packagecloud|apt-get|docker buildx|docker build|CREATE EXTENSION|ghcr\.io/.+:' "${MAKEFILE}"; then
   diag "scan Makefile" "Makefile" "no resolver/package/build/publish logic inline" "inline implementation logic found" "Move implementation logic to owned scripts in later stories."
@@ -201,6 +273,7 @@ assert_makefile_scan_passes "commented rule semicolon without space" 'all:# docs
 assert_makefile_scan_passes "escaped recipe literal" 'all:\n\t@printf '"'"'$$(shell date)\n'"'"'\n'
 # shellcheck disable=SC2016
 assert_makefile_scan_passes "escaped inline recipe literal" 'all: ; @printf '"'"'$$(shell date)\n'"'"'\n'
+# shellcheck disable=SC2016
 assert_makefile_scan_passes "url assignment is not a rule" 'URL = https://example.com\n\t# $(shell echo harmless top-level comment)\n'
 assert_makefile_scan_passes "semicolon assignment is not an inline recipe" 'URL = http://host/path;v=1\n'
 # shellcheck disable=SC2016
@@ -262,14 +335,16 @@ fi
 
 # BEGIN story-1-2 sandbox proof
 sandbox="$(mktemp -d)"
-trap 'rm -rf "${sandbox}"' EXIT
+generate_sandbox=""
+trap 'rm -rf "${sandbox}" "${generate_sandbox}"' EXIT
 mkdir -p "${sandbox}/cloudnative-pg-timescaledb/scripts/lib" "${sandbox}/cloudnative-pg-timescaledb/tests"
 cp "${MAKEFILE}" "${sandbox}/Makefile"
 cp "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh" "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh"
 sed -i '/^# BEGIN story-1-2 sandbox proof$/,/^# END story-1-2 sandbox proof$/c\\:' "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh"
+sed -i '/^# BEGIN story-1-2 generate transaction proof$/,/^# END story-1-2 generate transaction proof$/c\\:' "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh"
 chmod +x "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh"
 
-for script in make-help update generate validate matrix bake-print catalog build smoke validate-metadata validate-tags validate-generated validate-docs validate-barman-boundary validate-workflows lib/command; do
+for script in make-help update generate validate matrix bake-print catalog build smoke release-rehearsal validate-metadata validate-tags validate-generated validate-docs validate-barman-boundary validate-workflows lib/command; do
     path="${sandbox}/cloudnative-pg-timescaledb/scripts/${script}.sh"
     mkdir -p "$(dirname "${path}")"
     cat >"${path}" <<SH
@@ -309,6 +384,7 @@ assert_sandbox_target_executes_script bake-print "STUB bake-print"
 assert_sandbox_target_executes_script catalog "STUB catalog"
 assert_sandbox_target_executes_script build "STUB build" PG=18 DEBIAN=trixie
 assert_sandbox_target_executes_script smoke "STUB smoke" PG=18 DEBIAN=trixie
+assert_sandbox_target_executes_script release-rehearsal "STUB release-rehearsal"
 assert_sandbox_target_executes_script validate "STUB validate"
 
 cp "${SCRIPT_DIR}/validate.sh" "${sandbox}/cloudnative-pg-timescaledb/scripts/validate.sh"
@@ -432,5 +508,116 @@ if grep -Fq 'STUB validate-metadata' <<<"${output}"; then
     exit 1
 fi
 # END story-1-2 sandbox proof
+
+# BEGIN story-1-2 generate transaction proof
+generate_sandbox="$(mktemp -d)"
+mkdir -p "${generate_sandbox}/cloudnative-pg-timescaledb/scripts/lib" \
+  "${generate_sandbox}/cloudnative-pg-timescaledb/generated" \
+  "${generate_sandbox}/cloudnative-pg-timescaledb/docs/generated"
+cp "${SCRIPT_DIR}/generate.sh" "${generate_sandbox}/cloudnative-pg-timescaledb/scripts/generate.sh"
+cp "${SCRIPT_DIR}/lib/command.sh" "${generate_sandbox}/cloudnative-pg-timescaledb/scripts/lib/command.sh"
+printf 'original\n' >"${generate_sandbox}/cloudnative-pg-timescaledb/generated/original.txt"
+printf 'original\n' >"${generate_sandbox}/cloudnative-pg-timescaledb/docker-bake.hcl"
+printf 'original\n' >"${generate_sandbox}/cloudnative-pg-timescaledb/matrix.json"
+printf 'original\n' >"${generate_sandbox}/cloudnative-pg-timescaledb/docs/generated/original.md"
+
+create_generator_stub() {
+  local name="$1"
+  local behavior="$2"
+  local path="${generate_sandbox}/cloudnative-pg-timescaledb/scripts/${name}"
+  cat >"${path}" <<SH
+#!/usr/bin/env bash
+set -Eeuo pipefail
+output=""
+while [[ "\$#" -gt 0 ]]; do
+  case "\$1" in
+    --output)
+      output="\${2:-}"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+if [[ "${behavior}" == "fail" ]]; then
+  printf 'intentional generator failure\n' >&2
+  exit 42
+fi
+mkdir -p "\${output}"
+printf '%s\n' "${name}" >"\${output}/artifact.txt"
+SH
+  chmod +x "${path}"
+}
+
+create_generator_stub generate-dockerfiles.sh pass
+create_generator_stub generate-bake.sh pass
+create_generator_stub generate-matrix.sh pass
+create_generator_stub generate-catalog.sh fail
+create_generator_stub generate-docs.sh pass
+
+tmp="$(mktemp)"
+if "${generate_sandbox}/cloudnative-pg-timescaledb/scripts/generate.sh" >"${tmp}" 2>&1; then
+  output="$(cat "${tmp}")"
+  rm -f "${tmp}"
+  diag "generate.sh transaction sandbox" "cloudnative-pg-timescaledb/scripts/generate.sh" "later generator failure returns non-zero" "${output}" "Do not promote partially generated outputs when a later generator fails."
+  exit 1
+fi
+output="$(cat "${tmp}")"
+rm -f "${tmp}"
+assert_file_content() {
+  local path="$1"
+  local expected="$2"
+  local actual
+  actual="$(cat "${path}" 2>/dev/null || true)"
+  if [[ "${actual}" != "${expected}" ]]; then
+    diag "generate.sh transaction sandbox" "${path}" "exact original content is preserved after failed generation" "${actual:-missing}; output=${output}" "Generate into a temporary tree and promote only after every generator succeeds."
+    exit 1
+  fi
+}
+
+assert_file_content "${generate_sandbox}/cloudnative-pg-timescaledb/generated/original.txt" "original"
+assert_file_content "${generate_sandbox}/cloudnative-pg-timescaledb/docker-bake.hcl" "original"
+assert_file_content "${generate_sandbox}/cloudnative-pg-timescaledb/matrix.json" "original"
+assert_file_content "${generate_sandbox}/cloudnative-pg-timescaledb/docs/generated/original.md" "original"
+
+cat >"${generate_sandbox}/cloudnative-pg-timescaledb/scripts/generate-docs.sh" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+output=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --output)
+      output="${2:-}"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+mkdir -p "${output}"
+printf 'docs\n' >"${output}/artifact.txt"
+rm -rf "$(dirname "${output}")"
+SH
+chmod +x "${generate_sandbox}/cloudnative-pg-timescaledb/scripts/generate-docs.sh"
+create_generator_stub generate-catalog.sh pass
+
+tmp="$(mktemp)"
+if "${generate_sandbox}/cloudnative-pg-timescaledb/scripts/generate.sh" >"${tmp}" 2>&1; then
+  output="$(cat "${tmp}")"
+  rm -f "${tmp}"
+  diag "generate.sh rollback sandbox" "cloudnative-pg-timescaledb/scripts/generate.sh" "missing promoted docs artifact returns non-zero" "${output}" "Restore pre-existing outputs if promotion fails after backups are created."
+  exit 1
+fi
+output="$(cat "${tmp}")"
+rm -f "${tmp}"
+assert_file_content "${generate_sandbox}/cloudnative-pg-timescaledb/generated/original.txt" "original"
+assert_file_content "${generate_sandbox}/cloudnative-pg-timescaledb/docker-bake.hcl" "original"
+assert_file_content "${generate_sandbox}/cloudnative-pg-timescaledb/matrix.json" "original"
+assert_file_content "${generate_sandbox}/cloudnative-pg-timescaledb/docs/generated/original.md" "original"
+rm -rf "${generate_sandbox}"
+generate_sandbox=""
+# END story-1-2 generate transaction proof
 
 printf 'PASS story-1.2 make delegation\n'
