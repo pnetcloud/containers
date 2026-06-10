@@ -175,6 +175,8 @@ run_orchestration() {
     end="$(date -u +%s)"
     printf '%s\t%s\t%s\t%s\t%s\n' "${step_index}" "${label}" "${status}" "$((end - start))" "${log}" >> "${commands_file}"
     if [[ "${status}" != "0" ]]; then
+      printf '\n--- release rehearsal failed step log: %s ---\n' "${log}" >&2
+      tail -n 200 "${log}" >&2 || true
       diag "release-rehearsal" "${label}" "command exits 0" "exit ${status}; log=${log}" "Inspect the command log, fix the release gate, and rerun from a clean checkout."
       exit "${status}"
     fi
@@ -197,6 +199,10 @@ run_orchestration() {
     end="$(date -u +%s)"
     printf '%s\t%s\t%s\t%s\t%s\n' "${step_index}" "${label}" "${status}" "$((end - start))" "${out},${log}" >> "${commands_file}"
     if [[ "${status}" != "0" ]]; then
+      printf '\n--- release rehearsal failed step stdout: %s ---\n' "${out}" >&2
+      tail -n 200 "${out}" >&2 || true
+      printf '\n--- release rehearsal failed step stderr: %s ---\n' "${log}" >&2
+      tail -n 200 "${log}" >&2 || true
       diag "release-rehearsal" "${label}" "command exits 0" "exit ${status}; stdout=${out}; stderr=${log}" "Inspect the command output, fix the release gate, and rerun from a clean checkout."
       exit "${status}"
     fi

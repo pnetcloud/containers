@@ -51,8 +51,13 @@ jobs:
           import sys
           from pathlib import Path
           payload = json.loads(Path(sys.argv[1]).read_text())
+          plugin = payload.get("barman_plugin") or {}
           old = payload.get("old") or payload.get("previous") or {}
           new = payload.get("new") or payload.get("current") or {}
+          if not old and plugin.get("old_reference"):
+              old = {"barman_plugin": plugin["old_reference"]}
+          if not new and plugin.get("new_reference"):
+              new = {"barman_plugin": plugin["new_reference"]}
           def compact(value):
               if isinstance(value, dict):
                   parts = []
