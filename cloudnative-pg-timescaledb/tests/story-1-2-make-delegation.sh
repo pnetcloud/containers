@@ -201,6 +201,7 @@ assert_makefile_scan_passes "commented rule semicolon without space" 'all:# docs
 assert_makefile_scan_passes "escaped recipe literal" 'all:\n\t@printf '"'"'$$(shell date)\n'"'"'\n'
 # shellcheck disable=SC2016
 assert_makefile_scan_passes "escaped inline recipe literal" 'all: ; @printf '"'"'$$(shell date)\n'"'"'\n'
+# shellcheck disable=SC2016
 assert_makefile_scan_passes "url assignment is not a rule" 'URL = https://example.com\n\t# $(shell echo harmless top-level comment)\n'
 assert_makefile_scan_passes "semicolon assignment is not an inline recipe" 'URL = http://host/path;v=1\n'
 # shellcheck disable=SC2016

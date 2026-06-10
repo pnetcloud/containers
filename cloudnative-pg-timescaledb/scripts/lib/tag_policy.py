@@ -1,19 +1,31 @@
-from datetime import datetime
+import json
 import os
+from pathlib import Path
 import re
+import subprocess
 
 
 DEFAULT_TAG_DATE = "20260609"
-DOCKER_TAG_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
+TAGS_SCRIPT = Path(__file__).with_name("tags.sh")
+
+
+def _run_tags(args):
+    result = subprocess.run(
+        [str(TAGS_SCRIPT), *args],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "tag policy command failed").strip()
+        raise ValueError(detail)
+    return result.stdout
 
 
 def validate_release_date(release_date):
     if not re.fullmatch(r"[0-9]{8}", release_date):
         raise ValueError(f"invalid release_date {release_date!r}; expected UTC YYYYMMDD")
-    try:
-        datetime.strptime(release_date, "%Y%m%d")
-    except ValueError as exc:
-        raise ValueError(f"invalid release_date {release_date!r}; expected valid UTC calendar date") from exc
+    _run_tags(["--validate-date", release_date])
     return release_date
 
 
@@ -24,15 +36,5 @@ def resolve_release_date(env=None):
 
 def generated_tags(entry, release_date):
     release_date = validate_release_date(release_date)
-    suffix = "" if entry["debian_variant"] == "trixie" else f"-{entry['debian_variant']}"
-    immutable = f"{entry['pg_major']}-pg{entry['pg_version']}-ts{entry['timescaledb_version']}-{release_date}{suffix}"
-    if entry["experimental"]:
-        tags = [immutable]
-    else:
-        tags = [entry["pg_major"] if entry["debian_variant"] == "trixie" else f"{entry['pg_major']}-{entry['debian_variant']}", immutable]
-        if entry["latest_eligible"]:
-            tags.append("latest")
-    for tag in tags:
-        if not DOCKER_TAG_RE.fullmatch(tag):
-            raise ValueError(f"invalid Docker tag {tag!r}; expected [A-Za-z0-9_][A-Za-z0-9_.-]{{0,127}}")
-    return tags
+    output = _run_tags(["--generate-json", release_date, json.dumps(entry, sort_keys=True)])
+    return json.loads(output)

@@ -270,7 +270,6 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -480,18 +479,6 @@ def load_fixture(path: Path) -> dict:
 
 
 fixture = load_fixture(fixture_path)
-workflow_overrides = {
-    "url": os.environ.get("WORKFLOW_RUN_URL", ""),
-    "status": os.environ.get("WORKFLOW_RUN_STATUS", ""),
-    "conclusion": os.environ.get("WORKFLOW_RUN_CONCLUSION", ""),
-}
-if any(workflow_overrides.values()) and not expect_failure:
-    workflow = fixture.setdefault("workflow_dispatch", {})
-    for key, value in workflow_overrides.items():
-        if value:
-            workflow[key] = value
-
-
 def digest(value, artifact):
     require(isinstance(value, str) and DIGEST_RE.fullmatch(value), artifact, "sha256 digest", repr(value), "Record immutable sha256 digests from the build/publish evidence.")
 
