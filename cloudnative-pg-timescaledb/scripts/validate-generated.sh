@@ -169,15 +169,15 @@ Consumers must require `debian_variant`, `catalog_path`, and entry `pg_major`, `
 
 Command: `cloudnative-pg-timescaledb/scripts/generate-docs.sh`
 
-Default output: `cloudnative-pg-timescaledb/docs/generated/compatibility.md` plus generated companion docs in the same directory, including `compatibility-table.md`, `release-candidate-schema.md`, and `release-evidence-schema.md`.
+Default output: `cloudnative-pg-timescaledb/docs/generated/compatibility.md` plus generated companion docs in the same directory, including `compatibility-table.md`, `release-candidate-schema.md`, `release-evidence-schema.md`, and `failure-reason-catalog.md`.
 
 Required JSON keys:
 
 ```json
-{"docs":[{"doc_path":"cloudnative-pg-timescaledb/docs/generated/compatibility.md","companion_paths":["cloudnative-pg-timescaledb/docs/generated/compatibility-table.md"],"source":"cloudnative-pg-timescaledb/versions.yaml","sections":["compatibility"],"publishable_entries":0,"experimental_entries":2}]}
+{"docs":[{"doc_path":"cloudnative-pg-timescaledb/docs/generated/compatibility.md","companion_paths":["cloudnative-pg-timescaledb/docs/generated/compatibility-table.md"],"source":"cloudnative-pg-timescaledb/versions.yaml","sections":["compatibility"],"publishable_entries":0,"experimental_entries":2}],"generated_docs_manifest":[{"path":"cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md","generator_input":"cloudnative-pg-timescaledb/versions.yaml","generator_command":"cloudnative-pg-timescaledb/scripts/generate-docs.sh","owner_story":"5.8","deterministic_generation_mode":"static generated failure reason catalog"}]}
 ```
 
-Consumers must require `doc_path`, `companion_paths`, `source`, `sections`, `publishable_entries`, and `experimental_entries`. Public README validation consumes `compatibility-table.md` as the generated compatibility table. Release workflows must consume `release-candidate-schema.md` for Story 4.2 candidate metadata and `release-evidence-schema.md` for Story 4.4 supply-chain evidence. Final public documentation validation is owned by Epic 5.
+Consumers must require `docs[]` rows with `doc_path`, `companion_paths`, `source`, `sections`, `publishable_entries`, and `experimental_entries`. Consumers must also require `generated_docs_manifest[]` rows with `path`, `generator_input`, `generator_command`, `owner_story`, and `deterministic_generation_mode`. Public README validation consumes `compatibility-table.md` as the generated compatibility table. Release workflows must consume `release-candidate-schema.md` for Story 4.2 candidate metadata, `release-evidence-schema.md` for Story 4.4 supply-chain evidence, and `failure-reason-catalog.md` for Story 5.8 troubleshooting reason IDs. Final public documentation validation is owned by Epic 5.
 '''
 actual = path.read_text()
 if actual != expected:
@@ -253,11 +253,8 @@ for payload in sys.argv[3:]:
         print(row["doc_path"])
         for companion in row.get("companion_paths", []):
             print(companion)
-if "\nbarman_plugin:" in "\n" + metadata:
-    print((docs_file.parent / "barman-plugin-reference.md").as_posix())
-print((docs_file.parent / "release-candidate-schema.md").as_posix())
-print((docs_file.parent / "release-evidence-schema.md").as_posix())
-print((docs_file.parent / "matrix-schema.md").as_posix())
+    for row in data.get("generated_docs_manifest", []):
+        print(row["path"])
 PY
 }
 
@@ -281,7 +278,7 @@ collect_actual_files() {
   fi
 }
 
-collect_expected_files | sort >"${expected_tmp}"
+collect_expected_files | sort -u >"${expected_tmp}"
 collect_actual_files | sort >"${actual_tmp}"
 if ! diff -u "${expected_tmp}" "${actual_tmp}" >/tmp/validate-generated-file-set.diff; then
   diag "validate-generated" "generated artifact file set" "actual generated files exactly match generator contract" "$(cat /tmp/validate-generated-file-set.diff)" "Remove stale generated artifacts or run make generate after updating metadata/generators."

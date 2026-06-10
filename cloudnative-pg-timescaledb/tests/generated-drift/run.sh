@@ -22,6 +22,7 @@ prepare_fixture() {
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/matrix-schema.md" "${target}/docs/generated/matrix-schema.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md" "${target}/docs/generated/release-candidate-schema.md"
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md" "${target}/docs/generated/release-evidence-schema.md"
+  cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md" "${target}/docs/generated/failure-reason-catalog.md"
 }
 
 run_validator() {
@@ -142,6 +143,11 @@ stale_table_root="$(mktemp -d)"
 prepare_fixture "${stale_table_root}"
 printf '\n<!-- hand edit that must be regenerated -->\n' >>"${stale_table_root}/docs/generated/compatibility-table.md"
 expect_fail "stale generated compatibility table" "compatibility-table.md|committed output matches generated content|make generate" "${stale_table_root}"
+
+stale_failure_catalog_root="$(mktemp -d)"
+prepare_fixture "${stale_failure_catalog_root}"
+printf '\n<!-- hand edit that must be regenerated -->\n' >>"${stale_failure_catalog_root}/docs/generated/failure-reason-catalog.md"
+expect_fail "stale generated failure reason catalog" "failure-reason-catalog.md|committed output matches generated content|make generate" "${stale_failure_catalog_root}"
 
 orphan_dockerfile_root="$(mktemp -d)"
 prepare_fixture "${orphan_dockerfile_root}"

@@ -131,7 +131,7 @@ elif kind == "catalog":
     if catalog_variants != ["trixie", "bookworm"]:
         fail("catalog variants exactly trixie and bookworm", repr(catalog_variants), "Generate one stable release catalog per supported Debian variant.")
 elif kind == "docs":
-    require_keys(payload, {"docs"}, "docs payload")
+    require_keys(payload, {"docs", "generated_docs_manifest"}, "docs payload")
     if len(payload["docs"]) != 1:
         fail("docs payload has exactly one compatibility doc row", repr(payload["docs"]), "Keep Story 1.5 docs contract scoped to compatibility skeleton output.")
     for row in payload["docs"]:
@@ -140,6 +140,24 @@ elif kind == "docs":
             fail("docs sections exactly compatibility", repr(row["sections"]), "Preserve the documented generated docs contract.")
         if row["companion_paths"] != ["cloudnative-pg-timescaledb/docs/generated/compatibility-table.md"]:
             fail("docs companion paths include generated compatibility-table.md", repr(row["companion_paths"]), "Expose the public README compatibility table as a generated companion artifact.")
+    manifest = payload["generated_docs_manifest"]
+    if not isinstance(manifest, list) or not manifest:
+        fail("docs generated_docs_manifest is a non-empty list", repr(manifest), "Expose every generated docs artifact for drift validation and autocommit consumers.")
+    manifest_paths = []
+    for row in manifest:
+        require_keys(row, {"path", "generator_input", "generator_command", "owner_story", "deterministic_generation_mode"}, "generated docs manifest row")
+        manifest_paths.append(row["path"])
+    required_manifest_paths = [
+        "cloudnative-pg-timescaledb/docs/generated/compatibility.md",
+        "cloudnative-pg-timescaledb/docs/generated/compatibility-table.md",
+        "cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md",
+        "cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md",
+        "cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md",
+        "cloudnative-pg-timescaledb/docs/generated/matrix-schema.md",
+        "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md",
+    ]
+    if manifest_paths != required_manifest_paths:
+        fail("docs generated_docs_manifest lists every generated docs artifact in contract order", repr(manifest_paths), "Keep generated docs manifest synchronized with generator outputs.")
 else:
     fail("known generator kind", kind, "Use a documented generator schema kind.")
 PY

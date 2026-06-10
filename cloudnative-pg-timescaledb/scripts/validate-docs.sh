@@ -156,6 +156,7 @@ try:
         "cloudnative-pg-timescaledb/docs/generated/compatibility-table.md",
         "cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md",
         "cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md",
+        "cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md",
         "cloudnative-pg-timescaledb/docs/generated/matrix-schema.md",
         "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md",
     }
@@ -172,7 +173,7 @@ try:
 
     run_plain([str(root / "cloudnative-pg-timescaledb/scripts/generate-docs.sh"), "--metadata", str(metadata), "--output", str(generated_doc)], "generate-docs temp")
     compare("cloudnative-pg-timescaledb/docs/generated/compatibility.md", generated_doc.read_text(), "Run make generate and commit regenerated compatibility docs.")
-    for name in ["compatibility-table.md", "release-candidate-schema.md", "release-evidence-schema.md", "barman-plugin-reference.md"]:
+    for name in ["compatibility-table.md", "release-candidate-schema.md", "release-evidence-schema.md", "failure-reason-catalog.md", "barman-plugin-reference.md"]:
         compare(f"cloudnative-pg-timescaledb/docs/generated/{name}", (generated_doc.parent / name).read_text(), f"Run make generate and commit regenerated {name}.")
     matrix_tmp = tmpdir / "matrix.json"
     run_plain([str(root / "cloudnative-pg-timescaledb/scripts/generate-matrix.sh"), "--metadata", str(metadata), "--output", str(matrix_tmp)], "generate-matrix temp")

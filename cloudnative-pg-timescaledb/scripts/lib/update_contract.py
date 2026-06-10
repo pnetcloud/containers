@@ -374,6 +374,7 @@ def main(argv):
         "cloudnative-pg-timescaledb/docs/generated/compatibility.md",
         "cloudnative-pg-timescaledb/docs/generated/compatibility-table.md",
         "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md",
+        "cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md",
     ]
     snapshots = capture_paths([metadata] + generated_paths)
     try:
