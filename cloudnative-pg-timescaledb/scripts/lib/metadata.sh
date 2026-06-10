@@ -115,6 +115,15 @@ if set(image) != required_image:
 for field in ["registry", "repository"]:
     if not isinstance(image[field], str) or not image[field].strip():
         fail(f"image.{field} is non-empty string", repr(image[field]), "Set image registry and repository to usable image reference text.")
+    if image[field] != image[field].strip() or re.search(r"\s", image[field]):
+        fail(f"image.{field} has no whitespace", repr(image[field]), "Remove leading, trailing, or embedded whitespace from image reference metadata.")
+registry_pattern = r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?(?::[0-9]+)?"
+repository_component = r"[a-z0-9]+(?:(?:[._-]+)[a-z0-9]+)*"
+repository_pattern = rf"{repository_component}(?:/{repository_component})*"
+if not re.fullmatch(registry_pattern, image["registry"]):
+    fail("image.registry is OCI registry host[:port]", repr(image["registry"]), "Use a lowercase registry host with optional port, for example ghcr.io.")
+if not re.fullmatch(repository_pattern, image["repository"]):
+    fail("image.repository is lowercase slash-separated OCI repository path", repr(image["repository"]), "Use lowercase repository path components separated by '/', for example pnetcloud/cloudnative-pg-timescaledb.")
 if image["current_major"] != "18":
     fail("image.current_major is string '18'", repr(image["current_major"]), "Set current_major to '18'.")
 if image["primary_debian_variant"] != "trixie":

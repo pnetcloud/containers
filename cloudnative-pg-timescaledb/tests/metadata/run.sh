@@ -178,7 +178,11 @@ unsupported_mode_fixture="$(mktemp)"
 unknown_extension_fixture="$(mktemp)"
 invalid_registry_fixture="$(mktemp)"
 invalid_repository_fixture="$(mktemp)"
-trap 'rm -f "${valid_policy_fixture}" "${valid_true_unsupported_mode_fixture}" "${missing_reason_fixture}" "${missing_target_fixture}" "${unsupported_mode_fixture}" "${unknown_extension_fixture}" "${invalid_registry_fixture}" "${invalid_repository_fixture}"' EXIT
+invalid_registry_whitespace_fixture="$(mktemp)"
+invalid_registry_path_fixture="$(mktemp)"
+invalid_repository_whitespace_fixture="$(mktemp)"
+invalid_repository_uppercase_fixture="$(mktemp)"
+trap 'rm -f "${valid_policy_fixture}" "${valid_true_unsupported_mode_fixture}" "${missing_reason_fixture}" "${missing_target_fixture}" "${unsupported_mode_fixture}" "${unknown_extension_fixture}" "${invalid_registry_fixture}" "${invalid_repository_fixture}" "${invalid_registry_whitespace_fixture}" "${invalid_registry_path_fixture}" "${invalid_repository_whitespace_fixture}" "${invalid_repository_uppercase_fixture}"' EXIT
 policy_fixture "${valid_policy_fixture}" pgaudit false "PGAudit is validated by control file" control-file pgaudit.control
 policy_fixture "${valid_true_unsupported_mode_fixture}" pgaudit true __omit__ sql-only __omit__
 policy_fixture "${missing_reason_fixture}" pgaudit false __omit__ control-file pgaudit.control
@@ -187,6 +191,10 @@ policy_fixture "${unsupported_mode_fixture}" pgaudit false "PGAudit is validated
 policy_fixture "${unknown_extension_fixture}" postgis false "PostGIS is outside this image contract" control-file postgis.control
 replace_line_fixture "${invalid_registry_fixture}" "  registry:" "  registry: []"
 replace_line_fixture "${invalid_repository_fixture}" "  repository:" "  repository: \"\""
+replace_line_fixture "${invalid_registry_whitespace_fixture}" "  registry:" "  registry: \" ghcr.io\""
+replace_line_fixture "${invalid_registry_path_fixture}" "  registry:" "  registry: \"ghcr.io/pnetcloud\""
+replace_line_fixture "${invalid_repository_whitespace_fixture}" "  repository:" "  repository: \"pnetcloud/cloudnative pg-timescaledb\""
+replace_line_fixture "${invalid_repository_uppercase_fixture}" "  repository:" "  repository: \"pnetcloud/CloudNative-PG-TimescaleDB\""
 "${VALIDATOR}" "${valid_policy_fixture}" >/tmp/story-3-5-valid-extension-policy.out
 
 expect_fail "missing top-level key" "top-level keys exactly" "${FIXTURE_DIR}/missing-top-level-key.yaml"
@@ -194,6 +202,10 @@ expect_fail "wrong current major" "image.current_major" "${FIXTURE_DIR}/wrong-cu
 expect_fail "wrong primary Debian" "image.primary_debian_variant" "${FIXTURE_DIR}/wrong-primary-debian-variant.yaml"
 expect_fail "invalid image registry" "image.registry is non-empty string" "${invalid_registry_fixture}"
 expect_fail "invalid image repository" "image.repository is non-empty string" "${invalid_repository_fixture}"
+expect_fail "image registry whitespace" "image.registry has no whitespace" "${invalid_registry_whitespace_fixture}"
+expect_fail "image registry path component" "image.registry is OCI registry" "${invalid_registry_path_fixture}"
+expect_fail "image repository whitespace" "image.repository has no whitespace" "${invalid_repository_whitespace_fixture}"
+expect_fail "image repository uppercase" "image.repository is lowercase" "${invalid_repository_uppercase_fixture}"
 expect_fail "wrong allowed PostgreSQL majors" "allowed.postgres_majors" "${FIXTURE_DIR}/wrong-allowed-postgres-majors.yaml"
 expect_fail "wrong allowed Debian variants" "allowed.debian_variants" "${FIXTURE_DIR}/wrong-allowed-debian-variants.yaml"
 expect_fail "wrong allowed platforms" "allowed.platforms" "${FIXTURE_DIR}/wrong-allowed-platforms.yaml"

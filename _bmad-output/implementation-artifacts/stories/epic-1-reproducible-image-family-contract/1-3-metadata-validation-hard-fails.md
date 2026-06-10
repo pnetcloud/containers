@@ -220,12 +220,14 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Re-ran `validate-metadata.sh`, `tests/metadata/run.sh`, `make validate`, and `git diff --check` successfully after review fixes.
 - 2026-06-10: Hardened metadata validation to reject empty/non-string `image.registry` and `image.repository`, reject unsupported extension `validation_mode` even when `creatable: true`, and fail `validate-metadata.sh` with controlled argument diagnostics when more than one metadata path or an empty explicit metadata path is passed.
 - 2026-06-10: Replaced the brittle text scan for Makefile wiring with a sandboxed `make validate` fail-fast proof that `validate-metadata.sh` runs before downstream validators.
+- 2026-06-10: Addressed additional BMad review findings: rejected whitespace and invalid OCI components in `image.registry`/`image.repository`, and removed later-story documentation edits from the Story 1.3 follow-up scope.
 
 ### Completion Notes
 
 - Metadata validation now rejects unsupported PostgreSQL majors, plain `19`, unmarked `19beta1`, Alpine, `bullseye`, other Debian variants, invalid platform sets, malformed rows, duplicate or missing matrix rows, bad `latest_eligible` policy, unsafe publishable rows, and skipped rows without a reason.
 - Metadata validation also ensures `pg_version` belongs to `pg_major`, `cnpg_tag` matches `<pg_version>-standard-<debian_variant>`, and publishable resolver-owned/build-critical values are not empty or whitespace-only.
 - Metadata validation now also ensures `image.registry` and `image.repository` are usable non-empty strings, and that extension validation modes are constrained for both creatable and non-creatable extension policy entries.
+- Metadata validation now rejects whitespace, path-bearing registry values, and uppercase or whitespace-bearing repository values before generators can concatenate unsafe raw image references.
 - Story 1.3 intentionally does not perform upstream CNPG image, TimescaleDB package, Toolkit package, or per-architecture package availability checks; those remain owned by Stories 2.1 and 2.2.
 - `latest_eligible` remains a policy marker for `18-trixie` and does not require `publish: true` while resolver-owned values are still empty.
 
@@ -280,3 +282,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Wired metadata validation into `make validate` while leaving upstream availability checks to Epic 2.
 - 2026-06-09: Hardened static policy validation after code review so mismatched CNPG tags, mismatched PG versions, whitespace-only publish fields, and order-only platform differences are handled correctly.
 - 2026-06-10: Hardened image registry/repository validation, extension validation modes, validator argument handling, and Make metadata gate proof after additional code review.
+- 2026-06-10: Resolved additional review findings for image reference whitespace/format validation and Story 1.3 commit scope.

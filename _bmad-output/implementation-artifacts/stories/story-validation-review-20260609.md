@@ -51,10 +51,10 @@ Resolution path: This is an execution gap, not a contradiction in Epic 3. Story 
 
 Subagent validation confirmed the constraints are correctly represented, including `latest=18-trixie`, full version tags, Debian scope, and no baked-in Barman.
 
-Updated 2026-06-10: remote GitHub Actions evidence now proves `Validate` and `Build Release Candidates` succeeded for commit `e12488ecdde7b6f3588d32b75ebf878210273534`:
+Updated 2026-06-10: remote GitHub Actions evidence now proves `Validate` and `Build Release Candidates` succeeded for commit `74b4a07e8ccb5644f8ac4d5c6f4300fa7e191522`:
 
-- `Validate`: `https://github.com/pnetcloud/containers/actions/runs/27267944216`, status `completed`, conclusion `success`.
-- `Build Release Candidates`: `https://github.com/pnetcloud/containers/actions/runs/27267944657`, status `completed`, conclusion `success`.
+- `Validate`: `https://github.com/pnetcloud/containers/actions/runs/27265859709`, status `completed`, conclusion `success`.
+- `Build Release Candidates`: `https://github.com/pnetcloud/containers/actions/runs/27265860054`, status `completed`, conclusion `success`.
 
 Remaining proof gap: Stories 4.4, 4.5, and 4.6 are implementation-complete but still need real/staging release evidence before they can be treated as product release proof: actual cosign verification against a digest, staging/final publish metadata with promoted tags, and non-empty catalogs generated from real release metadata.
 
@@ -75,8 +75,6 @@ Resolution:
 ## Next Execution Step
 
 Current blocker is Story 5.9 plus remote workflow availability.
-
-Rechecked 2026-06-10: `gh workflow list --repo pnetcloud/containers --all` still lists only `Build Release Candidates` and `Validate`; `gh workflow view update.yml --repo pnetcloud/containers --yaml` and `gh workflow view release-rehearsal.yml --repo pnetcloud/containers --yaml` both return `HTTP 404`.
 
 Do not close the final release proof until these external checks exist from the same repository:
 

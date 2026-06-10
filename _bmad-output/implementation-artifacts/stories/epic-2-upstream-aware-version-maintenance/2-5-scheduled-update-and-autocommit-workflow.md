@@ -186,7 +186,7 @@ Every implementation story must finish with a working repository state and must 
 - Subagent review round 1 found policy exactness gap; fixed by checking full grant, reason, and owner story.
 - Subagent review round 2 found YAML quoting issue for grant values; fixed by quoting grants and verifying standard YAML parsing.
 - Subagent review round 3 reported no blocking findings.
-- 2026-06-10 follow-up story validation found remote workflow availability is not yet proven: `gh workflow list --repo pnetcloud/containers --all` currently lists only `Build Release Candidates` and `Validate`; `gh workflow view update.yml --repo pnetcloud/containers --yaml` returns `HTTP 404`. Keep this story in review until remote/default-branch workflow evidence is recorded.
+- 2026-06-10 follow-up story validation found remote workflow availability is not yet proven: `gh workflow list --repo pnetcloud/containers --all` currently lists only `Build Release Candidates` and `Validate`; `update.yml` is not yet visible through the GitHub Actions API. Keep this story in review until remote/default-branch workflow evidence is recorded.
 
 ### Validation Commands
 
@@ -199,7 +199,6 @@ Every implementation story must finish with a working repository state and must 
 - `make update` - passed, no-op `changed=false`.
 - Staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && make validate` - passed.
 - `git diff --cached --check` - passed.
-- `gh workflow view update.yml --repo pnetcloud/containers --yaml` - blocked with `HTTP 404` because the workflow is not yet visible to GitHub Actions on the remote/default branch.
 
 ### Completion Notes
 
