@@ -119,7 +119,7 @@
         "linux/arm64"
       ],
       "publish": false,
-      "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream support",
+      "skip_reason": "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists",
       "skipped_marker": "cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile.skipped.json"
     },
     {
@@ -134,7 +134,7 @@
         "linux/arm64"
       ],
       "publish": false,
-      "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream support",
+      "skip_reason": "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 bookworm linux/amd64 linux/arm64 missing packages while CNPG exists",
       "skipped_marker": "cloudnative-pg-timescaledb/generated/19beta1/bookworm/Dockerfile.skipped.json"
     }
   ]

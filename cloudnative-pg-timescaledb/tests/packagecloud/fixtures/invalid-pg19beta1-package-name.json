@@ -1,0 +1,3 @@
+{"packages":[
+  {"name": "timescaledb-2-postgresql-19beta1", "version": "2.27.2~debian13-19beta1", "distribution": "trixie", "architecture": "amd64", "pg_major": "19", "package_type": "timescaledb", "source_url": "fixture://invalid/trixie/amd64/timescaledb/19beta1"}
+]}

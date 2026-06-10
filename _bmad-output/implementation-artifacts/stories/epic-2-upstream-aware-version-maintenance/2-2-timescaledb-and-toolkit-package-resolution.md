@@ -3,7 +3,7 @@ storyId: 2.2
 storyKey: 2-2-timescaledb-and-toolkit-package-resolution
 epic: 2
 title: 'TimescaleDB and Toolkit Package Resolution'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: bdb1493
@@ -189,11 +189,14 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Addressed subagent review findings: publishable package rows now require both `linux/amd64` and `linux/arm64`, and live resolution now parses public Packagecloud Debian `Packages` indexes without requiring an API token.
 - 2026-06-09: Live smoke passed for PostgreSQL `18` on `trixie`, resolving `timescaledb-2-postgresql-18` to `2.27.2~debian13-1804` and Toolkit to `1:1.23.0~debian13`.
 - 2026-06-09: Re-ran `tests/packagecloud/run.sh`, `make validate`, shell syntax checks, live smoke, and `git diff --cached --check` successfully after review fixes.
+- 2026-06-10: Closed the review correction for experimental metadata `pg_major: 19beta1` by deriving package ABI `pg_package_major: 19` for package names, lookup keys, fixtures, skip reasons, and compact JSON output.
+- 2026-06-10: Added negative coverage rejecting package fixture records named with `postgresql-19beta1` and rejecting metadata `pg_major: 19` as a supported stable line.
+- 2026-06-10: Re-ran targeted validation successfully: `bash cloudnative-pg-timescaledb/tests/packagecloud/run.sh`, `bash cloudnative-pg-timescaledb/tests/update/run.sh`, `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh`, `bash cloudnative-pg-timescaledb/tests/generators/run.sh`, `shellcheck -x cloudnative-pg-timescaledb/scripts/lib/packagecloud.sh cloudnative-pg-timescaledb/tests/packagecloud/run.sh`, and `git diff --check`.
 
 ### Completion Notes
 
 - `resolve-versions.sh --check-packages` now resolves package names, package versions, and extension versions for TimescaleDB and Toolkit per PostgreSQL major, Debian variant, and platform.
-- Package names are derived from PostgreSQL package ABI major. A follow-up review correction requires the implementation and fixtures to map experimental metadata `pg_major: 19beta1` to `pg_package_major: 19`, reject package names ending in `19beta1`, and include `pg_package_major` in resolver JSON output.
+- Package names are derived from PostgreSQL package ABI major. Experimental metadata `pg_major: 19beta1` maps to `pg_package_major: 19`, package names ending in `19beta1` are rejected, and compact resolver JSON includes `pg_package_major` without treating `19` as a supported stable metadata line.
 - Publishable rows hard-fail when either required platform is absent, when a package is missing, or when versions differ across required platforms.
 - Non-publish rows require a specific `skip_reason` naming package, PostgreSQL major, Debian variant, and platform for missing package cases.
 - JSON output is compact and stdout-only on success; human diagnostics use deterministic `command/artifact/expected/actual/remediation` fields.
@@ -221,10 +224,21 @@ Every implementation story must finish with a working repository state and must 
 - `cloudnative-pg-timescaledb/tests/packagecloud/fixtures/mismatched-toolkit-version-amd64-arm64.json`
 - `cloudnative-pg-timescaledb/tests/packagecloud/fixtures/missing-toolkit-nonpublish-skip.json`
 - `cloudnative-pg-timescaledb/tests/packagecloud/fixtures/pg19beta1-cnpg-present-packages-missing.json`
+- `cloudnative-pg-timescaledb/tests/packagecloud/fixtures/invalid-pg19beta1-package-name.json`
 - `cloudnative-pg-timescaledb/tests/packagecloud/fixtures/missing-arm64-package.json`
+- `cloudnative-pg-timescaledb/versions.yaml`
+- `cloudnative-pg-timescaledb/matrix.json`
+- `cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile.skipped.json`
+- `cloudnative-pg-timescaledb/generated/19beta1/bookworm/Dockerfile.skipped.json`
+- `cloudnative-pg-timescaledb/docs/generated/compatibility-table.md`
+- `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-bake-valid.json`
+- `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-dockerfiles-valid.json`
+- `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-matrix-valid.json`
+- `_bmad-output/implementation-artifacts/execution-plan-20260610.md`
 
 ## Change Log
 
 - 2026-06-09: Implemented Story 2.2 package resolver and fixture suite.
 - 2026-06-09: Wired package resolver tests into `make validate`.
 - 2026-06-09: Hardened package resolver after subagent review for required platform coverage and live public Packagecloud index parsing.
+- 2026-06-10: Completed PG19 beta package ABI correction, regenerated derived outputs, and marked Story 2.2 done after targeted validation passed.
