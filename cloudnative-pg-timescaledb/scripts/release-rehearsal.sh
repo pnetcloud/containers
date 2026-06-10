@@ -157,6 +157,7 @@ run_orchestration() {
   logs_dir="${tmp_dir}/release-rehearsal-logs"
   mkdir -p "${logs_dir}"
   local commands_file="${logs_dir}/commands.tsv"
+  local capture_output_file=""
   : > "${commands_file}"
 
   run_step() {
@@ -206,13 +207,14 @@ run_orchestration() {
       diag "release-rehearsal" "${label}" "command exits 0" "exit ${status}; stdout=${out}; stderr=${log}" "Inspect the command output, fix the release gate, and rerun from a clean checkout."
       exit "${status}"
     fi
-    cat "${out}"
+    capture_output_file="${out}"
   }
 
   run_step "make update" env DATE="${date_value}" DRY_RUN="${dry_run:-0}" STAGING_NAMESPACE="${staging_namespace}" make --no-print-directory update UPDATE_ARGS=--json
   run_step "make generate" env DATE="${date_value}" make --no-print-directory generate
   run_step "make validate" env DATE="${date_value}" make --no-print-directory validate
-  matrix_json="$(capture_step "make matrix" make --no-print-directory matrix)"
+  capture_step "make matrix" make --no-print-directory matrix
+  matrix_json="$(cat "${capture_output_file}")"
   run_step "make bake-print" make --no-print-directory bake-print
 
   while IFS=$'\t' read -r pg debian platform; do
