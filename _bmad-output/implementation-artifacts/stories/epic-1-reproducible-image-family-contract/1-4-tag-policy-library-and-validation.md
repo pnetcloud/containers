@@ -154,11 +154,11 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-09: Re-ran `validate-tags.sh`, `tests/tags/run.sh`, `make validate`, and `git diff --check` successfully after review fixes.
 - 2026-06-10: Fixed shellcheck SC2016 in `tests/tags/run.sh` without changing the literal `TAG_VALIDATION_DATE` assertion, then re-ran tag validation, fixture tests, shellcheck, `make validate`, and `git diff --check`.
 - 2026-06-10: Addressed BMad review findings: added controlled `validate-tags.sh` diagnostics for missing option values, rejected `tags` on `publish: false` rows, converted directory and invalid UTF-8 metadata paths into deterministic diagnostics, removed the fixed `/tmp` positive-output path, and kept the `DATE` fallback assertion aligned with `validate.sh`.
-- 2026-06-10: Addressed BMad review round 2 findings: made missing `18-trixie` latest ownership fail unconditionally, moved tag date resolution/calendar validation into shared tag policy, and proved generated matrix tags/candidate refs honor `TAG_VALIDATION_DATE -> DATE -> 20260609`.
-- 2026-06-10: Addressed BMad review round 3 findings: moved Docker tag grammar validation into shared Python tag policy and matrix JSON validation, added generator/matrix regressions for invalid tag characters, and corrected stale `versions.yaml` completion notes.
-- 2026-06-10: Addressed BMad review round 4 findings: required the `latest_eligible` owner to be publishable and emit `latest`, rejected digest-form candidate refs in matrix validation, and added `validate-matrix-json.py` to the File List.
-- 2026-06-10: Addressed BMad review round 5 findings: included the shared `tags.sh` tag-policy refactor in the review artifact and tightened matrix validation to require row-shaped immutable tags plus exact latest/tag suffix policy.
-- 2026-06-10: Addressed BMad review round 6 findings: added `timescaledb_version` to generated matrix include rows and schema docs, then enforced exact immutable tag TimescaleDB/version shape, latest owner presence, supported dimensions, and required platforms in the shared matrix validator.
+- 2026-06-10: Addressed BMad review round 2 findings: made missing `18-trixie` latest ownership fail unconditionally, moved tag date resolution/calendar validation into shared tag policy, and proved generated tags honor `TAG_VALIDATION_DATE -> DATE -> 20260609`.
+- 2026-06-10: Addressed BMad review round 3 findings within Story 1.4 scope: moved Docker tag grammar validation into shared Python tag policy and corrected stale `versions.yaml` completion notes.
+- 2026-06-10: Addressed BMad review round 4 findings within Story 1.4 scope: required the `latest_eligible` owner to be publishable and emit `latest`.
+- 2026-06-10: Addressed BMad review round 5 findings within Story 1.4 scope: included the shared `tags.sh` tag-policy refactor in the review artifact.
+- 2026-06-10: Deferred matrix/generator hardening observations raised during review to their owning stories, especially Story 1.5 and Story 4.1; they are intentionally excluded from this story's final scoped review.
 
 ### Completion Notes
 
@@ -170,10 +170,6 @@ Every implementation story must finish with a working repository state and must 
 - Skipped rows cannot carry materialized publish tags, so disabled image rows cannot accidentally retain rolling, immutable, or `latest` references.
 - The only `latest_eligible` owner must be publishable and emit `latest`; skipped rows cannot reserve `latest` without producing the tag.
 - Tag validation reports invalid CLI arguments and non-file/non-UTF-8 metadata inputs with the same deterministic diagnostic shape used by other validators.
-- Generated tag consumers now use the same shared release-date resolution and calendar validation as tag validation, so matrix/candidate refs cannot silently drift to `20260609` or accept impossible dates.
-- Matrix validation requires candidate refs to equal `image:<immutable-intended-tag>` and rejects digest-form candidate refs.
-- Matrix validation also rejects fake immutable tags, bookworm `latest`, trixie immutable tags with Debian suffixes, and secondary immutable tags missing their Debian suffix.
-- Matrix include rows now carry `timescaledb_version`, letting validators reject wrong TimescaleDB immutable tags instead of accepting any Docker-safe `-ts...` segment.
 - Story 1.4 intentionally does not add GHCR publish, tag promotion, catalog references, or public tag docs; those remain owned by later stories.
 
 ### Latest Validation
@@ -187,22 +183,9 @@ Every implementation story must finish with a working repository state and must 
 
 - `cloudnative-pg-timescaledb/scripts/lib/tags.sh`
 - `cloudnative-pg-timescaledb/scripts/lib/tag_policy.py`
-- `cloudnative-pg-timescaledb/scripts/lib/generator_contract.py`
 - `cloudnative-pg-timescaledb/scripts/validate-tags.sh`
-- `cloudnative-pg-timescaledb/scripts/validate-matrix-json.py`
 - `cloudnative-pg-timescaledb/scripts/validate.sh`
-- `cloudnative-pg-timescaledb/matrix.json`
-- `cloudnative-pg-timescaledb/docs/generated/matrix-schema.md`
 - `cloudnative-pg-timescaledb/tests/tags/run.sh`
-- `cloudnative-pg-timescaledb/tests/matrix/run.sh`
-- `cloudnative-pg-timescaledb/tests/matrix/fixtures/valid-publishable-matrix.json`
-- `cloudnative-pg-timescaledb/tests/matrix/fixtures/missing-required-key.json`
-- `cloudnative-pg-timescaledb/tests/matrix/fixtures/pg19beta1-not-experimental.json`
-- `cloudnative-pg-timescaledb/tests/matrix/fixtures/bookworm-latest-eligible.json`
-- `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-matrix-valid.json`
-- `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-matrix-missing-include-key.json`
-- `cloudnative-pg-timescaledb/tests/generators/fixtures/generate-matrix-wrong-latest-eligible.json`
-- `cloudnative-pg-timescaledb/tests/generators/run.sh`
 - `cloudnative-pg-timescaledb/tests/tags/fixtures/valid-tags.yaml`
 - `cloudnative-pg-timescaledb/tests/tags/fixtures/wrong-latest-pg17.yaml`
 - `cloudnative-pg-timescaledb/tests/tags/fixtures/missing-latest-pg18-trixie.yaml`
@@ -230,6 +213,6 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Resolved BMad review findings for tag CLI argument diagnostics, skipped-row tag rejection, metadata read diagnostics, test temp output, and review artifact self-consistency.
 - 2026-06-10: Resolved BMad review round 2 findings for required latest ownership and shared generated tag-date validation.
 - 2026-06-10: Resolved BMad review round 3 findings for shared Docker tag grammar enforcement and stale completion notes.
-- 2026-06-10: Resolved BMad review round 4 findings for skipped latest ownership, digest candidate refs, and File List completeness.
-- 2026-06-10: Resolved BMad review round 5 findings for review artifact composition and strict matrix immutable/latest policy validation.
-- 2026-06-10: Resolved BMad review round 6 findings for exact TimescaleDB immutable tags, required latest owner, supported matrix dimensions, and matrix schema drift.
+- 2026-06-10: Resolved BMad review round 4 findings for skipped latest ownership.
+- 2026-06-10: Resolved BMad review round 5 findings for Story 1.4 review artifact composition.
+- 2026-06-10: Recorded matrix/generator review observations as deferred owning-story work for Story 1.5 and Story 4.1.
