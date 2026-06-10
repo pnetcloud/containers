@@ -2,6 +2,7 @@
 import argparse
 import json
 from pathlib import Path
+import re
 import sys
 
 
@@ -10,6 +11,7 @@ REQUIRED_INCLUDE = {
     "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental",
     "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref",
 }
+DOCKER_TAG_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
 
 
 def fail(artifact, expected, actual, remediation):
@@ -46,6 +48,18 @@ def validate(payload, artifact):
         missing = sorted(REQUIRED_INCLUDE - set(row))
         if missing:
             fail(artifact, f"include[{idx}] required keys", f"missing {missing}", "Keep downstream workflow keys explicit; do not recompute release fields.")
+        intended_tags = row["intended_tags"]
+        if not isinstance(intended_tags, list) or not intended_tags:
+            fail(artifact, f"include[{idx}].intended_tags is non-empty array", repr(intended_tags), "Emit deterministic tag-policy output for every publishable matrix row.")
+        for tag in intended_tags:
+            if not isinstance(tag, str) or not DOCKER_TAG_RE.fullmatch(tag):
+                fail(artifact, f"include[{idx}].intended_tags use Docker tag grammar", repr(tag), "Regenerate matrix tags from validated tag policy output.")
+        candidate_ref = row["candidate_ref"]
+        if not isinstance(candidate_ref, str) or ":" not in candidate_ref.rsplit("/", 1)[-1]:
+            fail(artifact, f"include[{idx}].candidate_ref has tagged image reference", repr(candidate_ref), "Use image:immutable-tag candidate references.")
+        candidate_tag = candidate_ref.rsplit(":", 1)[-1]
+        if not DOCKER_TAG_RE.fullmatch(candidate_tag):
+            fail(artifact, f"include[{idx}].candidate_ref tag uses Docker tag grammar", repr(candidate_ref), "Use a Docker tag-safe immutable candidate reference.")
 
 
 def main():

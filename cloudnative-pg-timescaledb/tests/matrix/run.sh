@@ -182,6 +182,18 @@ PY
 rm -f "${generated}"
 
 expect_command_fail "invalid TAG_VALIDATION_DATE calendar date" "valid UTC YYYYMMDD|valid UTC calendar date" env TAG_VALIDATION_DATE=20261340 "${SCRIPT}" --metadata "${PUBLISHABLE_METADATA}" --json
+invalid_tag_metadata="$(mktemp)"
+python3 - "${PUBLISHABLE_METADATA}" "${invalid_tag_metadata}" <<'PY'
+from pathlib import Path
+import sys
+
+source, output = sys.argv[1:]
+text = Path(source).read_text()
+text = text.replace('timescaledb_version: "2.27.2"', 'timescaledb_version: "2.27.2/bad"', 1)
+Path(output).write_text(text)
+PY
+expect_command_fail "generator rejects invalid Docker tag grammar" "generated tags use valid Docker tag grammar|invalid Docker tag" "${SCRIPT}" --metadata "${invalid_tag_metadata}" --json
+rm -f "${invalid_tag_metadata}"
 
 validate_matrix "${FIXTURE_DIR}/valid-publishable-matrix.json"
 python3 - "${ROOT_DIR}" "${PUBLISHABLE_METADATA}" "${FIXTURE_DIR}/valid-publishable-matrix.json" <<'PY'
@@ -208,6 +220,20 @@ PY
 validate_matrix "${ROOT_DIR}/cloudnative-pg-timescaledb/matrix.json"
 "${VALIDATE_MATRIX_JSON}" --file "${FIXTURE_DIR}/valid-publishable-matrix.json"
 expect_command_fail "shared workflow validator rejects missing required key" "missing .*digest" "${VALIDATE_MATRIX_JSON}" --file "${FIXTURE_DIR}/missing-required-key.json"
+invalid_tag_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${invalid_tag_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["intended_tags"][1] = "18-pg18.4-ts2.27.2/bad-20260609"
+payload["include"][0]["candidate_ref"] = f"{payload['include'][0]['image']}:{payload['include'][0]['intended_tags'][1]}"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects invalid Docker tags" "Docker tag grammar" "${VALIDATE_MATRIX_JSON}" --file "${invalid_tag_matrix}"
+rm -f "${invalid_tag_matrix}"
 expect_matrix_fail "missing required key" "missing .*digest" "${FIXTURE_DIR}/missing-required-key.json"
 expect_matrix_fail "19beta1 must be experimental" "19beta1 .*experimental" "${FIXTURE_DIR}/pg19beta1-not-experimental.json"
 expect_matrix_fail "bookworm cannot be latest" "latest_eligible only" "${FIXTURE_DIR}/bookworm-latest-eligible.json"

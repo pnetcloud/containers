@@ -155,13 +155,14 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Fixed shellcheck SC2016 in `tests/tags/run.sh` without changing the literal `TAG_VALIDATION_DATE` assertion, then re-ran tag validation, fixture tests, shellcheck, `make validate`, and `git diff --check`.
 - 2026-06-10: Addressed BMad review findings: added controlled `validate-tags.sh` diagnostics for missing option values, rejected `tags` on `publish: false` rows, converted directory and invalid UTF-8 metadata paths into deterministic diagnostics, removed the fixed `/tmp` positive-output path, and kept the `DATE` fallback assertion aligned with `validate.sh`.
 - 2026-06-10: Addressed BMad review round 2 findings: made missing `18-trixie` latest ownership fail unconditionally, moved tag date resolution/calendar validation into shared tag policy, and proved generated matrix tags/candidate refs honor `TAG_VALIDATION_DATE -> DATE -> 20260609`.
+- 2026-06-10: Addressed BMad review round 3 findings: moved Docker tag grammar validation into shared Python tag policy and matrix JSON validation, added generator/matrix regressions for invalid tag characters, and corrected stale `versions.yaml` completion notes.
 
 ### Completion Notes
 
 - Primary `trixie` publishable rows generate rolling major tags, immutable `{major}-pg{pg_version}-ts{timescaledb_version}-{yyyymmdd}` tags, and `latest` only for non-experimental PostgreSQL `18` `trixie`.
 - Secondary `bookworm` publishable rows generate OS-suffixed rolling and immutable tags, and never receive `latest`.
 - Experimental `19beta1` rows generate immutable date tags only and never receive normal rolling tags or `latest`.
-- Current unresolved `versions.yaml` still passes tag validation because all rows are `publish: false`; publishable tag behavior is covered by resolved fixtures.
+- Current `versions.yaml` has publishable PostgreSQL 17/18 `trixie` and `bookworm` rows with deterministic materialized tags, while PostgreSQL `19beta1` rows remain `publish: false`; fixture coverage also proves skipped and invalid tag cases.
 - Publishable rows cannot bypass tag validation by omitting `tags`; every generated tag is checked for deterministic ownership and Docker tag grammar before later publish stories consume it.
 - Skipped rows cannot carry materialized publish tags, so disabled image rows cannot accidentally retain rolling, immutable, or `latest` references.
 - Tag validation reports invalid CLI arguments and non-file/non-UTF-8 metadata inputs with the same deterministic diagnostic shape used by other validators.
@@ -210,3 +211,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Fixed shellcheck quoting in tag fixture runner and refreshed validation evidence.
 - 2026-06-10: Resolved BMad review findings for tag CLI argument diagnostics, skipped-row tag rejection, metadata read diagnostics, test temp output, and review artifact self-consistency.
 - 2026-06-10: Resolved BMad review round 2 findings for required latest ownership and shared generated tag-date validation.
+- 2026-06-10: Resolved BMad review round 3 findings for shared Docker tag grammar enforcement and stale completion notes.

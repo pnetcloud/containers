@@ -529,7 +529,10 @@ def matrix_summary(data, entries):
     skipped = []
     for entry in entries:
         if entry["publish"]:
-            tags = generated_tags(entry, date)
+            try:
+                tags = generated_tags(entry, date)
+            except ValueError as exc:
+                diag("generate-matrix", row_id(entry), "generated tags use valid Docker tag grammar", str(exc), "Fix metadata values used in tag policy before generating matrix rows.")
             immutable_tag = next((tag for tag in tags if "-pg" in tag and "-ts" in tag), tags[0])
             include.append(
                 {

@@ -198,7 +198,10 @@ for idx, entry in enumerate(entries):
             fail("taggable entries have required tag inputs", f"empty {empty}", "Populate PostgreSQL, Debian, and TimescaleDB values before generating tags.")
         if entry["publish"] and "tags" not in entry:
             fail(f"entries[{idx}].tags is present for publishable rows", "missing", "Materialize deterministic policy tags before an image row becomes publishable.")
-        actual = generated_tags(entry, release_date)
+        try:
+            actual = generated_tags(entry, release_date)
+        except ValueError as exc:
+            fail("generated Docker tags use valid tag grammar", str(exc), "Use only Docker tag-safe PostgreSQL, Debian, TimescaleDB, and date values.")
         for tag in actual:
             if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", tag):
                 fail("generated Docker tags use valid tag grammar", repr(tag), "Use only Docker tag-safe PostgreSQL, Debian, TimescaleDB, and date values.")
