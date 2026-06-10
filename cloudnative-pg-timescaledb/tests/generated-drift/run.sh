@@ -26,9 +26,52 @@ prepare_fixture() {
   cp "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md" "${target}/docs/generated/release-rehearsal-report.md"
 }
 
+manifest_fixture() {
+  local target="$1"
+  cat >"${target}" <<'JSON'
+{
+  "manifests": [
+    {
+      "tag": "17.10-standard-trixie",
+      "digest": "sha256:fdc339fb142d56b852e2c9ca2474f1d52bf798ff9b8381800b520597f0ff7cc2",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "18.4-standard-trixie",
+      "digest": "sha256:184219ecec559d15fa03932b0d3005e0372f7027746bb682aca478bc4918f776",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "19beta1-standard-trixie",
+      "digest": "sha256:ce40f7266c82a453bb38f4a253819a8226606460e6fc12bbd4abfe337f955e60",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "17.10-standard-bookworm",
+      "digest": "sha256:1273ed2ff3c3777541a010f98b805f139810f89ea240b8caeaee3efaca7bb2b8",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "18.4-standard-bookworm",
+      "digest": "sha256:6d1090d7ae1ea1cf2ba35959ba0fea38a78df91cf99e02e94a28b8e1f6df3de5",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    },
+    {
+      "tag": "19beta1-standard-bookworm",
+      "digest": "sha256:5622736e77f38a017b0ed8ea64a8d690808235492344f831a9863f38779f2a71",
+      "platforms": ["linux/amd64", "linux/arm64"]
+    }
+  ]
+}
+JSON
+}
+
 run_validator() {
   local fixture_root="$1"
-  "${VALIDATOR}" \
+  local manifest
+  manifest="${fixture_root}/cnpg-manifest-fixture.json"
+  manifest_fixture "${manifest}"
+  CNPG_MANIFEST_FIXTURE="${manifest}" "${VALIDATOR}" \
     --generated-root "${fixture_root}/generated" \
     --bake-file "${fixture_root}/docker-bake.hcl" \
     --matrix-file "${fixture_root}/matrix.json" \
