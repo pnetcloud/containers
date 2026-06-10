@@ -115,7 +115,10 @@ run_orchestration() {
     staging_namespace="$(config_value default_staging_namespace)"
   fi
   if [[ -z "${REPORT_FILE}" ]]; then
-    REPORT_FILE="$(config_value fixtures.report)"
+    REPORT_FILE="$(config_value report)"
+  fi
+  if [[ -z "${REPORT_FILE}" ]]; then
+    REPORT_FILE="cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md"
   fi
   report_path="${REPORT_FILE}"
   if [[ "${report_path}" != /* ]]; then

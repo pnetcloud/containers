@@ -274,6 +274,16 @@ for token in \
   fi
 done
 
+default_report_capture="${orchestration_tmp}/default-report-commands.log"
+RELEASE_REHEARSAL_CAPTURE="${default_report_capture}" PATH="${orchestration_bin}:${PATH}" \
+  WORKFLOW_RUN_URL=https://github.com/pnetcloud/containers/actions/runs/1234567890 \
+  "${SCRIPT}" --dry-run --date 20260609 --checkout-root "${orchestration_project}" >/tmp/story-5-9-default-report.out
+
+if ! grep -Fq 'report=cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md' /tmp/story-5-9-default-report.out; then
+  diag "release rehearsal default report path" "/tmp/story-5-9-default-report.out" "default report path is the generated report file" "$(cat /tmp/story-5-9-default-report.out)" "Read the top-level release rehearsal report path from config before writing the default report."
+  exit 1
+fi
+
 fail_capture="${orchestration_tmp}/fail-commands.log"
 set +e
 RELEASE_REHEARSAL_CAPTURE="${fail_capture}" RELEASE_REHEARSAL_FAIL_BUILD=1 PATH="${orchestration_bin}:${PATH}" \
