@@ -75,22 +75,22 @@ def normalize_dockerfile(text):
     return re.sub(r"\\\s*\n\s*", " ", text)
 
 
-def is_negated(text, start):
-    window = text[max(0, start - 200):start + 240].lower()
-    return required_phrase.lower() in window and any(
-        phrase in window
-        for phrase in [
-            "must not",
-            "do not",
-            "does not",
-            "must never",
-            "not appear",
-            "not part",
-            "not supported",
-            "outside the image filesystem",
-            "reserved for the cloudnativepg barman cloud plugin",
-        ]
-    )
+def is_negated(text, start, end):
+    sentence_start = max(text.rfind(".", 0, start), text.rfind("\n", 0, start)) + 1
+    sentence_end_candidates = [idx for idx in [text.find(".", end), text.find("\n", end)] if idx != -1]
+    sentence_end = min(sentence_end_candidates) if sentence_end_candidates else len(text)
+    sentence = text[sentence_start:sentence_end].lower()
+    patterns = [
+        r"\b(?:do\s+not|must\s+not|does\s+not|never|no)\b.{0,120}\b(?:install|require|recommend|validate|use|run|ship|include|advertise|support)\b.{0,160}\bbarman(?:-cloud)?\b",
+        r"\b(?:do\s+not|must\s+not|does\s+not|never|no)\b.{0,160}\bbarman(?:-cloud)?\b",
+        r"\bno\b.{0,160}\blegacy\b.{0,160}\bin-image\b.{0,160}\bbarman(?:-cloud)?\b",
+        r"\bnot\s+through\b.{0,120}\bbarman(?:-cloud)?\b",
+        r"\bwithout\b.{0,120}\bbarman(?:-cloud)?\b",
+        r"\bbarman(?:-cloud)?\b.{0,120}\b(?:not|never)\s+(?:supported|required|installed|included|used|validated|part)\b",
+        r"\bbackup-tooling-free\b",
+        r"\breserved\s+for\s+the\s+cloudnativepg\s+barman\s+cloud\s+plugin\b",
+    ]
+    return any(re.search(pattern, sentence) for pattern in patterns)
 
 
 for raw in paths:
@@ -109,9 +109,8 @@ for raw in paths:
             if required_phrase not in text:
                 fail(path, f"docs that discuss Barman include exact phrase {required_phrase!r}", text[:240], "Describe Barman support through the CloudNativePG Barman Cloud Plugin path.")
             for pattern in doc_forbidden:
-                match = pattern.search(text)
-                if match:
-                    if is_negated(text, match.start()):
+                for match in pattern.finditer(text):
+                    if is_negated(text, match.start(), match.end()):
                         continue
                     fail(path, f"docs do not direct users to legacy in-image barman-cloud; expected {required_phrase} wording", match.group(0), "Replace legacy in-image backup guidance with CloudNativePG Barman Cloud Plugin guidance.")
 

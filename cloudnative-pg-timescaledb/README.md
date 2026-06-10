@@ -64,6 +64,37 @@ Release catalogs are generated from release-complete published images. When rele
 
 See the root `docs/catalog.md` for full catalog usage guidance.
 
+## Backup Boundary
+
+The CloudNativePG Barman Cloud Plugin is the supported v1 backup integration path. This image family supplies PostgreSQL and extension runtime contents; backup plugin deployment is handled through CloudNativePG plugin mechanisms, not through legacy in-image `barman-cloud` binaries.
+
+Current generated Barman plugin reference values from `cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md`:
+
+- Release: `v0.12.0`
+- Manifest URL: `https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.12.0/manifest.yaml`
+- Plugin image: `ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.12.0`
+- Sidecar image: `ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.12.0`
+
+Backup guidance remains compatible with direct image tags:
+
+```yaml
+spec:
+  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609
+```
+
+It also remains compatible with generated catalogs:
+
+```yaml
+spec:
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ClusterImageCatalog
+    name: cloudnative-pg-timescaledb-standard-trixie
+    major: 18
+```
+
+See the root `docs/barman-plugin.md` for the backup integration boundary.
+
 The compatibility overview is generated from `cloudnative-pg-timescaledb/versions.yaml`:
 
 - `cloudnative-pg-timescaledb/docs/generated/compatibility.md`
