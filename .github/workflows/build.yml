@@ -97,8 +97,23 @@ jobs:
             --set "${BAKE_TARGET}.tags=${candidate_ref}" \
             --set "${BAKE_TARGET}.output=type=registry,push=true"
           inspect_raw="candidate-metadata/${BAKE_TARGET}/index.raw.json"
-          docker buildx imagetools inspect "${candidate_ref}" --raw > "${inspect_raw}"
-          index_digest="$(docker buildx imagetools inspect "${candidate_ref}" | awk '/Digest:/ {print $2; exit}')"
+          inspect_candidate_ref() {
+            local attempt inspect_text
+            for attempt in 1 2 3 4 5 6; do
+              if docker buildx imagetools inspect "${candidate_ref}" --raw > "${inspect_raw}"; then
+                if inspect_text="$(docker buildx imagetools inspect "${candidate_ref}")"; then
+                  printf '%s\n' "${inspect_text}"
+                  return 0
+                fi
+              fi
+              printf 'Candidate ref not inspectable yet PG=%s DEBIAN=%s ref=%s attempt=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${candidate_ref}" "${attempt}" >&2
+              sleep 10
+            done
+            printf 'Candidate ref did not become inspectable PG=%s DEBIAN=%s ref=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${candidate_ref}" >&2
+            return 1
+          }
+          inspect_text="$(inspect_candidate_ref)"
+          index_digest="$(awk '/Digest:/ {print $2; exit}' <<<"${inspect_text}")"
           if [[ ! "${index_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             printf 'Invalid candidate index digest PG=%s DEBIAN=%s digest=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${index_digest}" >&2
             exit 1
