@@ -3,7 +3,7 @@ storyId: 2.6
 storyKey: 2-6-renovate-dependency-boundaries
 epic: 2
 title: 'Renovate Dependency Boundaries'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: 3475a543a7e099a6cf58fa40d83a1a8715112cef
@@ -190,6 +190,7 @@ Every implementation story must finish with a working repository state and must 
 - Added maintainer documentation for Renovate boundaries and resolver ownership.
 - Subagent review round 1 reported no BLOCKER, MAJOR, or MINOR findings. Residual risks: branch protection controls actual automerge safety, and field-level origin rules are contract markers while current classifier operates by changed path.
 - Subagent review round 2 after adding the CI Renovate validator step and classifier missing-argument diagnostics reported no BLOCKER, MAJOR, or MINOR findings.
+- 2026-06-11 evidence closure: direct Renovate boundary tests and clean-checkout validator sequence pass locally, and GitHub Actions `Validate` run `27315292349` passed the repository Renovate config gate on branch `codex/bmad-cloudnativepg-timescaledb-execution`.
 
 ### Validation Commands
 
@@ -203,6 +204,9 @@ Every implementation story must finish with a working repository state and must 
 - `find cloudnative-pg-timescaledb/scripts cloudnative-pg-timescaledb/tests/renovate -type f -name '*.sh' -print0 | xargs -0 bash -n` - passed.
 - Staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && npm ci && npm exec -- renovate-config-validator renovate.json && bash cloudnative-pg-timescaledb/tests/renovate/run.sh && go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 .github/workflows/*.yml && make validate` - passed.
 - `git diff --cached --check` - passed.
+- 2026-06-11: `npm ci && npm exec -- renovate-config-validator renovate.json` - passed; npm audit reported 0 vulnerabilities with Renovate dependency deprecation warnings only.
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/renovate/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Validate` run `27315292349` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292349`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 ### Completion Notes
 
@@ -211,7 +215,7 @@ Every implementation story must finish with a working repository state and must 
 - NFR-3 Security: release-sensitive GitHub Actions updates do not broad-automerge, major updates require manual review, and CI validates Renovate config before local gates.
 - NFR-4 Maintainability: resolver-owned image/package decisions remain centralized in metadata and resolver scripts; Renovate ownership is constrained and fixture-tested.
 - Renovate boundary: negative fixtures reject managers for `versions.yaml`, `pg_major`, `pg_version`, `debian_variant`, CNPG tags/digests, TimescaleDB/Toolkit package fields, policy fields, `barman_plugin.*`, and legacy Barman tooling.
-- Note: ordinary `make validate` in the current working tree remains affected by unrelated unstaged Story 1.1 hardening edits; the committed Story 2.6 index state was validated in a clean checkout-index snapshot.
+- Remote repository proof is complete for Story 2.6: the GitHub Actions `Validate` workflow runs the Renovate config gate before local repository gates and passed on branch `codex/bmad-cloudnativepg-timescaledb-execution`.
 
 ## File List
 

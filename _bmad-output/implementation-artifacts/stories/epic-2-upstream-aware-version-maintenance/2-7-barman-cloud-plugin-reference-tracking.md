@@ -3,7 +3,7 @@ storyId: 2.7
 storyKey: 2-7-barman-cloud-plugin-reference-tracking
 epic: 2
 title: 'Barman Cloud Plugin Reference Tracking'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: d6c647f
@@ -176,6 +176,7 @@ Every implementation story must finish with a working repository state and must 
 - Extended autocommit allowlist and fixtures for the single generated Barman reference doc path.
 - Subagent review round 1 found two blocker gaps in Dockerfile boundary scanning: line-continuation installs and COPY/ADD plugin binaries to non-standard destinations. Both were fixed with normalization, broader COPY/ADD rejection, and negative fixtures.
 - Subagent review round 2 reported no BLOCKER, MAJOR, or MINOR findings.
+- 2026-06-11 evidence closure: Barman plugin fixture runner and production boundary validator pass locally, and GitHub Actions `Validate` run `27315292349` plus `Build Release Candidates` run `27315292356` passed on branch `codex/bmad-cloudnativepg-timescaledb-execution` without adding Barman tooling to built images.
 
 ### Validation Commands
 
@@ -189,6 +190,10 @@ Every implementation story must finish with a working repository state and must 
 - Staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && BARMAN_PLUGIN_FIXTURE=<tmp>/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json make update UPDATE_ARGS=--json && make validate` - passed.
 - `git diff --cached --check` - passed.
 - `find cloudnative-pg-timescaledb/scripts cloudnative-pg-timescaledb/tests/barman-plugin -type f -name '*.sh' -print0 | xargs -0 bash -n` - passed.
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/barman-plugin/run.sh` - passed.
+- 2026-06-11: `bash cloudnative-pg-timescaledb/scripts/validate-barman-boundary.sh` - passed.
+- 2026-06-11: GitHub Actions `Validate` run `27315292349` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292349`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
+- 2026-06-11: GitHub Actions `Build Release Candidates` run `27315292356` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292356`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 ### Completion Notes
 
@@ -197,6 +202,7 @@ Every implementation story must finish with a working repository state and must 
 - NFR-5: update summaries include old/new Barman references, changed/no-op status, and `backup_tooling_free: true`.
 - NFR-8: generated Barman plugin docs are derived from metadata and validated for drift; autocommit staging is limited to the exact generated Barman doc path plus existing resolver-owned paths.
 - Barman Cloud Plugin boundary: no plugin binaries, legacy `barman-cloud` packages, Barman CLI packages, or backup tooling packages are added to generated PostgreSQL images.
+- Remote repository proof is complete for Story 2.7: validation gates and candidate image builds passed on GitHub while Barman support remains limited to the CloudNativePG Barman Cloud Plugin reference path.
 
 ## File List
 
