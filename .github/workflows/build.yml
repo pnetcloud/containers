@@ -905,11 +905,28 @@ jobs:
           print("\n".join(refs))
           PY
           : > ghcr-cleanup/output/protected-digests.txt
+          inspect_release_ref() {
+            local ref="$1"
+            local raw_path="$2"
+            local text_path="$3"
+            local attempt
+            for attempt in 1 2 3 4 5 6; do
+              if docker buildx imagetools inspect "${ref}" --raw > "${raw_path}" &&
+                 docker buildx imagetools inspect "${ref}" > "${text_path}"; then
+                return 0
+              fi
+              printf 'Release ref not inspectable yet ref=%s attempt=%s\n' "${ref}" "${attempt}" >&2
+              sleep 10
+            done
+            printf 'Release ref did not become inspectable ref=%s\n' "${ref}" >&2
+            return 1
+          }
           while IFS= read -r ref; do
             printf 'Collecting protected release digests from %s\n' "${ref}"
             inspect_raw="ghcr-cleanup/output/$(printf '%s' "${ref}" | tr '/:@' '____').raw.json"
-            docker buildx imagetools inspect "${ref}" --raw > "${inspect_raw}"
-            docker buildx imagetools inspect "${ref}" | awk '/Digest:/ {print $2; exit}' >> ghcr-cleanup/output/protected-digests.txt
+            inspect_text="${inspect_raw%.raw.json}.txt"
+            inspect_release_ref "${ref}" "${inspect_raw}" "${inspect_text}"
+            awk '/Digest:/ {print $2; exit}' "${inspect_text}" >> ghcr-cleanup/output/protected-digests.txt
             jq -r '.manifests[]?.digest // empty' "${inspect_raw}" >> ghcr-cleanup/output/protected-digests.txt
           done < ghcr-cleanup/output/final-release-refs.txt
           sort -u ghcr-cleanup/output/protected-digests.txt -o ghcr-cleanup/output/protected-digests.txt

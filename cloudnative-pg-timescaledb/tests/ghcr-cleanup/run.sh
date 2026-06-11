@@ -85,6 +85,9 @@ required = [
     "--protected-digests-file",
     "--detach-mixed-candidates",
     "Collect protected release digests",
+    "inspect_release_ref",
+    "Release ref not inspectable yet",
+    "sleep 10",
     "Verify public pulls after cleanup",
     "docker pull --platform",
 ]
