@@ -102,6 +102,10 @@ ALLOWED_WRITE_GRANTS = {
         "Delete temporary candidate-only GHCR package versions after successful release",
         "4.5",
     ),
+    (".github/workflows/ghcr-cleanup.yml", "cleanup", "packages: write"): (
+        "Manually delete temporary GHCR package versions with protected release digest verification",
+        "4.5",
+    ),
     (".github/workflows/security-scan.yml", "upload_sarif", "security-events: write"): (
         "Upload vulnerability scan SARIF after candidate scan evaluation",
         "4.3",

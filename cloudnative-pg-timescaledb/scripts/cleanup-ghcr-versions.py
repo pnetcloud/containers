@@ -286,6 +286,7 @@ def main():
     parser.add_argument("--detach-mixed-candidates", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--versions-file")
+    parser.add_argument("--summary-file", help="Write the final cleanup summary JSON to this path.")
     parser.add_argument("--max-pages", type=int, default=20)
     args = parser.parse_args()
 
@@ -376,7 +377,12 @@ def main():
         "post_detach_skipped_mixed_tags": post_detach_skipped_mixed,
         "skipped_mixed_tags": skipped_mixed,
     }
-    print(json.dumps(summary, indent=2, sort_keys=True))
+    summary_json = json.dumps(summary, indent=2, sort_keys=True)
+    if args.summary_file:
+        summary_path = Path(args.summary_file)
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text(summary_json + "\n")
+    print(summary_json)
 
 
 if __name__ == "__main__":

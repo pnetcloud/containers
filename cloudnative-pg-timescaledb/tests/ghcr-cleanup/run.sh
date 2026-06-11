@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCRIPT="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/cleanup-ghcr-versions.py"
 FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/ghcr-cleanup/fixtures/package-versions.json"
 WORKFLOW="${ROOT_DIR}/.github/workflows/build.yml"
+MANUAL_WORKFLOW="${ROOT_DIR}/.github/workflows/ghcr-cleanup.yml"
 
 summary="$(mktemp)"
 trap 'rm -f "${summary}"' EXIT
@@ -73,15 +74,13 @@ if payload["post_detach_deleted_count"] != 0 or payload["post_detach_skipped_mix
     raise SystemExit(f"dry-run must not reload or delete post-detach versions: {payload}")
 PY
 
-python3 - "${WORKFLOW}" <<'PY'
+python3 - "${WORKFLOW}" "${MANUAL_WORKFLOW}" <<'PY'
 import sys
 from pathlib import Path
 
-text = Path(sys.argv[1]).read_text()
 required = [
     "--delete-candidates",
     "--delete-signature-tags",
-    "--delete-untagged",
     "--protected-digests-file",
     "--detach-mixed-candidates",
     "Collect protected release digests",
@@ -91,13 +90,26 @@ required = [
     "Verify public pulls after cleanup",
     "docker pull --platform",
 ]
-missing = [item for item in required if item not in text]
-if missing:
-    raise SystemExit(f"workflow cleanup coverage missing: {missing}")
+for workflow in sys.argv[1:]:
+    text = Path(workflow).read_text()
+    missing = [item for item in required if item not in text]
+    if missing:
+        raise SystemExit(f"workflow cleanup coverage missing in {workflow}: {missing}")
+    if "--delete-untagged" not in text:
+        raise SystemExit(f"workflow cleanup must support guarded untagged deletion: {workflow}")
+    if "ghcr-cleanup/output/protected-digests.txt" not in text:
+        raise SystemExit(f"workflow must protect release manifest digests before deleting untagged GHCR versions: {workflow}")
 
-cleanup_job = text.split("ghcr_cleanup:", 1)[1]
-if "ghcr-cleanup/output/protected-digests.txt" not in cleanup_job:
-    raise SystemExit("workflow must protect release manifest digests before deleting untagged GHCR versions")
+manual = Path(sys.argv[2]).read_text()
+for marker in [
+    "workflow_dispatch:",
+    "dry_run:",
+    "default: 'true'",
+    "--summary-file ghcr-cleanup/output/cleanup-summary.json",
+    "Public GHCR tag list still contains candidate-* or sha256-* tags.",
+]:
+    if marker not in manual:
+        raise SystemExit(f"manual cleanup workflow missing marker: {marker}")
 PY
 
 printf 'PASS GHCR candidate cleanup fixtures\n'

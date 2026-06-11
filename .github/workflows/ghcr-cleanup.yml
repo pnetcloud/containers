@@ -1,0 +1,189 @@
+name: GHCR Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report selected GHCR package versions without deleting them
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      delete_untagged:
+        description: Delete untagged package versions not referenced by protected release digests
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Cleanup cloudnative-pg-timescaledb package versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # actions/checkout v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - name: Login to GHCR for cleanup tag detachment
+        run: |
+          set -Eeuo pipefail
+          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - name: Collect protected release digests
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ghcr-cleanup/output
+          python3 - cloudnative-pg-timescaledb/release-metadata <<'PY' > ghcr-cleanup/output/final-release-refs.txt
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          refs = []
+          digests = []
+          digest_re = re.compile(r"^sha256:[0-9a-f]{64}$")
+          for path in sorted(Path(sys.argv[1]).glob("sha256-*.json")):
+              payload = json.loads(path.read_text())
+              image = payload.get("image")
+              for tag in payload.get("final_tags", []):
+                  ref = f"{image}:{tag}"
+                  if image and isinstance(tag, str) and ref not in refs:
+                      refs.append(ref)
+              for key in ("candidate_digest", "index_digest", "published_digest"):
+                  digest = payload.get(key)
+                  if isinstance(digest, str) and digest_re.fullmatch(digest) and digest not in digests:
+                      digests.append(digest)
+              platform_digests = payload.get("platform_digests") or {}
+              if isinstance(platform_digests, dict):
+                  for digest in platform_digests.values():
+                      if isinstance(digest, str) and digest_re.fullmatch(digest) and digest not in digests:
+                          digests.append(digest)
+              release_ref = payload.get("release_metadata_ref")
+              if isinstance(release_ref, str) and "@sha256:" in release_ref:
+                  digest = release_ref.rsplit("@", 1)[1]
+                  if digest_re.fullmatch(digest) and digest not in digests:
+                      digests.append(digest)
+          if not refs:
+              raise SystemExit("no final tags found in release metadata")
+          Path("ghcr-cleanup/output/protected-digests.txt").write_text("\n".join(digests) + ("\n" if digests else ""))
+          print("\n".join(refs))
+          PY
+          inspect_release_ref() {
+            local ref="$1"
+            local raw_path="$2"
+            local text_path="$3"
+            local attempt
+            for attempt in 1 2 3 4 5 6; do
+              if docker buildx imagetools inspect "${ref}" --raw > "${raw_path}" &&
+                 docker buildx imagetools inspect "${ref}" > "${text_path}"; then
+                return 0
+              fi
+              printf 'Release ref not inspectable yet ref=%s attempt=%s\n' "${ref}" "${attempt}" >&2
+              sleep 10
+            done
+            printf 'Release ref did not become inspectable ref=%s\n' "${ref}" >&2
+            return 1
+          }
+          while IFS= read -r ref; do
+            printf 'Collecting protected release digests from %s\n' "${ref}"
+            inspect_raw="ghcr-cleanup/output/$(printf '%s' "${ref}" | tr '/:@' '____').raw.json"
+            inspect_text="${inspect_raw%.raw.json}.txt"
+            inspect_release_ref "${ref}" "${inspect_raw}" "${inspect_text}"
+            awk '/Digest:/ {print $2; exit}' "${inspect_text}" >> ghcr-cleanup/output/protected-digests.txt
+            jq -r '.manifests[]?.digest // empty' "${inspect_raw}" >> ghcr-cleanup/output/protected-digests.txt
+          done < ghcr-cleanup/output/final-release-refs.txt
+          sort -u ghcr-cleanup/output/protected-digests.txt -o ghcr-cleanup/output/protected-digests.txt
+          if [[ ! -s ghcr-cleanup/output/protected-digests.txt ]]; then
+            printf 'No protected release digests were collected.\n' >&2
+            exit 1
+          fi
+          printf 'Protected release digest count: '
+          wc -l < ghcr-cleanup/output/protected-digests.txt
+      - name: Delete auxiliary package versions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          DELETE_UNTAGGED_INPUT: ${{ inputs.delete_untagged }}
+        run: |
+          set -Eeuo pipefail
+          cleanup_args=(
+            --owner "${GITHUB_REPOSITORY_OWNER}"
+            --owner-kind users
+            --package cloudnative-pg-timescaledb
+            --image "ghcr.io/${GITHUB_REPOSITORY_OWNER}/cloudnative-pg-timescaledb"
+            --candidate-prefix candidate-
+            --delete-candidates
+            --delete-signature-tags
+            --protected-digests-file ghcr-cleanup/output/protected-digests.txt
+            --detach-mixed-candidates
+          )
+          if [[ "${DELETE_UNTAGGED_INPUT}" == "true" ]]; then
+            cleanup_args+=(--delete-untagged)
+          fi
+          if [[ "${DRY_RUN_INPUT}" == "true" ]]; then
+            cleanup_args+=(--dry-run)
+          fi
+          cloudnative-pg-timescaledb/scripts/cleanup-ghcr-versions.py \
+            "${cleanup_args[@]}" \
+            --summary-file ghcr-cleanup/output/cleanup-summary.json
+      - name: Verify public pulls after cleanup
+        run: |
+          set -Eeuo pipefail
+          docker logout ghcr.io || true
+          token="$(curl -fsSL 'https://ghcr.io/token?scope=repository:pnetcloud/cloudnative-pg-timescaledb:pull' | jq -r .token)"
+          curl -fsSL -H "Authorization: Bearer ${token}" \
+            'https://ghcr.io/v2/pnetcloud/cloudnative-pg-timescaledb/tags/list' \
+            | tee ghcr-cleanup/output/public-tags.json
+          if jq -e '.tags[] | select(startswith("candidate-") or startswith("sha256-"))' ghcr-cleanup/output/public-tags.json >/dev/null; then
+            printf 'Public GHCR tag list still contains candidate-* or sha256-* tags.\n' >&2
+            exit 1
+          fi
+          while IFS= read -r ref; do
+            for platform in linux/amd64 linux/arm64; do
+              docker pull --platform "${platform}" "${ref}"
+            done
+          done < ghcr-cleanup/output/final-release-refs.txt
+      - name: Write cleanup summary
+        if: always()
+        env:
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          DELETE_UNTAGGED_INPUT: ${{ inputs.delete_untagged }}
+        run: |
+          set -Eeuo pipefail
+          {
+            printf '%s\n\n' '## GHCR cleanup'
+            printf '%s\n' "- Dry run: ${DRY_RUN_INPUT}"
+            printf '%s\n' "- Delete untagged: ${DELETE_UNTAGGED_INPUT}"
+            if [[ -f ghcr-cleanup/output/protected-digests.txt ]]; then
+              printf '%s\n' "- Protected digest count: $(wc -l < ghcr-cleanup/output/protected-digests.txt)"
+            fi
+            if [[ -f ghcr-cleanup/output/cleanup-summary.json ]]; then
+              python3 - ghcr-cleanup/output/cleanup-summary.json <<PY
+          import json
+          import sys
+          from pathlib import Path
+
+          payload = json.loads(Path(sys.argv[1]).read_text())
+          for key in (
+              "selected_count",
+              "deleted_count",
+              "post_detach_deleted_count",
+              "signature_selected_count",
+              "signature_deleted_count",
+              "untagged_selected_count",
+              "untagged_deleted_count",
+              "untagged_skipped_protected_count",
+              "untagged_skipped_unknown_digest_count",
+          ):
+              print(f"- {key}: {payload.get(key, 0)}")
+          PY
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
