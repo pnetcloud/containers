@@ -54,8 +54,14 @@ RELEASE_WRITE_PERMISSIONS = {"contents", "packages", "id-token", "security-event
 POSIX_CLASS_RANGES = {
     "alnum": "0-9A-Za-z",
     "alpha": "A-Za-z",
+    "blank": r" \t",
+    "cntrl": r"\x00-\x1F\x7F",
     "digit": "0-9",
+    "graph": r"\x21-\x7E",
     "lower": "a-z",
+    "print": r"\x20-\x7E",
+    "punct": r"""!"\#\$%&'\(\)\*\+,\./:;<=>\?@\[\\\]\^_`\{\|\}\~-""",
+    "space": r"\s",
     "upper": "A-Z",
     "xdigit": "0-9A-Fa-f",
 }
@@ -547,7 +553,7 @@ def split_case_patterns(value):
 
 
 def case_patterns_match(pattern_text, literal):
-    if not literal:
+    if literal is None:
         return False
     for raw_pattern in split_case_patterns(pattern_text):
         if shell_case_pattern_matches(raw_pattern, literal):
@@ -590,6 +596,10 @@ def shell_case_pattern_matches(raw_pattern, literal):
             regex.append(".")
         elif char == "[":
             end = idx + 1
+            if end < len(raw_pattern) and raw_pattern[end] in {"!", "^"}:
+                end += 1
+            if end < len(raw_pattern) and raw_pattern[end] == "]":
+                end += 1
             while end < len(raw_pattern):
                 if raw_pattern.startswith("[:", end):
                     posix_end = raw_pattern.find(":]", end + 2)
@@ -604,21 +614,48 @@ def shell_case_pattern_matches(raw_pattern, literal):
             if end == -1:
                 regex.append(re.escape(char))
             else:
-                expression = raw_pattern[idx + 1 : end]
-                for class_name, class_range in POSIX_CLASS_RANGES.items():
-                    expression = expression.replace(f"[:{class_name}:]", class_range)
-                if expression.startswith("!"):
-                    expression = "^" + re.escape(expression[1:]).replace(r"\-", "-")
-                elif expression.startswith("^"):
-                    expression = r"\^" + re.escape(expression[1:]).replace(r"\-", "-")
-                else:
-                    expression = re.escape(expression).replace(r"\-", "-")
-                regex.append("[" + expression + "]")
+                regex.append("[" + translate_bracket_expression(raw_pattern[idx + 1 : end]) + "]")
                 idx = end
         else:
             regex.append(re.escape(char))
         idx += 1
-    return bool(re.fullmatch("".join(regex), literal))
+    try:
+        return bool(re.fullmatch("".join(regex), literal))
+    except re.error:
+        return False
+
+
+def translate_bracket_expression(expression):
+    prefix = ""
+    if expression.startswith("!"):
+        prefix = "^"
+        expression = expression[1:]
+    elif expression.startswith("^"):
+        prefix = r"\^"
+        expression = expression[1:]
+    translated = []
+    idx = 0
+    while idx < len(expression):
+        if expression.startswith("[:", idx):
+            end = expression.find(":]", idx + 2)
+            if end != -1:
+                class_name = expression[idx + 2 : end]
+                class_range = POSIX_CLASS_RANGES.get(class_name)
+                if class_range:
+                    translated.append(class_range)
+                    idx = end + 2
+                    continue
+        char = expression[idx]
+        if char == "\\" and idx + 1 < len(expression):
+            translated.append(re.escape(expression[idx + 1]))
+            idx += 2
+            continue
+        if char == "-":
+            translated.append("-")
+        else:
+            translated.append(re.escape(char))
+        idx += 1
+    return prefix + "".join(translated)
 
 
 def case_arm(value):
@@ -645,7 +682,7 @@ def case_arm(value):
 
 def case_exit_matches(value, literal):
     arm = case_arm(value)
-    return bool(arm and case_patterns_match(arm[0], literal) and unconditional_exit_segment(arm[1]))
+    return bool(arm and case_patterns_match(arm[0], literal) and (static_shell_list_exit(arm[1]) or unconditional_exit_segment(arm[1])))
 
 
 def one_line_case_exit(value):
@@ -660,7 +697,7 @@ def one_line_case_start(value):
     if not match:
         return None
     literal = simple_shell_word(match.group(1))
-    if not literal:
+    if literal is None:
         return None
     arm = case_arm(match.group(2))
     if not arm:
@@ -700,7 +737,7 @@ def split_top_level_operator(value, operator):
             current.append(char)
             idx += 1
             continue
-        if (quote != "'" and value.startswith("$(", idx)) or (quote != "'" and value.startswith(("<(", ">("), idx)):
+        if (not substitution_quote and quote != "'" and value.startswith("$(", idx)) or (not substitution_quote and not quote and value.startswith(("<(", ">("), idx)):
             if value.startswith("$(", idx):
                 command_substitution_depth += 1
             else:
@@ -786,7 +823,7 @@ def split_top_level_shell_list(value):
             current.append(char)
             idx += 1
             continue
-        if (quote != "'" and value.startswith("$(", idx)) or (quote != "'" and value.startswith(("<(", ">("), idx)):
+        if (not substitution_quote and quote != "'" and value.startswith("$(", idx)) or (not substitution_quote and not quote and value.startswith(("<(", ">("), idx)):
             if value.startswith("$(", idx):
                 command_substitution_depth += 1
             else:
@@ -869,14 +906,14 @@ def has_top_level_redirection(value):
             quote = char
             idx += 1
             continue
-        if command_substitution_depth == 0 and char in {"<", ">"}:
+        if command_substitution_depth == 0 and char in {"<", ">"} and not value.startswith(("<(", ">("), idx):
             return True
         idx += 1
     return False
 
 
 def static_success_segment(value):
-    if re.match(r"^(true|:)(?:\s|$)", value):
+    if re.match(r"^(true|:)(?:\s|$)", value) and not has_top_level_redirection(value):
         return True
     return bool(re.match(r"^(echo|printf)(?:\s|$)", value) and not has_top_level_redirection(value))
 
@@ -887,6 +924,27 @@ def static_failure_segment(value):
 
 def exit_segment(value):
     return bool(re.match(r"^(exit|return)\b", value) or re.match(r"^\{\s*(exit|return)\b", value))
+
+
+def disables_errexit_segment(value):
+    value = re.sub(r"^(then|do)\s+", "", value)
+    if not re.match(r"^set(?:\s|$)", value):
+        return False
+    try:
+        words = shlex.split(value, posix=True)
+    except ValueError:
+        return False
+    idx = 1
+    while idx < len(words):
+        word = words[idx]
+        if word == "--":
+            return False
+        if word == "+e":
+            return True
+        if word == "+o" and idx + 1 < len(words) and words[idx + 1] == "errexit":
+            return True
+        idx += 1
+    return False
 
 
 def terminal_exec_segment(value):
@@ -908,12 +966,17 @@ def static_or_chain_exit(value):
 
 
 def static_shell_list_exit(value):
+    value = re.sub(r"^(then|do)\s+", "", value)
     parts = split_top_level_shell_list(value)
     should_execute = True
     status = None
     for segment, operator_after in parts:
         if should_execute:
+            if has_pipeline(segment):
+                return False
             if exit_segment(segment):
+                return True
+            if disables_errexit_segment(segment):
                 return True
             if static_success_segment(segment):
                 status = True
@@ -961,7 +1024,7 @@ def has_pipeline(value):
             previous_escaped = False
             idx += 1
             continue
-        if (quote != "'" and value.startswith("$(", idx)) or (quote != "'" and value.startswith(("<(", ">("), idx)):
+        if (not substitution_quote and quote != "'" and value.startswith("$(", idx)) or (not substitution_quote and not quote and value.startswith(("<(", ">("), idx)):
             if value.startswith("$(", idx):
                 command_substitution_depth += 1
             else:
@@ -1204,9 +1267,10 @@ def executable_run_text(run):
                 if case_arm_matches(stripped, case_literals.get(shell_block_depth)):
                     active_case_depths.add(shell_block_depth)
                 if (
-                    (shell_block_depth in always_true_depths and unconditional_exit_segment(stripped))
+                    (shell_block_depth in always_true_depths and (static_shell_list_exit(stripped) or unconditional_exit_segment(stripped)))
+                    or (shell_block_depth in always_true_depths and disables_errexit_segment(stripped))
                     or case_exit_matches(stripped, case_literals.get(shell_block_depth))
-                    or (shell_block_depth in active_case_depths and unconditional_exit_segment(stripped))
+                    or (shell_block_depth in active_case_depths and (static_shell_list_exit(stripped) or unconditional_exit_segment(stripped)))
                 ):
                     stop_after_unsafe_control = True
                     break
@@ -1217,12 +1281,15 @@ def executable_run_text(run):
                     if always_entered_block(stripped):
                         always_true_depths.add(shell_block_depth)
                     case_literal = static_case_literal(stripped)
-                    if case_literal:
+                    if case_literal is not None:
                         case_literals[shell_block_depth] = case_literal
                 continue
             if re.match(r"^(echo|printf)\b", stripped):
+                if static_shell_list_exit(stripped):
+                    stop_after_unsafe_control = True
+                    break
                 continue
-            if re.match(r"^set\s+(?:\+e|\+o\s+errexit)\b", stripped):
+            if disables_errexit_segment(stripped) or static_shell_list_exit(stripped):
                 stop_after_unsafe_control = True
                 break
             if re.match(r"^(if|while|until|case|for|select)\b", stripped):
@@ -1234,7 +1301,7 @@ def executable_run_text(run):
                 if always_entered_block(stripped):
                     always_true_depths.add(shell_block_depth)
                 case_literal = static_case_literal(stripped)
-                if case_literal:
+                if case_literal is not None:
                     case_literals[shell_block_depth] = case_literal
                 if one_line_case:
                     case_literals[shell_block_depth] = one_line_case[0]
@@ -1254,6 +1321,8 @@ def workflow_run_text(payload, path, unconditional_only=False):
     for job, job_payload in workflow_jobs(payload, path).items():
         if unconditional_only and job_payload.get("if") is not None:
             continue
+        if unconditional_only and not blocking_continue_on_error(job_payload.get("continue-on-error")):
+            continue
         steps = job_payload.get("steps", [])
         if steps is None:
             continue
@@ -1266,12 +1335,18 @@ def workflow_run_text(payload, path, unconditional_only=False):
             if isinstance(run, str):
                 if unconditional_only and step.get("if") is not None:
                     continue
-                if unconditional_only and str(step.get("continue-on-error", "")).lower() == "true":
+                if unconditional_only and not blocking_continue_on_error(step.get("continue-on-error")):
                     continue
                 runs.append(executable_run_text(run))
             elif run is not None:
                 diag(path, f"job {job} steps[{idx}].run is a string", type(run).__name__, "Use string run blocks.")
     return "\n".join(runs)
+
+
+def blocking_continue_on_error(value):
+    if value in (None, False, "false", "False", "FALSE"):
+        return True
+    return isinstance(value, str) and bool(re.fullmatch(r"\$\{\{\s*false\s*\}\}", value))
 
 
 def workflow_actions(payload, path):

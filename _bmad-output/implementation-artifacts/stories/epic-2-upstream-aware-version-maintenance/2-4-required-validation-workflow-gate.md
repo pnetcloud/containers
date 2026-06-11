@@ -87,12 +87,12 @@ Permission allowlist contract:
 - Story 2.4 initial policy must allow no write permissions in `validate.yml`.
 
 - `contents: write` is allowed only for named update/autocommit jobs.
-- `packages: write` is allowed only for named publish jobs.
+- `packages: write` is allowed only for named candidate/publish jobs and release-evidence jobs that upload GHCR cosign registry signatures.
 - `id-token: write` is allowed only for named signing or provenance jobs.
 - `security-events: write` is allowed only for named SARIF upload jobs.
 - `pull_request` workflows must never receive broad write tokens.
 - All other write permissions are default-denied unless explicitly allowlisted with workflow, job, permission, reason, and owning story.
-- Future owning stories extend the policy explicitly: Story 2.5 may add `update.yml` autocommit job with `contents: write`; Story 4.2/4.5 may add publish jobs with `packages: write`; Story 4.4 may add signing/provenance jobs with `id-token: write`; Story 4.3 may add SARIF upload jobs with `security-events: write`.
+- Future owning stories extend the policy explicitly: Story 2.5 may add `update.yml` autocommit job with `contents: write`; Story 4.2/4.5 may add candidate/publish jobs with `packages: write`; Story 4.4 may add signing/provenance jobs with `id-token: write` and release-evidence GHCR signature uploads with `packages: write`; Story 4.3 may add SARIF upload jobs with `security-events: write`.
 
 ## Required Validation Commands
 
@@ -231,6 +231,9 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for quoted case globs, command-substitution subshell closes, embedded short-circuit non-exits, printf redirection non-exits, `exec true`, later one-line case arms, and quoted case terminators.
 - Addressed BMAD review findings for mixed `&&`/`||` shell lists, redirection-only `exec`, backtick command substitutions with pipes, shell case bracket negation, quoted `)` case arms, and release-sensitive permission allowlist category enforcement.
 - Added regression fixtures for mixed shell-list exits, redirection-only exec positives, backtick pipe exits, negated bracket case exits, quoted parenthesis case exits, and allowlisted wrong-category write permissions.
+- Addressed BMAD review findings for `continue-on-error` expressions/jobs, one-line `then set +e`, shell-list exits inside always-entered blocks and matching case arms, POSIX/literal-bracket case classes, quoted process-substitution text, echo/printf short-circuit exits, and process-substitution redirection false positives.
+- Preserved `release_evidence` `packages: write` as an exact allowlisted GHCR cosign signature requirement after full `make validate` proved the release evidence gate depends on it.
+- Addressed final bounded BMAD review findings for one-line `then false || exit`, active case-arm shell-list exits with skipped pipeline branches, and empty-string static case literals.
 
 ### Validation Commands
 
@@ -242,6 +245,9 @@ Every implementation story must finish with a working repository state and must 
 - `git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck -x` - passed.
 - `git diff --check` - passed.
 - Staged-index snapshot validation using a temporary detached `git worktree`, `git diff --cached --binary | git apply --index`, and `make validate` - passed.
+- `bash cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh` - passed after final BMAD review fixes.
+- `bash cloudnative-pg-timescaledb/scripts/validate-workflows.sh` - passed after final BMAD review fixes.
+- `make validate` - passed after final BMAD review fixes.
 
 ### Completion Notes
 
@@ -278,6 +284,8 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: case pattern matching now preserves quoted glob metacharacters, case terminator detection is quote-aware, static short-circuit handling respects top-level `&&`/`||`, and `exec` is treated as terminal before required gates.
 - Review follow-up: release-sensitive write permissions now require exact workflow/job/permission/reason/story category matches; shell-list reachability handles mixed operators and backtick substitutions.
 - Review follow-up: release evidence `packages: write` remains explicitly allowlisted for GHCR cosign registry signatures; range/POSIX case patterns, quoted one-line case arms, backtick/process-substitution shell-list operators, redirection-only `exec`, and non-blocking required gate steps are covered.
+- Review follow-up: final coverage now rejects expression/job-level `continue-on-error`, one-line always-entered `set +e`, always-entered and case-arm shell-list exits with skipped pipeline branches, literal `]` case bracket patterns, quoted process-substitution text, and echo/printf short-circuit exits.
+- Review follow-up: one-line always-entered `then/do` shell-list exits and empty-string `case` literals are normalized so unreachable gates are not counted.
 - Review follow-up: required gate evidence now ignores `continue-on-error` steps and disabled errexit, process substitutions are excluded from top-level operator/pipeline parsing, and function-close `&& true` remains a valid positive flow.
 
 ## File List
@@ -328,4 +336,6 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-11: Hardened embedded short-circuit, quoted case pattern/terminator, exec, redirection, and subshell close reachability edges.
 - 2026-06-11: Hardened mixed shell-list reachability, backtick/case bracket parsing, and exact write-permission category allowlisting.
 - 2026-06-11: Preserved release-evidence package write allowlisting for cosign registry signatures and hardened range/POSIX case, quoted one-line case, backtick/process-substitution operator, and exec-redirection edges.
+- 2026-06-11: Closed final BMAD review findings for continue-on-error, disabled-errexit, always-entered/case-arm shell-list, POSIX/literal-bracket case, quoted process-substitution, and echo short-circuit edge cases.
+- 2026-06-11: Closed bounded final review findings for leading `then/do` shell-list normalization and empty-string static case literals.
 - 2026-06-11: Hardened non-blocking validation gates, process substitutions, POSIX case classes, and harmless function-close continuations.
