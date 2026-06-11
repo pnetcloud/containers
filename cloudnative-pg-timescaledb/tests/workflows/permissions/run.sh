@@ -260,8 +260,10 @@ for fixture in \
   validate-comments-only.yml \
   validate-run-comments-only.yml \
   validate-conditional-gates.yml \
+  validate-function-brace-group-gates.yml \
   validate-function-gates.yml \
   validate-heredoc-gates.yml \
+  validate-split-function-gates.yml \
   validate-heredoc-dashed-delimiter-gates.yml \
   validate-short-circuit-gates.yml \
   validate-apt-without-shellcheck.yml \
@@ -485,6 +487,16 @@ validate_function_root="${tmp_root}/validate-function-gates"
 prepare_root "${validate_function_root}"
 cp "${FIXTURE_DIR}/validate-function-gates.yml" "${validate_function_root}/.github/workflows/validate.yml"
 expect_fail "validate function gates" "validate workflow runs make validate" "${validate_function_root}"
+
+validate_split_function_root="${tmp_root}/validate-split-function-gates"
+prepare_root "${validate_split_function_root}"
+cp "${FIXTURE_DIR}/validate-split-function-gates.yml" "${validate_split_function_root}/.github/workflows/validate.yml"
+expect_fail "validate split function gates" "validate workflow runs make validate" "${validate_split_function_root}"
+
+validate_function_brace_group_root="${tmp_root}/validate-function-brace-group-gates"
+prepare_root "${validate_function_brace_group_root}"
+cp "${FIXTURE_DIR}/validate-function-brace-group-gates.yml" "${validate_function_brace_group_root}/.github/workflows/validate.yml"
+expect_fail "validate function brace group gates" "validate workflow runs make validate" "${validate_function_brace_group_root}"
 
 validate_heredoc_root="${tmp_root}/validate-heredoc-gates"
 prepare_root "${validate_heredoc_root}"

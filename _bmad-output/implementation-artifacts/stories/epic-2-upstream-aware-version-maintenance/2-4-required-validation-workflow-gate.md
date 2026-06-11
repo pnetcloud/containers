@@ -209,6 +209,8 @@ Every implementation story must finish with a working repository state and must 
 - Added a regression fixture for quoted heredoc payload text ending in backslash before real gates, plus a stubbed optional-tool test path proving the policy parser catches line-continuation hash heredocs directly.
 - Addressed BMAD acceptance review findings by ignoring required gate text inside shell function definitions unless the gate is present as direct executable step text.
 - Added a regression fixture for uncalled shell functions containing all required validation gate strings.
+- Addressed BMAD review findings for split-line shell function definitions and nested brace groups inside function bodies by tracking function brace depth.
+- Added regression fixtures for `name()` newline `{` function declarations and inner brace groups before function-body gate strings.
 
 ### Validation Commands
 
@@ -243,6 +245,7 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: required validation command matching now rejects hash-suffixed shell words, and heredoc/comment scanning handles shell line continuations plus escaped whitespace before `#`.
 - Review follow-up: shell line-continuation handling no longer rewrites heredoc payload bodies before delimiter matching.
 - Review follow-up: required gates inside shell function bodies no longer satisfy unconditional executable gate evidence.
+- Review follow-up: split-line shell functions and nested brace groups inside functions no longer leak function-body gates into executable evidence.
 
 ## File List
 
@@ -278,3 +281,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-11: Hardened required gate token boundaries, shell line continuations, and escaped-space hash heredoc parsing after final BMAD review findings.
 - 2026-06-11: Scoped line-continuation handling to executable shell text and added direct parser coverage for line-continuation hash heredocs.
 - 2026-06-11: Hardened executable gate detection to ignore uncalled shell function bodies.
+- 2026-06-11: Hardened shell function tracking for split declarations and nested brace groups.

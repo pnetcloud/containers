@@ -405,11 +405,59 @@ def shell_function_definition(value):
     )
 
 
+def shell_function_header(value):
+    return bool(
+        re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*$", value)
+        or re.match(r"^function\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*\(\))?\s*$", value)
+    )
+
+
+def shell_brace_delta(value):
+    delta = 0
+    quote = None
+    escaped = False
+    ansi_single_quote = False
+    previous = ""
+    previous_escaped = False
+    for char in value:
+        if escaped:
+            escaped = False
+            previous = char
+            previous_escaped = True
+            continue
+        if char == "\\" and (quote != "'" or ansi_single_quote):
+            escaped = True
+            previous = char
+            previous_escaped = False
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+                ansi_single_quote = False
+            previous = char
+            previous_escaped = False
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
+            previous = char
+            previous_escaped = False
+            continue
+        if char == "{":
+            delta += 1
+        elif char == "}":
+            delta -= 1
+        previous = char
+        previous_escaped = False
+    return delta
+
+
 def executable_run_text(run):
     executable = []
     heredoc_queue = []
     shell_block_depth = 0
-    shell_function_depth = 0
+    shell_function_brace_depth = 0
+    pending_function_header = False
     stop_after_unsafe_control = False
     pending_line = ""
     for raw_line in run.splitlines():
@@ -430,9 +478,11 @@ def executable_run_text(run):
             if not stripped:
                 continue
             segment_heredocs = heredoc_delimiters(stripped)
-            if shell_function_depth:
-                if re.match(r"^\}\b|^\}\s*(?:[;&|]|$)", stripped):
-                    shell_function_depth = max(shell_function_depth - 1, 0)
+            if shell_function_brace_depth:
+                heredoc_queue.extend(segment_heredocs)
+                previous_depth = shell_function_brace_depth
+                shell_function_brace_depth = max(shell_function_brace_depth + shell_brace_delta(stripped), 0)
+                if previous_depth and shell_function_brace_depth == 0 and re.match(r"^\}", stripped):
                     trailing = re.sub(r"^\}", "", stripped, count=1).strip()
                     if trailing:
                         heredoc_queue.extend(heredoc_delimiters(trailing))
@@ -440,13 +490,18 @@ def executable_run_text(run):
                         if trailing.startswith(("||", "&&")):
                             stop_after_unsafe_control = True
                             break
+                continue
+            if pending_function_header:
+                pending_function_header = False
+                if stripped.startswith("{"):
+                    shell_function_brace_depth = max(shell_brace_delta(stripped), 1)
+                    heredoc_queue.extend(segment_heredocs)
                     continue
-                heredoc_queue.extend(segment_heredocs)
-                if shell_function_definition(stripped):
-                    shell_function_depth += 1
+            if shell_function_header(stripped):
+                pending_function_header = True
                 continue
             if shell_function_definition(stripped):
-                shell_function_depth += 1
+                shell_function_brace_depth = max(shell_brace_delta(stripped), 1)
                 heredoc_queue.extend(segment_heredocs)
                 continue
             if re.match(r"^(fi|done|esac)\b", stripped):
