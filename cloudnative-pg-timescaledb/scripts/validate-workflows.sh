@@ -250,57 +250,41 @@ def strip_shell_comment(value):
     return "".join(result)
 
 
-def collapse_shell_line_continuations(value):
-    result = []
+def shell_line_continues(value):
     quote = None
     escaped = False
     ansi_single_quote = False
     previous = ""
     previous_escaped = False
-    idx = 0
-    while idx < len(value):
-        char = value[idx]
+    for idx, char in enumerate(value):
         if escaped:
-            result.append(char)
             escaped = False
             previous = char
             previous_escaped = True
-            idx += 1
             continue
-        if char == "\\" and idx + 1 < len(value) and value[idx + 1] == "\n" and (quote != "'" or ansi_single_quote):
-            idx += 2
-            previous = ""
-            previous_escaped = False
-            continue
+        if char == "\\" and idx == len(value) - 1 and (quote != "'" or ansi_single_quote):
+            return True
         if char == "\\" and (quote != "'" or ansi_single_quote):
-            result.append(char)
             escaped = True
             previous = char
             previous_escaped = False
-            idx += 1
             continue
         if quote:
-            result.append(char)
             if char == quote:
                 quote = None
                 ansi_single_quote = False
             previous = char
             previous_escaped = False
-            idx += 1
             continue
         if char in {"'", '"'}:
-            result.append(char)
             quote = char
             ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
             previous = char
             previous_escaped = False
-            idx += 1
             continue
-        result.append(char)
         previous = char
         previous_escaped = False
-        idx += 1
-    return "".join(result)
+    return False
 
 
 def shell_word(value, idx):
@@ -414,24 +398,57 @@ def heredoc_delimiters(value):
     return delimiters
 
 
+def shell_function_definition(value):
+    return bool(
+        re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{(?:\s|$)", value)
+        or re.match(r"^function\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*\(\))?\s*\{(?:\s|$)", value)
+    )
+
+
 def executable_run_text(run):
     executable = []
     heredoc_queue = []
     shell_block_depth = 0
+    shell_function_depth = 0
     stop_after_unsafe_control = False
-    for line in collapse_shell_line_continuations(run).splitlines():
+    pending_line = ""
+    for raw_line in run.splitlines():
         if stop_after_unsafe_control:
             break
         if heredoc_queue:
-            if line.strip() == heredoc_queue[0]:
+            if raw_line.strip() == heredoc_queue[0]:
                 heredoc_queue.pop(0)
             continue
+        line = f"{pending_line}{raw_line}"
+        if shell_line_continues(line):
+            pending_line = line[:-1]
+            continue
+        pending_line = ""
         uncommented = strip_shell_comment(line)
         for segment in shell_semicolon_segments(uncommented):
             stripped = segment.strip()
             if not stripped:
                 continue
             segment_heredocs = heredoc_delimiters(stripped)
+            if shell_function_depth:
+                if re.match(r"^\}\b|^\}\s*(?:[;&|]|$)", stripped):
+                    shell_function_depth = max(shell_function_depth - 1, 0)
+                    trailing = re.sub(r"^\}", "", stripped, count=1).strip()
+                    if trailing:
+                        heredoc_queue.extend(heredoc_delimiters(trailing))
+                        executable.append(trailing)
+                        if trailing.startswith(("||", "&&")):
+                            stop_after_unsafe_control = True
+                            break
+                    continue
+                heredoc_queue.extend(segment_heredocs)
+                if shell_function_definition(stripped):
+                    shell_function_depth += 1
+                continue
+            if shell_function_definition(stripped):
+                shell_function_depth += 1
+                heredoc_queue.extend(segment_heredocs)
+                continue
             if re.match(r"^(fi|done|esac)\b", stripped):
                 shell_block_depth = max(shell_block_depth - 1, 0)
                 trailing = re.sub(r"^(fi|done|esac)\b", "", stripped, count=1).strip()

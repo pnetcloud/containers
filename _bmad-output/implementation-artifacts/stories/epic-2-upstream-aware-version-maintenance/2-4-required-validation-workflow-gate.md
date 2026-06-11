@@ -205,6 +205,10 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for unquoted hash heredoc delimiters, conditional hash heredocs before real gates, and block-close heredoc payload gates.
 - Addressed final BMAD code-review findings by requiring required gate matches to end on shell token boundaries, preserving escaped whitespace before `#` inside shell words, and collapsing shell backslash-newline continuations before heredoc scanning.
 - Added regression fixtures for hash-suffixed fake gates, line-continuation hash heredoc payload gates, and valid escaped-space hash heredocs before real gates.
+- Addressed follow-up BMAD code-review findings by limiting shell line-continuation handling to executable text before heredoc payload mode, preventing quoted heredoc body continuations from hiding later real gates.
+- Added a regression fixture for quoted heredoc payload text ending in backslash before real gates, plus a stubbed optional-tool test path proving the policy parser catches line-continuation hash heredocs directly.
+- Addressed BMAD acceptance review findings by ignoring required gate text inside shell function definitions unless the gate is present as direct executable step text.
+- Added a regression fixture for uncalled shell functions containing all required validation gate strings.
 
 ### Validation Commands
 
@@ -237,6 +241,8 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: non-comment `#` heredoc delimiters and heredocs attached to `fi`/`done`/`esac` suffixes no longer allow payload-only gates to satisfy required validation checks.
 - Review follow-up: unquoted hash heredoc delimiters now remain intact during comment stripping, including ignored-block cases where later real gates must still be visible.
 - Review follow-up: required validation command matching now rejects hash-suffixed shell words, and heredoc/comment scanning handles shell line continuations plus escaped whitespace before `#`.
+- Review follow-up: shell line-continuation handling no longer rewrites heredoc payload bodies before delimiter matching.
+- Review follow-up: required gates inside shell function bodies no longer satisfy unconditional executable gate evidence.
 
 ## File List
 
@@ -270,3 +276,5 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-11: Hardened non-comment hash heredoc delimiters and block-close heredoc suffix queueing.
 - 2026-06-10: Hardened unquoted hash heredoc delimiters and block-close heredoc suffix handling.
 - 2026-06-11: Hardened required gate token boundaries, shell line continuations, and escaped-space hash heredoc parsing after final BMAD review findings.
+- 2026-06-11: Scoped line-continuation handling to executable shell text and added direct parser coverage for line-continuation hash heredocs.
+- 2026-06-11: Hardened executable gate detection to ignore uncalled shell function bodies.

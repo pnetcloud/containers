@@ -195,6 +195,19 @@ expect_fail() {
   rm -f "${tmp}"
 }
 
+expect_fail_with_stubbed_optional_tools() {
+  local description="$1"
+  local pattern="$2"
+  local target="$3"
+  local stub_bin
+  stub_bin="$(mktemp -d)"
+  printf '#!/usr/bin/env sh\nexit 0\n' >"${stub_bin}/actionlint"
+  printf '#!/usr/bin/env sh\nexit 0\n' >"${stub_bin}/shellcheck"
+  chmod +x "${stub_bin}/actionlint" "${stub_bin}/shellcheck"
+  PATH="${stub_bin}:${PATH}" expect_fail "${description}" "${pattern}" "${target}"
+  rm -rf "${stub_bin}"
+}
+
 for fixture in \
   valid-least-privilege.yml \
   valid-inline-shell-conditional.yml \
@@ -208,6 +221,7 @@ for fixture in \
   valid-escaped-dollar-before-single-quote.yml \
   valid-conditional-hash-heredoc-before-gates.yml \
   valid-escaped-space-hash-heredoc-before-gates.yml \
+  valid-quoted-heredoc-body-continuation-before-gates.yml \
   valid-shellcheck-version-package.yml \
   valid-shellcheck-apt-selectors.yml \
   valid-gate-redirections.yml \
@@ -246,6 +260,7 @@ for fixture in \
   validate-comments-only.yml \
   validate-run-comments-only.yml \
   validate-conditional-gates.yml \
+  validate-function-gates.yml \
   validate-heredoc-gates.yml \
   validate-heredoc-dashed-delimiter-gates.yml \
   validate-short-circuit-gates.yml \
@@ -331,6 +346,11 @@ escaped_space_hash_heredoc_root="${tmp_root}/valid-escaped-space-hash-heredoc-be
 prepare_root "${escaped_space_hash_heredoc_root}"
 cp "${FIXTURE_DIR}/valid-escaped-space-hash-heredoc-before-gates.yml" "${escaped_space_hash_heredoc_root}/.github/workflows/validate.yml"
 expect_pass "valid escaped space hash heredoc before gates" "${escaped_space_hash_heredoc_root}"
+
+quoted_heredoc_body_continuation_root="${tmp_root}/valid-quoted-heredoc-body-continuation-before-gates"
+prepare_root "${quoted_heredoc_body_continuation_root}"
+cp "${FIXTURE_DIR}/valid-quoted-heredoc-body-continuation-before-gates.yml" "${quoted_heredoc_body_continuation_root}/.github/workflows/validate.yml"
+expect_pass "valid quoted heredoc body continuation before gates" "${quoted_heredoc_body_continuation_root}"
 
 shellcheck_version_root="${tmp_root}/valid-shellcheck-version-package"
 prepare_root "${shellcheck_version_root}"
@@ -461,6 +481,11 @@ prepare_root "${validate_conditional_root}"
 cp "${FIXTURE_DIR}/validate-conditional-gates.yml" "${validate_conditional_root}/.github/workflows/validate.yml"
 expect_fail "validate conditional gates" "validate workflow runs make validate" "${validate_conditional_root}"
 
+validate_function_root="${tmp_root}/validate-function-gates"
+prepare_root "${validate_function_root}"
+cp "${FIXTURE_DIR}/validate-function-gates.yml" "${validate_function_root}/.github/workflows/validate.yml"
+expect_fail "validate function gates" "validate workflow runs make validate" "${validate_function_root}"
+
 validate_heredoc_root="${tmp_root}/validate-heredoc-gates"
 prepare_root "${validate_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-heredoc-gates.yml" "${validate_heredoc_root}/.github/workflows/validate.yml"
@@ -544,7 +569,7 @@ expect_fail "validate hash suffixed gates" "validate workflow runs make validate
 validate_line_continuation_hash_heredoc_root="${tmp_root}/validate-line-continuation-hash-heredoc-gates"
 prepare_root "${validate_line_continuation_hash_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-line-continuation-hash-heredoc-gates.yml" "${validate_line_continuation_hash_heredoc_root}/.github/workflows/validate.yml"
-expect_fail "validate line continuation hash heredoc gates" "validate workflow runs make validate|shellcheck reported issue" "${validate_line_continuation_hash_heredoc_root}"
+expect_fail_with_stubbed_optional_tools "validate line continuation hash heredoc gates" "validate workflow runs make validate" "${validate_line_continuation_hash_heredoc_root}"
 
 validate_unquoted_hash_heredoc_root="${tmp_root}/validate-unquoted-hash-heredoc-gates"
 prepare_root "${validate_unquoted_hash_heredoc_root}"
