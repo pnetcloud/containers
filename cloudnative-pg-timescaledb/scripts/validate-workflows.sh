@@ -159,16 +159,19 @@ def shell_semicolon_segments(line):
     escaped = False
     ansi_single_quote = False
     previous = ""
+    previous_escaped = False
     for char in line:
         if escaped:
             current.append(char)
             escaped = False
             previous = char
+            previous_escaped = True
             continue
         if char == "\\" and (quote != "'" or ansi_single_quote):
             current.append(char)
             escaped = True
             previous = char
+            previous_escaped = False
             continue
         if quote:
             current.append(char)
@@ -176,20 +179,24 @@ def shell_semicolon_segments(line):
                 quote = None
                 ansi_single_quote = False
             previous = char
+            previous_escaped = False
             continue
         if char in {"'", '"'}:
             current.append(char)
             quote = char
-            ansi_single_quote = char == "'" and previous == "$"
+            ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
             previous = char
+            previous_escaped = False
             continue
         if char == ";":
             segments.append("".join(current))
             current = []
             previous = char
+            previous_escaped = False
             continue
         current.append(char)
         previous = char
+        previous_escaped = False
     segments.append("".join(current))
     return segments
 
@@ -200,17 +207,20 @@ def shell_word(value, idx):
     escaped = False
     ansi_single_quote = False
     previous = ""
+    previous_escaped = False
     while idx < len(value):
         char = value[idx]
         if escaped:
             chars.append(char)
             escaped = False
             previous = char
+            previous_escaped = True
             idx += 1
             continue
         if char == "\\" and (quote != "'" or ansi_single_quote):
             escaped = True
             previous = char
+            previous_escaped = False
             idx += 1
             continue
         if quote:
@@ -220,18 +230,26 @@ def shell_word(value, idx):
             else:
                 chars.append(char)
             previous = char
+            previous_escaped = False
             idx += 1
             continue
         if char in {"'", '"'}:
             quote = char
-            ansi_single_quote = char == "'" and previous == "$"
+            ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
             previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if char == "$" and idx + 1 < len(value) and value[idx + 1] == "'":
+            previous = char
+            previous_escaped = False
             idx += 1
             continue
         if re.match(r"[\s;|&()<>]", char):
             break
         chars.append(char)
         previous = char
+        previous_escaped = False
         idx += 1
     return "".join(chars).lstrip("\\"), idx
 

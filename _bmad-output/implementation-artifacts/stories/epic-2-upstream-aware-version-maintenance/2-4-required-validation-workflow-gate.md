@@ -195,6 +195,8 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for single-quoted backslash semicolon text, quoted heredoc marker strings, and valid `2>&1` gate redirections.
 - Addressed BMAD code-review pass 8 findings by handling Bash ANSI-C `$'...'` escaped quotes in shell segment and heredoc scanning, tracking multiple heredoc delimiters as a queue, and keeping negative validator fixtures from being preempted by shellcheck diagnostics.
 - Added regression fixtures for ANSI-C quoted gate-like text, ANSI-C quoted heredoc markers, and multiple heredoc payloads containing gate-like commands.
+- Addressed BMAD code-review pass 9 findings by removing the leading `$` during ANSI-C heredoc delimiter quote removal and tracking escaped dollars before single quotes so escaped `$'...'` text is not treated as ANSI-C shell syntax.
+- Added regression fixtures for real ANSI-C heredoc delimiters and escaped dollar before single-quote text.
 
 ### Validation Commands
 
@@ -222,6 +224,7 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: required gate suffix validation now distinguishes blocking redirection syntax from non-blocking/backgrounding and pipe operators, including Bash `|&`.
 - Review follow-up: heredoc detection now scans shell text instead of masking quoted delimiters, so real `<<'EOF'` payloads are ignored while quoted `<<EOF` strings do not hide later real gates.
 - Review follow-up: ANSI-C quoted strings and multiple heredoc payloads no longer let non-executed gate-like text satisfy required gate checks.
+- Review follow-up: ANSI-C heredoc delimiters now terminate correctly, and escaped dollar-plus-single-quote text does not poison shell quote tracking.
 
 ## File List
 
@@ -250,3 +253,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Hardened required gate suffix validation for Bash `|&` pipelines while preserving valid redirection suffixes.
 - 2026-06-10: Hardened quote/backslash handling, heredoc delimiter scanning, and explicit stderr redirection coverage.
 - 2026-06-10: Hardened ANSI-C quote handling, multiple heredoc queues, and validator-specific fixtures that avoid shellcheck preemption.
+- 2026-06-10: Hardened ANSI-C heredoc delimiter quote removal and escaped-dollar quote tracking.

@@ -204,6 +204,8 @@ for fixture in \
   valid-single-quote-backslash-semicolon.yml \
   valid-stderr-redirect-gates.yml \
   valid-ansi-c-quoted-heredoc-marker.yml \
+  valid-ansi-c-heredoc-delimiter.yml \
+  valid-escaped-dollar-before-single-quote.yml \
   valid-shellcheck-version-package.yml \
   valid-shellcheck-apt-selectors.yml \
   valid-gate-redirections.yml \
@@ -300,6 +302,16 @@ ansi_heredoc_root="${tmp_root}/valid-ansi-c-quoted-heredoc-marker"
 prepare_root "${ansi_heredoc_root}"
 cp "${FIXTURE_DIR}/valid-ansi-c-quoted-heredoc-marker.yml" "${ansi_heredoc_root}/.github/workflows/validate.yml"
 expect_pass "valid ansi c quoted heredoc marker" "${ansi_heredoc_root}"
+
+ansi_delimiter_root="${tmp_root}/valid-ansi-c-heredoc-delimiter"
+prepare_root "${ansi_delimiter_root}"
+cp "${FIXTURE_DIR}/valid-ansi-c-heredoc-delimiter.yml" "${ansi_delimiter_root}/.github/workflows/validate.yml"
+expect_pass "valid ansi c heredoc delimiter" "${ansi_delimiter_root}"
+
+escaped_dollar_root="${tmp_root}/valid-escaped-dollar-before-single-quote"
+prepare_root "${escaped_dollar_root}"
+cp "${FIXTURE_DIR}/valid-escaped-dollar-before-single-quote.yml" "${escaped_dollar_root}/.github/workflows/validate.yml"
+expect_pass "valid escaped dollar before single quote" "${escaped_dollar_root}"
 
 shellcheck_version_root="${tmp_root}/valid-shellcheck-version-package"
 prepare_root "${shellcheck_version_root}"
