@@ -41,6 +41,11 @@ permission_allowlist:
     permission: "contents: write"
     reason: Commit release metadata and digest-aware catalogs after successful publish
     owner_story: 4.6
+  - workflow: .github/workflows/build.yml
+    job: ghcr_cleanup
+    permission: "packages: write"
+    reason: Delete temporary candidate-only GHCR package versions after successful release
+    owner_story: 4.5
   - workflow: .github/workflows/security-scan.yml
     job: upload_sarif
     permission: "security-events: write"

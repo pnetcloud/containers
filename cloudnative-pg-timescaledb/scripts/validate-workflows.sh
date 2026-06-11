@@ -98,6 +98,10 @@ ALLOWED_WRITE_GRANTS = {
         "Commit release metadata and digest-aware catalogs after successful publish",
         "4.6",
     ),
+    (".github/workflows/build.yml", "ghcr_cleanup", "packages: write"): (
+        "Delete temporary candidate-only GHCR package versions after successful release",
+        "4.5",
+    ),
     (".github/workflows/security-scan.yml", "upload_sarif", "security-events: write"): (
         "Upload vulnerability scan SARIF after candidate scan evaluation",
         "4.3",

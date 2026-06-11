@@ -1,0 +1,47 @@
+[
+  {
+    "id": 101,
+    "created_at": "2026-06-11T00:00:00Z",
+    "metadata": {
+      "container": {
+        "tags": ["candidate-123-1-pg18-trixie-index"]
+      }
+    }
+  },
+  {
+    "id": 102,
+    "created_at": "2026-06-11T00:01:00Z",
+    "metadata": {
+      "container": {
+        "tags": ["18", "18-pg18.4-ts2.27.2-20260609", "latest"]
+      }
+    }
+  },
+  {
+    "id": 103,
+    "created_at": "2026-06-11T00:02:00Z",
+    "metadata": {
+      "container": {
+        "tags": ["candidate-123-1-pg17-bookworm-index", "17-bookworm"]
+      }
+    }
+  },
+  {
+    "id": 104,
+    "created_at": "2026-06-11T00:03:00Z",
+    "metadata": {
+      "container": {
+        "tags": []
+      }
+    }
+  },
+  {
+    "id": 105,
+    "created_at": "2026-06-11T00:04:00Z",
+    "metadata": {
+      "container": {
+        "tags": ["candidate-124-1-pg17-trixie-index", "candidate-124-1-pg17-trixie-debug"]
+      }
+    }
+  }
+]

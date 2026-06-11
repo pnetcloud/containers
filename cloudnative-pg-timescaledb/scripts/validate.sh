@@ -71,6 +71,9 @@ fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/publish-tag-promotion/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/publish-tag-promotion/run.sh"
 fi
+if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/ghcr-cleanup/run.sh" ]]; then
+  "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/ghcr-cleanup/run.sh"
+fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/catalog/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/catalog/run.sh"
 fi

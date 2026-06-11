@@ -69,6 +69,8 @@ def first_line(pattern):
 
 
 require("pull_request:" not in text, "candidate GHCR push workflow excludes pull_request trigger", "pull_request present", "Keep write-token candidate publishing on push/workflow_dispatch only; validate.yml covers PRs.")
+if path.name == "build.yml":
+    require(re.search(r"on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- main\s*\n\s+tags:\s*\n\s+- \"\*\"\s*\n\s+workflow_dispatch:", text), "release build workflow push trigger is restricted to main and tags", text.split("permissions:", 1)[0], "Do not publish GHCR candidates from arbitrary feature branches.")
 require("docker/build-push-action" not in text and "defaultContext" not in text, "Buildx/Bake uses checkout path context, not default Git context", "default Git context marker found", "Use checkout plus docker buildx bake CLI from the repository workspace.")
 require("actions/checkout@" in text, "workflow checks out repository before generated-file builds", "checkout missing", "Generated Dockerfiles and Bake files must come from checkout path context.")
 if "skipped_summary=\"$(python3 -c" in text:
@@ -103,6 +105,13 @@ publish_body = publish_match.group("body")
 for marker in ["github.event_name == 'workflow_dispatch'", "github.ref == 'refs/heads/main'", "startsWith(github.ref, 'refs/tags/')"]:
     require(marker in publish_body, f"publish job is guarded by {marker}", publish_body[:500], "Restrict final tag promotion to manual, main, or tag release contexts.")
 require("needs.matrix.outputs.has_include == 'true'" in publish_body, "publish job still requires non-empty generated matrix", publish_body[:500], "Publish only generated publishable rows.")
+if path.name == "build.yml":
+    cleanup_match = re.search(r"\n  ghcr_cleanup:\n(?P<body>[\s\S]+?)(?:\n  [A-Za-z0-9_-]+:|\Z)", text)
+    require(cleanup_match, "build workflow has GHCR cleanup job", "ghcr_cleanup job missing", "Delete temporary candidate-only package versions after final tag promotion succeeds.")
+    cleanup_body = cleanup_match.group("body")
+    require("needs.publish.result == 'success'" in cleanup_body, "GHCR cleanup runs after successful publish only", cleanup_body[:500], "Do not delete candidates before final tags point at the promoted digest.")
+    require("packages: write" in cleanup_body, "GHCR cleanup has package delete permission", cleanup_body[:500], "Grant packages: write only to the cleanup job that deletes temporary package versions.")
+    require("cleanup-ghcr-versions.py" in cleanup_body and "--delete-candidates" in cleanup_body, "GHCR cleanup invokes candidate-only deletion script", cleanup_body[:500], "Use the audited cleanup selector instead of ad hoc GitHub API deletes.")
 PY
 }
 
