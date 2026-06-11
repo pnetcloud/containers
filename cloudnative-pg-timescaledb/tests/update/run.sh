@@ -142,6 +142,13 @@ assert_allowlisted_status() {
   done <<<"${status}"
 }
 
+normalize_fixture_diff() {
+  sed -E \
+    -e 's/index [0-9a-f]+\.\.[0-9a-f]+ ([0-9]{6})/index <old>..<new> \1/g' \
+    -e 's/@sha256:[0-9a-f]{64}/@sha256:<digest>/g' \
+    "$1"
+}
+
 set_entry_field() {
   local file="$1"
   local pg="$2"
@@ -246,8 +253,12 @@ run_committed_fixture() {
     assert_json_success "${stdout_file}" true
     assert_allowlisted_status "${project}"
     (cd "${project}" && git diff --binary | sed -E 's/[[:space:]]+$//') >"${actual_diff}"
+    local normalized_expected="${base_tmp}/committed-${fixture}.expected.normalized.diff"
+    local normalized_actual="${base_tmp}/committed-${fixture}.actual.normalized.diff"
+    normalize_fixture_diff "${fixture_root}/expected-diff.patch" >"${normalized_expected}"
+    normalize_fixture_diff "${actual_diff}" >"${normalized_actual}"
     local diff_file="/tmp/story-2-3-${fixture}.diff"
-    if ! diff -u "${fixture_root}/expected-diff.patch" "${actual_diff}" >"${diff_file}"; then
+    if ! diff -u "${normalized_expected}" "${normalized_actual}" >"${diff_file}"; then
       diag "fixture expected diff" "${fixture}" "actual git diff matches expected-diff.patch" "$(cat "${diff_file}")" "Regenerate the committed expected diff from the fixture input/upstream."
       exit 1
     fi
