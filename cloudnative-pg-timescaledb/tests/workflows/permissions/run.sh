@@ -242,8 +242,10 @@ for fixture in \
   valid-conditional-hash-heredoc-before-gates.yml \
   valid-escaped-space-hash-heredoc-before-gates.yml \
   valid-function-literal-brace-before-gates.yml \
+  valid-function-one-line-subshell-group-before-gates.yml \
   valid-function-subshell-one-line-before-gates.yml \
   valid-quoted-heredoc-body-continuation-before-gates.yml \
+  valid-short-circuit-false-and-exit-before-gates.yml \
   valid-shellcheck-version-package.yml \
   valid-shellcheck-apt-selectors.yml \
   valid-gate-redirections.yml \
@@ -280,9 +282,11 @@ for fixture in \
   invalid-allowlist-entry.yml \
   missing-strict-mode.sh \
   validate-comments-only.yml \
+  validate-case-exit-before-gates.yml \
   validate-run-comments-only.yml \
   validate-conditional-gates.yml \
   validate-exit-before-gates.yml \
+  validate-for-exit-before-gates.yml \
   validate-function-brace-group-gates.yml \
   validate-function-gates.yml \
   validate-function-subshell-gates.yml \
@@ -306,9 +310,11 @@ for fixture in \
   validate-hash-suffixed-gates.yml \
   validate-line-continuation-hash-heredoc-gates.yml \
   validate-redirection-suffixed-gates.yml \
+  validate-short-circuit-or-exit-gates.yml \
   validate-unquoted-hash-heredoc-gates.yml \
   validate-conditional-heredoc-gates.yml \
   validate-block-close-heredoc-gates.yml \
+  validate-while-exit-before-gates.yml \
   valid-update-autocommit-contents-write.yml \
   invalid-update-nonautocommit-contents-write.yml; do
   [[ -f "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -f" "${FIXTURE_DIR}/${fixture}" "fixture exists" "missing" "Restore Story 2.4 workflow policy fixtures."; exit 1; }
@@ -385,10 +391,20 @@ prepare_root "${function_literal_brace_root}"
 cp "${FIXTURE_DIR}/valid-function-literal-brace-before-gates.yml" "${function_literal_brace_root}/.github/workflows/validate.yml"
 expect_pass_with_stubbed_optional_tools "valid function literal brace before gates" "${function_literal_brace_root}"
 
+function_one_line_subshell_group_root="${tmp_root}/valid-function-one-line-subshell-group-before-gates"
+prepare_root "${function_one_line_subshell_group_root}"
+cp "${FIXTURE_DIR}/valid-function-one-line-subshell-group-before-gates.yml" "${function_one_line_subshell_group_root}/.github/workflows/validate.yml"
+expect_pass "valid function one line subshell group before gates" "${function_one_line_subshell_group_root}"
+
 function_subshell_one_line_root="${tmp_root}/valid-function-subshell-one-line-before-gates"
 prepare_root "${function_subshell_one_line_root}"
 cp "${FIXTURE_DIR}/valid-function-subshell-one-line-before-gates.yml" "${function_subshell_one_line_root}/.github/workflows/validate.yml"
 expect_pass "valid function subshell one line before gates" "${function_subshell_one_line_root}"
+
+false_and_exit_root="${tmp_root}/valid-short-circuit-false-and-exit-before-gates"
+prepare_root "${false_and_exit_root}"
+cp "${FIXTURE_DIR}/valid-short-circuit-false-and-exit-before-gates.yml" "${false_and_exit_root}/.github/workflows/validate.yml"
+expect_pass "valid short circuit false and exit before gates" "${false_and_exit_root}"
 
 quoted_heredoc_body_continuation_root="${tmp_root}/valid-quoted-heredoc-body-continuation-before-gates"
 prepare_root "${quoted_heredoc_body_continuation_root}"
@@ -514,6 +530,11 @@ prepare_root "${validate_comments_root}"
 cp "${FIXTURE_DIR}/validate-comments-only.yml" "${validate_comments_root}/.github/workflows/validate.yml"
 expect_fail "validate comments only" "validate workflow runs make validate" "${validate_comments_root}"
 
+validate_case_exit_root="${tmp_root}/validate-case-exit-before-gates"
+prepare_root "${validate_case_exit_root}"
+cp "${FIXTURE_DIR}/validate-case-exit-before-gates.yml" "${validate_case_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate case exit before gates" "validate workflow runs make validate" "${validate_case_exit_root}"
+
 validate_run_comments_root="${tmp_root}/validate-run-comments-only"
 prepare_root "${validate_run_comments_root}"
 cp "${FIXTURE_DIR}/validate-run-comments-only.yml" "${validate_run_comments_root}/.github/workflows/validate.yml"
@@ -528,6 +549,11 @@ validate_exit_root="${tmp_root}/validate-exit-before-gates"
 prepare_root "${validate_exit_root}"
 cp "${FIXTURE_DIR}/validate-exit-before-gates.yml" "${validate_exit_root}/.github/workflows/validate.yml"
 expect_fail "validate exit before gates" "validate workflow runs make validate" "${validate_exit_root}"
+
+validate_for_exit_root="${tmp_root}/validate-for-exit-before-gates"
+prepare_root "${validate_for_exit_root}"
+cp "${FIXTURE_DIR}/validate-for-exit-before-gates.yml" "${validate_for_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate for exit before gates" "validate workflow runs make validate" "${validate_for_exit_root}"
 
 validate_function_root="${tmp_root}/validate-function-gates"
 prepare_root "${validate_function_root}"
@@ -644,6 +670,11 @@ prepare_root "${validate_redirection_suffixed_root}"
 cp "${FIXTURE_DIR}/validate-redirection-suffixed-gates.yml" "${validate_redirection_suffixed_root}/.github/workflows/validate.yml"
 expect_fail "validate redirection suffixed gates" "validate workflow runs make validate" "${validate_redirection_suffixed_root}"
 
+validate_short_circuit_or_exit_root="${tmp_root}/validate-short-circuit-or-exit-gates"
+prepare_root "${validate_short_circuit_or_exit_root}"
+cp "${FIXTURE_DIR}/validate-short-circuit-or-exit-gates.yml" "${validate_short_circuit_or_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate short circuit or exit gates" "validate workflow runs make validate" "${validate_short_circuit_or_exit_root}"
+
 validate_unquoted_hash_heredoc_root="${tmp_root}/validate-unquoted-hash-heredoc-gates"
 prepare_root "${validate_unquoted_hash_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-unquoted-hash-heredoc-gates.yml" "${validate_unquoted_hash_heredoc_root}/.github/workflows/validate.yml"
@@ -658,6 +689,11 @@ validate_block_close_heredoc_root="${tmp_root}/validate-block-close-heredoc-gate
 prepare_root "${validate_block_close_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-block-close-heredoc-gates.yml" "${validate_block_close_heredoc_root}/.github/workflows/validate.yml"
 expect_fail "validate block close heredoc gates" "validate workflow runs make validate" "${validate_block_close_heredoc_root}"
+
+validate_while_exit_root="${tmp_root}/validate-while-exit-before-gates"
+prepare_root "${validate_while_exit_root}"
+cp "${FIXTURE_DIR}/validate-while-exit-before-gates.yml" "${validate_while_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate while exit before gates" "validate workflow runs make validate" "${validate_while_exit_root}"
 
 rm -rf "${tmp_root}"
 printf 'PASS story-2.4 workflow permission fixtures\n'

@@ -215,6 +215,8 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for redirection-suffixed fake gates, function subshell bodies, literal function brace arguments before real gates, and conditional exit before the required gates.
 - Addressed BMAD review findings for short-circuit `&& exit` before gates and one-line subshell function helpers, while preserving valid unknown-conditional exits before direct gates.
 - Added regression fixtures for `true && exit 0` before gates, one-line subshell helper functions before real gates, and non-constant conditional exits before real gates.
+- Addressed BMAD review findings for constant `false || exit`, `false && exit` false positives, always-entered `case`/`for`/`while` exit blocks, and one-line subshell groups inside function bodies.
+- Added regression fixtures for constant OR exit bypasses, constant false AND non-exit paths, case/for/while exit before gates, and one-line subshell groups inside functions before real gates.
 
 ### Validation Commands
 
@@ -252,6 +254,7 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: split-line shell functions and nested brace groups inside functions no longer leak function-body gates into executable evidence.
 - Review follow-up: required gate suffix validation now requires a real shell separator before fd redirections, function tracking covers subshell bodies, literal brace arguments do not alter function tracking, and `exit`/`return` before gates prevents later gate evidence from being accepted.
 - Review follow-up: reachability handling catches direct and short-circuit exits before gates without rejecting non-constant conditional exits followed by direct gates; one-line subshell helper functions no longer hide later gates.
+- Review follow-up: reachability handling distinguishes static `true && exit` and `false || exit` from `false && exit`, catches simple always-entered loop/case exits, and does not treat one-line subshell groups inside functions as unclosed function bodies.
 
 ## File List
 
@@ -290,3 +293,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-11: Hardened shell function tracking for split declarations and nested brace groups.
 - 2026-06-11: Hardened redirection suffix boundaries, subshell function bodies, literal brace handling, and exit-before-gate reachability.
 - 2026-06-11: Hardened short-circuit exit reachability and one-line subshell helper parsing.
+- 2026-06-11: Hardened constant short-circuit reachability, simple always-entered loop/case exits, and one-line subshell groups inside function bodies.

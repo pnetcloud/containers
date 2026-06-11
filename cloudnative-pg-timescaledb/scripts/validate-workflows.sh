@@ -435,19 +435,33 @@ def structural_close(value):
     return None
 
 
-def always_true_if(value):
+def always_entered_block(value):
     return bool(
         re.match(r"^if\s+true(?:\s*;?\s*then\b)?$", value)
         or re.match(r"^if\s+\[\[\s*1\s+-eq\s+1\s*\]\](?:\s*;?\s*then\b)?$", value)
+        or re.match(r"^if\s+\[\s*1\s+-eq\s+1\s*\](?:\s*;?\s*then\b)?$", value)
+        or re.match(r"^while\s+true(?:\s*;?\s*do\b)?$", value)
+        or re.match(r"^for\s+[A-Za-z_][A-Za-z0-9_]*\s+in\s+\S+(?:\s*;?\s*do\b)?$", value)
+        or re.match(r"^case\s+\S+\s+in$", value)
     )
 
 
 def unconditional_exit_segment(value):
     return bool(
         re.match(r"^(exit|return)\b", value)
-        or re.search(r"(^|\s)&&\s*(exit|return)\b", value)
+        or re.search(r"(^|\s)true\s+&&\s*(exit|return)\b", value)
+        or re.search(r"(^|\s)false\s+\|\|\s*(exit|return)\b", value)
         or re.match(r"^\{\s*(exit|return)\b", value)
+        or re.match(r"^[^;\s)]+\)\s*(exit|return)\b", value)
     )
+
+
+def structural_closes_same_segment(value, close_token):
+    if close_token == "}":
+        return bool(re.search(r"\}(?:\s|[;&|]|$)", value))
+    if close_token == ")":
+        return bool(re.search(r"\)(?:\s|[;&|]|$)", value))
+    return False
 
 
 def executable_run_text(run):
@@ -491,7 +505,7 @@ def executable_run_text(run):
                     shell_function_stack.pop()
                 else:
                     open_token = structural_open(stripped)
-                    if open_token:
+                    if open_token and not structural_closes_same_segment(stripped, open_token):
                         shell_function_stack.append(open_token)
                 if not shell_function_stack and close_token:
                     trailing = re.sub(r"^\}", "", stripped, count=1).strip()
@@ -508,7 +522,8 @@ def executable_run_text(run):
                 pending_function_header = False
                 open_token = structural_open(stripped)
                 if open_token:
-                    shell_function_stack.append(open_token)
+                    if not structural_closes_same_segment(stripped, open_token):
+                        shell_function_stack.append(open_token)
                     heredoc_queue.extend(segment_heredocs)
                     continue
             if shell_function_header(stripped):
@@ -541,14 +556,14 @@ def executable_run_text(run):
                     break
                 if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                     shell_block_depth += 1
-                    if always_true_if(stripped):
+                    if always_entered_block(stripped):
                         always_true_depths.add(shell_block_depth)
                 continue
             if re.match(r"^(echo|printf)\b", stripped):
                 continue
             if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                 shell_block_depth += 1
-                if always_true_if(stripped):
+                if always_entered_block(stripped):
                     always_true_depths.add(shell_block_depth)
                 continue
             heredoc_queue.extend(segment_heredocs)
