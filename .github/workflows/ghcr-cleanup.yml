@@ -98,7 +98,13 @@ jobs:
             inspect_text="${inspect_raw%.raw.json}.txt"
             inspect_release_ref "${ref}" "${inspect_raw}" "${inspect_text}"
             awk '/Digest:/ {print $2; exit}' "${inspect_text}" >> ghcr-cleanup/output/protected-digests.txt
-            jq -r '.manifests[]?.digest // empty' "${inspect_raw}" >> ghcr-cleanup/output/protected-digests.txt
+            jq -r '
+              .manifests[]?
+              | select((.annotations["vnd.docker.reference.type"] // "") != "attestation-manifest")
+              | select((.platform.os // "") == "linux")
+              | select((.platform.architecture // "") == "amd64" or (.platform.architecture // "") == "arm64")
+              | .digest // empty
+            ' "${inspect_raw}" >> ghcr-cleanup/output/protected-digests.txt
           done < ghcr-cleanup/output/final-release-refs.txt
           sort -u ghcr-cleanup/output/protected-digests.txt -o ghcr-cleanup/output/protected-digests.txt
           if [[ ! -s ghcr-cleanup/output/protected-digests.txt ]]; then

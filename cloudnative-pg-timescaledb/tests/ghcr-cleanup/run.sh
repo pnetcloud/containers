@@ -85,6 +85,8 @@ required = [
     "--detach-mixed-candidates",
     "Collect protected release digests",
     "inspect_release_ref",
+    "attestation-manifest",
+    ".platform.architecture",
     "Release ref not inspectable yet",
     "sleep 10",
     "Verify public pulls after cleanup",
