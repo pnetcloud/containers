@@ -3,7 +3,7 @@ storyId: 5.4
 storyKey: 5-4-barman-cloud-plugin-and-backup-boundary-docs
 epic: 5
 title: 'Barman Cloud Plugin and Backup Boundary Docs'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: d02ee67370f1394f9e87fed4677b1074ce8764a5
@@ -159,7 +159,7 @@ Every implementation story must finish with a working repository state and must 
 - Public docs include generated Story 2.7 reference values for release, manifest URL, plugin image, and sidecar image.
 - Validation now rejects legacy install/require guidance, missing plugin references, wrong bound plugin image values, and broken database image examples.
 - Review subagents found validator bypasses around unrelated negation and unbound generated reference values; both classes were fixed and revalidated.
-- Story status set to `review` after all tasks and validations passed.
+- 2026-06-11 evidence closure: Barman plugin docs fixtures, Barman plugin reference fixtures, and production boundary validator pass locally; GitHub Actions `Validate` run `27315292349` passed repository validation gates.
 
 ### Validation Commands
 
@@ -171,6 +171,8 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/scripts/validate-barman-boundary.sh` - passed.
 - `git diff --cached --check` - passed.
 - Staged snapshot `make validate` via `git checkout-index --all --prefix="$tmpdir/"` - passed.
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/docs/barman-plugin/run.sh && bash cloudnative-pg-timescaledb/tests/barman-plugin/run.sh && bash cloudnative-pg-timescaledb/scripts/validate-barman-boundary.sh` - passed.
+- 2026-06-11: GitHub Actions `Validate` run `27315292349` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292349`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 ## File List
 

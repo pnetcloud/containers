@@ -3,7 +3,7 @@ storyId: 5.5
 storyKey: 5-5-image-verification-and-security-evidence-docs
 epic: 5
 title: 'Image Verification and Security Evidence Docs'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: 7198ede96e4b3ad563033a7afb3ed1f7dc56b725
@@ -171,7 +171,7 @@ Every implementation story must finish with a working repository state and must 
 - `docs/user-guide/verifying-images.md`, root README, and package README now document digest verification, exact cosign issuer/identity, SBOM/provenance/signature/verification evidence, vulnerability scan policy, and image-label mapping to `versions.yaml`.
 - Added deterministic docs guardrails and required positive/negative fixtures.
 - Review subagent found validator bypasses; they were fixed and revalidated.
-- Story status set to `review` after all tasks and validations passed.
+- 2026-06-11 evidence closure: verification docs, security scan, and release evidence fixtures pass locally; GitHub Actions `Build Release Candidates` run `27315292356` passed vulnerability scans and SARIF upload jobs.
 
 ### Validation Commands
 
@@ -184,6 +184,8 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/tests/docs/barman-plugin/run.sh` - passed.
 - `git diff --cached --check` - passed.
 - Staged snapshot `make validate` via `git checkout-index --all --prefix="$tmpdir/"` - passed.
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/docs/verification/run.sh && bash cloudnative-pg-timescaledb/tests/security-scan/run.sh && bash cloudnative-pg-timescaledb/tests/release-evidence/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Build Release Candidates` run `27315292356` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292356`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 ## File List
 

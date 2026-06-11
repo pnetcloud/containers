@@ -3,7 +3,7 @@ storyId: 5.3
 storyKey: 5-3-clusterimagecatalog-usage-docs
 epic: 5
 title: 'ClusterImageCatalog Usage Docs'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: 56b374794f01a51bc6005fde8e5ef215b12e5583
@@ -153,7 +153,7 @@ Every implementation story must finish with a working repository state and must 
 - `docs/catalog.md`, root README, and package README now document `catalog-standard-trixie.yaml` as primary, `catalog-standard-bookworm.yaml` as secondary, `imageCatalogRef` major mapping, digest preference, and unpublished-image rejection.
 - Added docs guardrails and all required positive/negative fixtures for catalog documentation.
 - Review subagent found two validator bypasses; both were fixed and revalidated.
-- Story status set to `review` after all tasks and validations passed.
+- 2026-06-11 evidence closure: catalog documentation and catalog validation fixtures pass locally, and GitHub Actions `Validate` run `27315292349` passed repository docs/catalog gates.
 
 ### Validation Commands
 
@@ -164,6 +164,8 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/scripts/validate-barman-boundary.sh` - passed.
 - `git diff --cached --check` - passed.
 - Staged snapshot `make validate` via `git checkout-index --all --prefix="$tmpdir/"` - passed.
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/docs/catalog/run.sh && bash cloudnative-pg-timescaledb/tests/catalog/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Validate` run `27315292349` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292349`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 ## File List
 

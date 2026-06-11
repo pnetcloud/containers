@@ -3,7 +3,7 @@ storyId: 4.1
 storyKey: 4-1-metadata-generated-ci-matrix
 epic: 4
 title: 'Metadata-Generated CI Matrix'
-status: ready-for-review
+status: done
 baseline_commit: 01c82afcf666e6fc3027a98a95d3a8580a2ee63b
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
@@ -150,6 +150,7 @@ Every implementation story must finish with a working repository state and must 
 - Updated generator drift, update/autocommit allowlists, and generator fixtures for the new matrix schema artifact.
 - 2026-06-10: Tightened skipped matrix rows so they expose `bake_target` plus `skipped_marker`, keep `latest_eligible` policy explicit, and do not leak buildable Dockerfile paths or publish-only fields.
 - 2026-06-10: Expanded matrix/generator validators and fixtures for duplicate rows, missing include keys, skipped latest ownership, and marker-only skipped row contracts.
+- 2026-06-11 evidence closure: matrix fixtures pass locally, and GitHub Actions `Build Release Candidates` run `27315292356` generated and consumed the metadata-driven image matrix successfully.
 
 ### Completion Notes
 
@@ -173,6 +174,8 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/tests/tags/run.sh` PASS
 - `bash cloudnative-pg-timescaledb/scripts/validate-workflows.sh` PASS; local `actionlint` unavailable, CI `validate.yml` installs it before `make validate`
 - Staged snapshot `make validate` PASS
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/matrix/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Build Release Candidates` run `27315292356` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292356`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 ### File List
 
