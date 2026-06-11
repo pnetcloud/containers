@@ -1,0 +1,17 @@
+name: Validate Redirection Suffixed Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Redirection suffixed fake gates
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck2>/dev/null
+          make validate2>/dev/null
+          find .github/workflows -type f -name '*.yml' -print0 | sort -z | xargs -0 actionlint2>/dev/null
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck2>/dev/null

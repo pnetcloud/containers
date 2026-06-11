@@ -405,6 +405,13 @@ def shell_function_definition(value):
     )
 
 
+def shell_function_subshell_definition(value):
+    return bool(
+        re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\((?:\s|$)", value)
+        or re.match(r"^function\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*\(\))?\s*\((?:\s|$)", value)
+    )
+
+
 def shell_function_header(value):
     return bool(
         re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*$", value)
@@ -412,51 +419,43 @@ def shell_function_header(value):
     )
 
 
-def shell_brace_delta(value):
-    delta = 0
-    quote = None
-    escaped = False
-    ansi_single_quote = False
-    previous = ""
-    previous_escaped = False
-    for char in value:
-        if escaped:
-            escaped = False
-            previous = char
-            previous_escaped = True
-            continue
-        if char == "\\" and (quote != "'" or ansi_single_quote):
-            escaped = True
-            previous = char
-            previous_escaped = False
-            continue
-        if quote:
-            if char == quote:
-                quote = None
-                ansi_single_quote = False
-            previous = char
-            previous_escaped = False
-            continue
-        if char in {"'", '"'}:
-            quote = char
-            ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
-            previous = char
-            previous_escaped = False
-            continue
-        if char == "{":
-            delta += 1
-        elif char == "}":
-            delta -= 1
-        previous = char
-        previous_escaped = False
-    return delta
+def structural_open(value):
+    if re.match(r"^\{(?:\s|$)", value):
+        return "}"
+    if re.match(r"^\((?:\s|$)", value):
+        return ")"
+    return None
+
+
+def structural_close(value):
+    if re.match(r"^\}(?:\s|[;&|]|$)", value):
+        return "}"
+    if re.match(r"^\)(?:\s|[;&|]|$)", value):
+        return ")"
+    return None
+
+
+def always_true_if(value):
+    return bool(
+        re.match(r"^if\s+true(?:\s*;?\s*then\b)?$", value)
+        or re.match(r"^if\s+\[\[\s*1\s+-eq\s+1\s*\]\](?:\s*;?\s*then\b)?$", value)
+    )
+
+
+def unconditional_exit_segment(value):
+    return bool(
+        re.match(r"^(exit|return)\b", value)
+        or re.search(r"(^|\s)&&\s*(exit|return)\b", value)
+        or re.match(r"^\{\s*(exit|return)\b", value)
+    )
 
 
 def executable_run_text(run):
     executable = []
     heredoc_queue = []
     shell_block_depth = 0
-    shell_function_brace_depth = 0
+    always_true_depths = set()
+    shell_function_stack = []
     pending_function_header = False
     stop_after_unsafe_control = False
     pending_line = ""
@@ -478,12 +477,26 @@ def executable_run_text(run):
             if not stripped:
                 continue
             segment_heredocs = heredoc_delimiters(stripped)
-            if shell_function_brace_depth:
+            if shell_function_stack:
                 heredoc_queue.extend(segment_heredocs)
-                previous_depth = shell_function_brace_depth
-                shell_function_brace_depth = max(shell_function_brace_depth + shell_brace_delta(stripped), 0)
-                if previous_depth and shell_function_brace_depth == 0 and re.match(r"^\}", stripped):
+                if shell_function_definition(stripped):
+                    shell_function_stack.append("}")
+                    continue
+                if shell_function_subshell_definition(stripped):
+                    if not re.search(r"\)\s*$", stripped):
+                        shell_function_stack.append(")")
+                    continue
+                close_token = structural_close(stripped)
+                if close_token and shell_function_stack and shell_function_stack[-1] == close_token:
+                    shell_function_stack.pop()
+                else:
+                    open_token = structural_open(stripped)
+                    if open_token:
+                        shell_function_stack.append(open_token)
+                if not shell_function_stack and close_token:
                     trailing = re.sub(r"^\}", "", stripped, count=1).strip()
+                    if close_token == ")":
+                        trailing = re.sub(r"^\)", "", stripped, count=1).strip()
                     if trailing:
                         heredoc_queue.extend(heredoc_delimiters(trailing))
                         executable.append(trailing)
@@ -493,18 +506,25 @@ def executable_run_text(run):
                 continue
             if pending_function_header:
                 pending_function_header = False
-                if stripped.startswith("{"):
-                    shell_function_brace_depth = max(shell_brace_delta(stripped), 1)
+                open_token = structural_open(stripped)
+                if open_token:
+                    shell_function_stack.append(open_token)
                     heredoc_queue.extend(segment_heredocs)
                     continue
             if shell_function_header(stripped):
                 pending_function_header = True
                 continue
             if shell_function_definition(stripped):
-                shell_function_brace_depth = max(shell_brace_delta(stripped), 1)
+                shell_function_stack.append("}")
+                heredoc_queue.extend(segment_heredocs)
+                continue
+            if shell_function_subshell_definition(stripped):
+                if not re.search(r"\)\s*$", stripped):
+                    shell_function_stack.append(")")
                 heredoc_queue.extend(segment_heredocs)
                 continue
             if re.match(r"^(fi|done|esac)\b", stripped):
+                always_true_depths.discard(shell_block_depth)
                 shell_block_depth = max(shell_block_depth - 1, 0)
                 trailing = re.sub(r"^(fi|done|esac)\b", "", stripped, count=1).strip()
                 if trailing:
@@ -516,15 +536,25 @@ def executable_run_text(run):
                 continue
             if shell_block_depth:
                 heredoc_queue.extend(segment_heredocs)
+                if shell_block_depth in always_true_depths and unconditional_exit_segment(stripped):
+                    stop_after_unsafe_control = True
+                    break
                 if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                     shell_block_depth += 1
+                    if always_true_if(stripped):
+                        always_true_depths.add(shell_block_depth)
                 continue
             if re.match(r"^(echo|printf)\b", stripped):
                 continue
             if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                 shell_block_depth += 1
+                if always_true_if(stripped):
+                    always_true_depths.add(shell_block_depth)
                 continue
             heredoc_queue.extend(segment_heredocs)
+            if unconditional_exit_segment(stripped):
+                stop_after_unsafe_control = True
+                break
             executable.append(stripped)
     return "\n".join(executable)
 
@@ -683,7 +713,7 @@ def command_present(run_text, pattern):
         if not match:
             continue
         suffix = line[match.end():]
-        if suffix and not re.match(r"^\s*(?:$|[;|&<>]|\d?>|&>)", suffix):
+        if suffix and not re.match(r"^(?:\s+(?:$|[;|&<>]|\d?>|&>)|[;|&<>])", suffix):
             continue
         if "||" in suffix or "|&" in suffix:
             continue

@@ -211,6 +211,10 @@ Every implementation story must finish with a working repository state and must 
 - Added a regression fixture for uncalled shell functions containing all required validation gate strings.
 - Addressed BMAD review findings for split-line shell function definitions and nested brace groups inside function bodies by tracking function brace depth.
 - Added regression fixtures for `name()` newline `{` function declarations and inner brace groups before function-body gate strings.
+- Addressed BMAD review findings for digit-suffixed fake gates before redirections, subshell function bodies, literal brace arguments inside functions, and unreachable gates after shell `exit` or `return`.
+- Added regression fixtures for redirection-suffixed fake gates, function subshell bodies, literal function brace arguments before real gates, and conditional exit before the required gates.
+- Addressed BMAD review findings for short-circuit `&& exit` before gates and one-line subshell function helpers, while preserving valid unknown-conditional exits before direct gates.
+- Added regression fixtures for `true && exit 0` before gates, one-line subshell helper functions before real gates, and non-constant conditional exits before real gates.
 
 ### Validation Commands
 
@@ -246,6 +250,8 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: shell line-continuation handling no longer rewrites heredoc payload bodies before delimiter matching.
 - Review follow-up: required gates inside shell function bodies no longer satisfy unconditional executable gate evidence.
 - Review follow-up: split-line shell functions and nested brace groups inside functions no longer leak function-body gates into executable evidence.
+- Review follow-up: required gate suffix validation now requires a real shell separator before fd redirections, function tracking covers subshell bodies, literal brace arguments do not alter function tracking, and `exit`/`return` before gates prevents later gate evidence from being accepted.
+- Review follow-up: reachability handling catches direct and short-circuit exits before gates without rejecting non-constant conditional exits followed by direct gates; one-line subshell helper functions no longer hide later gates.
 
 ## File List
 
@@ -282,3 +288,5 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-11: Scoped line-continuation handling to executable shell text and added direct parser coverage for line-continuation hash heredocs.
 - 2026-06-11: Hardened executable gate detection to ignore uncalled shell function bodies.
 - 2026-06-11: Hardened shell function tracking for split declarations and nested brace groups.
+- 2026-06-11: Hardened redirection suffix boundaries, subshell function bodies, literal brace handling, and exit-before-gate reachability.
+- 2026-06-11: Hardened short-circuit exit reachability and one-line subshell helper parsing.
