@@ -226,7 +226,11 @@ def main():
     parser.add_argument("--candidate-prefix", default="candidate-")
     parser.add_argument("--delete-candidates", action="store_true")
     parser.add_argument("--delete-signature-tags", action="store_true", help="Delete main-package cosign signature tags named sha256-<64hex>.")
-    parser.add_argument("--delete-untagged", action="store_true", help="Delete package versions that have no container tags.")
+    parser.add_argument(
+        "--delete-untagged",
+        action="store_true",
+        help="Disabled safety switch. Untagged GHCR package versions can be platform manifests or attestations referenced by release tags.",
+    )
     parser.add_argument("--detach-mixed-candidates", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--versions-file")
@@ -261,9 +265,10 @@ def main():
 
     untagged_deleted = []
     if args.delete_untagged and not args.dry_run:
-        if args.versions_file:
-            fail("--versions-file can only be used with --dry-run")
-        untagged_deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, untagged_selected, token))
+        fail(
+            "--delete-untagged is disabled: untagged GHCR versions can be release platform manifests "
+            "or BuildKit attestations, and deleting them can break tagged multi-platform images"
+        )
 
     mixed_candidate_tags = candidate_tags_from(skipped_mixed, args.candidate_prefix)
     detached_mixed_tags = []

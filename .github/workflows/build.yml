@@ -896,7 +896,6 @@ jobs:
             --candidate-prefix candidate- \
             --delete-candidates \
             --delete-signature-tags \
-            --delete-untagged \
             --detach-mixed-candidates
       - name: Verify public pulls after cleanup
         run: |

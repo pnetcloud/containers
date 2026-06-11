@@ -70,7 +70,6 @@ text = Path(sys.argv[1]).read_text()
 required = [
     "--delete-candidates",
     "--delete-signature-tags",
-    "--delete-untagged",
     "--detach-mixed-candidates",
     "Verify public pulls after cleanup",
     "docker pull --platform",
@@ -78,6 +77,10 @@ required = [
 missing = [item for item in required if item not in text]
 if missing:
     raise SystemExit(f"workflow cleanup coverage missing: {missing}")
+
+cleanup_job = text.split("ghcr_cleanup:", 1)[1]
+if "--delete-untagged" in cleanup_job:
+    raise SystemExit("workflow must not delete untagged GHCR versions; multi-platform release manifests need them")
 PY
 
 printf 'PASS GHCR candidate cleanup fixtures\n'
