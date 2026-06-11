@@ -43,5 +43,23 @@
         "tags": ["candidate-124-1-pg17-trixie-index", "candidate-124-1-pg17-trixie-debug"]
       }
     }
+  },
+  {
+    "id": 106,
+    "created_at": "2026-06-11T00:05:00Z",
+    "metadata": {
+      "container": {
+        "tags": ["sha256-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]
+      }
+    }
+  },
+  {
+    "id": 107,
+    "created_at": "2026-06-11T00:06:00Z",
+    "metadata": {
+      "container": {
+        "tags": ["sha256-fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210", "18"]
+      }
+    }
   }
 ]

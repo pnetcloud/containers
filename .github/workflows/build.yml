@@ -388,6 +388,7 @@ jobs:
           EVIDENCE_DIR: release-evidence/output/${{ matrix.bake_target }}
           EXPECTED_CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }}
           COSIGN_CERTIFICATE_ISSUER: https://token.actions.githubusercontent.com
+          COSIGN_REPOSITORY: ghcr.io/${{ github.repository_owner }}/cloudnative-pg-timescaledb-signatures
         run: |
           set -Eeuo pipefail
           mkdir -p "${EVIDENCE_DIR}"
@@ -877,7 +878,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
-      - name: Delete candidate-only package versions
+      - name: Delete auxiliary package versions
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -889,4 +890,5 @@ jobs:
             --image "ghcr.io/${GITHUB_REPOSITORY_OWNER}/cloudnative-pg-timescaledb" \
             --candidate-prefix candidate- \
             --delete-candidates \
+            --delete-signature-tags \
             --detach-mixed-candidates

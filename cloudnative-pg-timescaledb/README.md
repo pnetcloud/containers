@@ -102,12 +102,13 @@ Verify public images by immutable digest, not mutable tags alone:
 ```bash
 IMAGE_REF="ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 EXPECTED_CERTIFICATE_IDENTITY="https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main"
+export COSIGN_REPOSITORY="ghcr.io/pnetcloud/cloudnative-pg-timescaledb-signatures"
 cosign verify "$IMAGE_REF" --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity "$EXPECTED_CERTIFICATE_IDENTITY"
 ```
 
 For release refs, derive `EXPECTED_CERTIFICATE_IDENTITY=https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/tags/<tag>`. Do not use broad certificate identity regex matching. Public verification does not need private registry credentials.
 
-Release evidence covers `index_digest`, `platform_digests`, and `per_digest_evidence` with `sbom_ref`, `provenance_ref`, `signature_ref`, `verification_ref`, and `verified` for the final multi-platform index digest and every platform digest. Missing SBOM, provenance, signature, verification evidence, or threshold-passing scan status is a release blocker.
+Cosign signatures are stored in `ghcr.io/pnetcloud/cloudnative-pg-timescaledb-signatures` so the main image package only carries release tags. Release evidence covers `index_digest`, `platform_digests`, and `per_digest_evidence` with `sbom_ref`, `provenance_ref`, `signature_ref`, `verification_ref`, and `verified` for the final multi-platform index digest and every platform digest. Missing SBOM, provenance, signature, verification evidence, or threshold-passing scan status is a release blocker.
 
 Vulnerability policy lives in `cloudnative-pg-timescaledb/config/vulnerability-policy.yaml`; ignores live in `cloudnative-pg-timescaledb/config/vulnerability-ignore.yaml`, and undeclared ignores are rejected. Required scan command shape: `trivy image --scanners vuln --severity HIGH,CRITICAL --ignorefile cloudnative-pg-timescaledb/config/vulnerability-ignore.yaml --format sarif --output <sarif> ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`. Inspect `security-scan.json`, `security-scan.sarif`, `vulnerability-scan-json`, `vulnerability-scan-sarif`, `scan_result`, failure reason, Step Summary, and `GITHUB_STEP_SUMMARY`. Any unignored `HIGH` or `CRITICAL` vulnerability fails the release gate, and scanner database failures fail closed.
 

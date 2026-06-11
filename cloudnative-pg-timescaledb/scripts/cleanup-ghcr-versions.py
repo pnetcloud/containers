@@ -3,6 +3,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -13,6 +14,7 @@ from pathlib import Path
 
 
 API_VERSION = "2022-11-28"
+SIGNATURE_TAG_RE = re.compile(r"^sha256-[0-9a-f]{64}$")
 
 
 def fail(message):
@@ -110,6 +112,29 @@ def select_candidate_versions(versions, prefix):
     return selected, skipped_mixed
 
 
+def select_signature_versions(versions):
+    selected = []
+    skipped_mixed = []
+    for version in versions:
+        version_id = version.get("id")
+        tags = tags_for(version)
+        if not tags:
+            continue
+        signature_tags = [tag for tag in tags if SIGNATURE_TAG_RE.fullmatch(tag)]
+        if not signature_tags:
+            continue
+        record = {
+            "id": version_id,
+            "created_at": version.get("created_at", ""),
+            "tags": tags,
+        }
+        if len(signature_tags) == len(tags):
+            selected.append(record)
+        else:
+            skipped_mixed.append(record)
+    return selected, skipped_mixed
+
+
 def candidate_tags_from(records, prefix):
     tags = []
     for record in records:
@@ -172,6 +197,7 @@ def main():
     parser.add_argument("--image", help="Container image reference used when detaching mixed candidate tags, for example ghcr.io/owner/name.")
     parser.add_argument("--candidate-prefix", default="candidate-")
     parser.add_argument("--delete-candidates", action="store_true")
+    parser.add_argument("--delete-signature-tags", action="store_true", help="Delete main-package cosign signature tags named sha256-<64hex>.")
     parser.add_argument("--detach-mixed-candidates", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--versions-file")
@@ -189,12 +215,19 @@ def main():
 
     versions = load_versions(args, token)
     selected, skipped_mixed = select_candidate_versions(versions, args.candidate_prefix)
+    signature_selected, signature_skipped_mixed = select_signature_versions(versions)
 
     deleted = []
     if args.delete_candidates and not args.dry_run:
         if args.versions_file:
             fail("--versions-file can only be used with --dry-run")
         deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, selected, token))
+
+    signature_deleted = []
+    if args.delete_signature_tags and not args.dry_run:
+        if args.versions_file:
+            fail("--versions-file can only be used with --dry-run")
+        signature_deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, signature_selected, token))
 
     mixed_candidate_tags = candidate_tags_from(skipped_mixed, args.candidate_prefix)
     detached_mixed_tags = []
@@ -223,9 +256,15 @@ def main():
         "post_detach_selected_count": len(post_detach_selected),
         "post_detach_deleted_count": len(post_detach_deleted),
         "post_detach_skipped_mixed_tag_count": len(post_detach_skipped_mixed),
+        "signature_selected_count": len(signature_selected),
+        "signature_deleted_count": len(signature_deleted),
+        "signature_skipped_mixed_tag_count": len(signature_skipped_mixed),
         "skipped_mixed_tag_count": len(skipped_mixed),
         "mixed_candidate_tags": mixed_candidate_tags,
         "detached_mixed_tags": detached_mixed_tags,
+        "signature_selected": signature_selected,
+        "signature_deleted": signature_deleted,
+        "signature_skipped_mixed_tags": signature_skipped_mixed,
         "selected": selected,
         "post_detach_selected": post_detach_selected,
         "post_detach_deleted": post_detach_deleted,
