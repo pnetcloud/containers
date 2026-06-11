@@ -26,8 +26,13 @@ strict_mode_exceptions: []
 permission_allowlist:
   - workflow: .github/workflows/build.yml
     job: publish
+    permission: "id-token: write"
+    reason: Request GitHub OIDC token to sign the clean published runtime index digest
+    owner_story: 4.5
+  - workflow: .github/workflows/build.yml
+    job: publish
     permission: "packages: write"
-    reason: Promote validated GHCR final tags after release gates pass
+    reason: Promote validated GHCR final tags and upload the published digest signature
     owner_story: 4.5
 EOF
 }
@@ -141,8 +146,13 @@ permission_allowlist:
     owner_story: 4.4
   - workflow: .github/workflows/build.yml
     job: publish
+    permission: "id-token: write"
+    reason: Request GitHub OIDC token to sign the clean published runtime index digest
+    owner_story: 4.5
+  - workflow: .github/workflows/build.yml
+    job: publish
     permission: "packages: write"
-    reason: Promote validated GHCR final tags after release gates pass
+    reason: Promote validated GHCR final tags and upload the published digest signature
     owner_story: 4.5
   - workflow: .github/workflows/build.yml
     job: release_metadata_autocommit

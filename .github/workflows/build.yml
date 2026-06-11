@@ -630,6 +630,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
       packages: write
     strategy:
       fail-fast: false
@@ -657,6 +658,10 @@ jobs:
         with:
           name: release-gate-metadata-${{ matrix.bake_target }}
           path: publish/input/release-gate-metadata
+      # sigstore/cosign-installer v4.1.2
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+        with:
+          cosign-release: v3.1.1
       - name: Login to GHCR for final tag promotion
         run: |
           set -Eeuo pipefail
@@ -669,6 +674,9 @@ jobs:
           RELEASE_EVIDENCE: publish/input/release-evidence/release-evidence.json
           RELEASE_GATE_METADATA: publish/input/release-gate-metadata/release-gate-metadata.json
           OUTPUT_DIR: publish/output/${{ matrix.bake_target }}
+          EXPECTED_CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }}
+          COSIGN_CERTIFICATE_ISSUER: https://token.actions.githubusercontent.com
+          COSIGN_REPOSITORY: ghcr.io/${{ github.repository_owner }}/cloudnative-pg-timescaledb-signatures
         run: |
           set -Eeuo pipefail
           mkdir -p "${OUTPUT_DIR}"
@@ -686,13 +694,84 @@ jobs:
           from pathlib import Path
 
           metadata = json.loads(Path(sys.argv[1]).read_text())
-          source = f"{metadata['image']}@{metadata['published_digest']}"
+          # docker buildx imagetools create final runtime-only index
+          sources = [
+              f"{metadata['image']}@{metadata['platform_digests'][platform]}"
+              for platform in sorted(metadata["platform_digests"])
+          ]
           print("set -Eeuo pipefail")
+          args = ["docker", "buildx", "imagetools", "create"]
           for tag in metadata["final_tags"]:
-              target = f"{metadata['image']}:{tag}"
-              print("docker buildx imagetools create " + shlex.quote(source) + " -t " + shlex.quote(target))
+              args.extend(["-t", f"{metadata['image']}:{tag}"])
+          args.extend(sources)
+          print(" ".join(shlex.quote(arg) for arg in args))
           PY
           bash "${OUTPUT_DIR}/promote-tags.sh"
+          first_ref="$(python3 - "${metadata_path}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          metadata = json.loads(Path(sys.argv[1]).read_text())
+          print(f"{metadata['image']}:{metadata['final_tags'][0]}")
+          PY
+          )"
+          inspect_release_ref() {
+            local ref="$1"
+            local raw_path="$2"
+            local text_path="$3"
+            local attempt
+            for attempt in 1 2 3 4 5 6; do
+              if docker buildx imagetools inspect "${ref}" --raw > "${raw_path}" &&
+                 docker buildx imagetools inspect "${ref}" > "${text_path}"; then
+                return 0
+              fi
+              printf 'Published ref not inspectable yet ref=%s attempt=%s\n' "${ref}" "${attempt}" >&2
+              sleep 10
+            done
+            printf 'Published ref did not become inspectable ref=%s\n' "${ref}" >&2
+            return 1
+          }
+          inspect_release_ref "${first_ref}" "${OUTPUT_DIR}/published.raw.json" "${OUTPUT_DIR}/published.txt"
+          published_digest="$(awk '/Digest:/ {print $2; exit}' "${OUTPUT_DIR}/published.txt")"
+          if [[ ! "${published_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            printf 'Invalid published digest: %s\n' "${published_digest}" >&2
+            exit 1
+          fi
+          jq -e '
+            [.manifests[]? | select((.annotations["vnd.docker.reference.type"] // "") == "attestation-manifest")]
+            | length == 0
+          ' "${OUTPUT_DIR}/published.raw.json" >/dev/null
+          subject="$(python3 - "${metadata_path}" "${published_digest}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          path = Path(sys.argv[1])
+          published_digest = sys.argv[2]
+          metadata = json.loads(path.read_text())
+          image = metadata["image"]
+          metadata["published_digest"] = published_digest
+          metadata["release_metadata_ref"] = f"{image}@{published_digest}"
+          metadata["signature_ref"] = f"{image}@{published_digest}#signature"
+          path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+          print(f"{image}@{published_digest}")
+          PY
+          )"
+          cosign sign --yes "${subject}"
+          cosign_verify_with_retry() {
+            local subject="$1"
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if cosign verify --certificate-identity "${EXPECTED_CERTIFICATE_IDENTITY}" --certificate-oidc-issuer "${COSIGN_CERTIFICATE_ISSUER}" "${subject}" >/dev/null; then
+                return 0
+              fi
+              printf 'cosign verify not ready for %s; retry %s/5 after registry propagation delay\n' "${subject}" "${attempt}" >&2
+              sleep 10
+            done
+            cosign verify --certificate-identity "${EXPECTED_CERTIFICATE_IDENTITY}" --certificate-oidc-issuer "${COSIGN_CERTIFICATE_ISSUER}" "${subject}" >/dev/null
+          }
+          cosign_verify_with_retry "${subject}"
           python3 - "${metadata_path}" <<'PY' >> "${GITHUB_OUTPUT}"
           import json
           import sys

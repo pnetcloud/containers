@@ -37,6 +37,33 @@ jobs:
         run: |
           set -Eeuo pipefail
           printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - name: Normalize final release indexes
+        if: ${{ inputs.dry_run == 'false' }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ghcr-cleanup/output
+          python3 - cloudnative-pg-timescaledb/release-metadata <<'PY' > ghcr-cleanup/output/normalize-release-indexes.sh
+          import json
+          import shlex
+          import sys
+          from pathlib import Path
+
+          print("set -Eeuo pipefail")
+          for path in sorted(Path(sys.argv[1]).glob("sha256-*.json")):
+              payload = json.loads(path.read_text())
+              image = payload.get("image")
+              tags = payload.get("final_tags") or []
+              platform_digests = payload.get("platform_digests") or {}
+              if not image or not tags or not isinstance(platform_digests, dict):
+                  continue
+              args = ["docker", "buildx", "imagetools", "create"]
+              for tag in tags:
+                  args.extend(["-t", f"{image}:{tag}"])
+              for platform in sorted(platform_digests):
+                  args.append(f"{image}@{platform_digests[platform]}")
+              print(" ".join(shlex.quote(arg) for arg in args))
+          PY
+          bash ghcr-cleanup/output/normalize-release-indexes.sh
       - name: Collect protected release digests
         run: |
           set -Eeuo pipefail

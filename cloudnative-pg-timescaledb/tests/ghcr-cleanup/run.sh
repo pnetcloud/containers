@@ -107,6 +107,8 @@ for marker in [
     "workflow_dispatch:",
     "dry_run:",
     "default: 'true'",
+    "Normalize final release indexes",
+    "normalize-release-indexes.sh",
     "--summary-file ghcr-cleanup/output/cleanup-summary.json",
     "Public GHCR tag list still contains candidate-* or sha256-* tags.",
 ]:

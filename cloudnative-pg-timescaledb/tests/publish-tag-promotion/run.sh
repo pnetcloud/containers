@@ -224,6 +224,8 @@ for marker in [
     "validate-publish-gates.sh",
     "--release-gate-metadata",
     "docker buildx imagetools create",
+    "published.raw.json",
+    "cosign sign --yes",
     "published_digest",
     "final_tags",
     "docker logout ghcr.io",
@@ -235,10 +237,9 @@ for marker in [
 require(publish_text.index("docker buildx imagetools create") < publish_text.index("docker logout ghcr.io") < publish_text.index("docker pull"), "publish verifies public anonymous pulls after final tag promotion", "wrong order", "Promote final tags first, then logout and pull anonymously to prove public GHCR availability.")
 require("--tag-validation-status passed" not in publish_text, "publish job does not synthesize tag validation status", "found", "Publish must consume release gate metadata from the tag_validation job.")
 perms = publish.get("permissions", {})
-require(perms.get("contents") == "read" and perms.get("packages") == "write", "publish permissions are contents read and packages write", perms, "Use least privilege for GHCR tag promotion.")
-require("id-token" not in perms, "publish job does not request id-token", perms, "Signing is owned by release_evidence, not publish.")
+require(perms.get("contents") == "read" and perms.get("packages") == "write" and perms.get("id-token") == "write", "publish permissions are contents read, packages write, and id-token write", perms, "Use least privilege for clean GHCR tag promotion and published digest signing.")
 policy_text = policy.read_text()
-require("job: publish" in policy_text and "permission: \"packages: write\"" in policy_text and "owner_story: 4.5" in policy_text, "workflow policy allowlists publish packages write for Story 4.5", "missing", "Add the publish permission allowlist entry.")
+require("job: publish" in policy_text and "permission: \"packages: write\"" in policy_text and "permission: \"id-token: write\"" in policy_text and "owner_story: 4.5" in policy_text, "workflow policy allowlists publish packages/id-token write for Story 4.5", "missing", "Add the publish permission allowlist entries.")
 PY
 }
 

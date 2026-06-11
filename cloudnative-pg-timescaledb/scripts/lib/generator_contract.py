@@ -765,8 +765,8 @@ def normalize_release_record(data, entries, payload, command, artifact):
         diag(command, artifact, "candidate_digest is sha256:<64 lowercase hex>", repr(candidate_digest), "Carry candidate digest lineage from Story 4.5 release metadata.")
     if candidate_digest == published_digest:
         diag(command, artifact, "candidate_digest is distinct from published index digest", candidate_digest, "Keep platform candidate lineage separate from the manifest-list digest.")
-    if index_digest != published_digest:
-        diag(command, artifact, "published_digest equals index_digest", {"published_digest": published_digest, "index_digest": index_digest}, "Use the published multi-platform manifest-list digest, not a platform digest.")
+    if not isinstance(index_digest, str) or not DIGEST_RE.fullmatch(index_digest):
+        diag(command, artifact, "index_digest is sha256:<64 lowercase hex>", repr(index_digest), "Carry the candidate evidence index digest into release metadata.")
     platform_digests = payload.get("platform_digests")
     if not isinstance(platform_digests, dict) or not platform_digests:
         diag(command, artifact, "platform_digests is a non-empty object", repr(platform_digests), "Carry every publishable platform digest into release metadata.")
@@ -774,10 +774,14 @@ def normalize_release_record(data, entries, payload, command, artifact):
         diag(command, artifact, "published_digest is distinct from per-platform digests", published_digest, "Use the manifest-list digest in catalogs.")
     if payload.get("scan_result") != "passed" or payload.get("verified") is not True or payload.get("promotion_status") != "validated":
         diag(command, artifact, "release metadata is scan-passed, verified, and promotion_status validated", {"scan_result": payload.get("scan_result"), "verified": payload.get("verified"), "promotion_status": payload.get("promotion_status")}, "Catalog generation requires release-complete publish metadata.")
-    for key in ["sbom_ref", "provenance_ref", "signature_ref"]:
+    for key in ["sbom_ref", "provenance_ref"]:
         value = payload.get(key)
-        if not isinstance(value, str) or not value.startswith(f"{image}@{published_digest}"):
-            diag(command, artifact, f"{key} is bound to the published digest", value, "Do not catalog unsigned or unprovenanced digests.")
+        allowed_prefixes = (f"{image}@{published_digest}", f"{image}@{index_digest}")
+        if not isinstance(value, str) or not value.startswith(allowed_prefixes):
+            diag(command, artifact, f"{key} is bound to the published or candidate evidence digest", value, "Keep SBOM/provenance evidence tied to the clean published index or the attested candidate index with matching platform digests.")
+    signature_ref = payload.get("signature_ref")
+    if not isinstance(signature_ref, str) or not signature_ref.startswith(f"{image}@{published_digest}"):
+        diag(command, artifact, "signature_ref is bound to the published digest", signature_ref, "Do not catalog unsigned published digests.")
     identity = payload.get("cosign_certificate_identity")
     issuer = payload.get("cosign_certificate_issuer")
     if not isinstance(identity, str) or not re.fullmatch(r"https://github.com/[^/]+/[^/]+/\.github/workflows/build\.yml@refs/(heads|tags)/.+", identity):

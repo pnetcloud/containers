@@ -90,8 +90,12 @@ ALLOWED_WRITE_GRANTS = {
         "Upload keyless cosign registry signatures for release evidence to GHCR",
         "4.4",
     ),
+    (".github/workflows/build.yml", "publish", "id-token: write"): (
+        "Request GitHub OIDC token to sign the clean published runtime index digest",
+        "4.5",
+    ),
     (".github/workflows/build.yml", "publish", "packages: write"): (
-        "Promote validated GHCR final tags after release gates pass",
+        "Promote validated GHCR final tags and upload the published digest signature",
         "4.5",
     ),
     (".github/workflows/build.yml", "release_metadata_autocommit", "contents: write"): (
