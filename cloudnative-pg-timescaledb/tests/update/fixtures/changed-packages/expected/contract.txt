@@ -1,0 +1,2 @@
+fixture=changed-packages
+kind=diff

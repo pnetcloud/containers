@@ -272,6 +272,10 @@ def validate_metadata_shape(data, command, artifact):
     optional_top = {"barman_plugin"}
     if not required_top.issubset(data) or set(data) - required_top - optional_top:
         diag(command, artifact, f"top-level keys include {sorted(required_top)} and optional {sorted(optional_top)}", f"actual {sorted(data)}", "Use the versions.yaml metadata contract.")
+    image = data["image"]
+    required_image = {"registry", "repository", "current_major", "primary_debian_variant"}
+    if not isinstance(image, dict) or set(image) != required_image:
+        diag(command, artifact, f"image keys exactly {sorted(required_image)}", repr(image), "Keep registry, repository, current major, and primary Debian variant explicit.")
     allowed = data["allowed"]
     expected_allowed = {
         "postgres_majors": ["17", "18", "19beta1"],
@@ -285,6 +289,46 @@ def validate_metadata_shape(data, command, artifact):
             diag(command, artifact, f"allowed.{key} exactly {expected!r}", repr(allowed[key]), "Do not broaden generator scope outside planning.")
     if not isinstance(data["entries"], list) or not data["entries"]:
         diag(command, artifact, "entries is non-empty list", type(data["entries"]).__name__, "Define image entries before generation.")
+    required_entry = {
+        "pg_major",
+        "pg_version",
+        "debian_variant",
+        "cnpg_tag",
+        "cnpg_digest",
+        "timescaledb_version",
+        "timescaledb_package_name",
+        "timescaledb_package_version",
+        "toolkit_version",
+        "toolkit_package_name",
+        "toolkit_package_version",
+        "pgvector_source",
+        "pgvector_package_version",
+        "pgaudit_source",
+        "pgaudit_package_version",
+        "platforms",
+        "publish",
+        "experimental",
+        "latest_eligible",
+        "skip_reason",
+    }
+    optional_entry = {"tags"}
+    for index, entry in enumerate(data["entries"]):
+        if not isinstance(entry, dict):
+            diag(command, artifact, f"entries[{index}] is a mapping", repr(entry), "Use one mapping per PostgreSQL/Debian row.")
+        missing = sorted(required_entry - set(entry))
+        extra = sorted(set(entry) - required_entry - optional_entry)
+        if missing or extra:
+            diag(command, artifact, f"entries[{index}] keys include {sorted(required_entry)} and optional {sorted(optional_entry)}", {"missing": missing, "extra": extra, "row": entry}, "Preserve the versions.yaml entry schema before generators consume row fields.")
+        for key in sorted(required_entry - {"platforms", "publish", "experimental", "latest_eligible"}):
+            if not isinstance(entry[key], str):
+                diag(command, artifact, f"entries[{index}].{key} is a string", repr(entry[key]), "Quote scalar metadata fields or use an empty string for unresolved versions.")
+        for key in ["publish", "experimental", "latest_eligible"]:
+            if not isinstance(entry[key], bool):
+                diag(command, artifact, f"entries[{index}].{key} is boolean", repr(entry[key]), "Use true or false for generator control fields.")
+        if entry["platforms"] != expected_allowed["platforms"]:
+            diag(command, artifact, f"entries[{index}].platforms exactly linux/amd64 and linux/arm64", repr(entry["platforms"]), "Keep every image row multi-platform and deterministic.")
+        if "tags" in entry and not isinstance(entry["tags"], list):
+            diag(command, artifact, f"entries[{index}].tags is a list when present", repr(entry["tags"]), "Keep optional tag snapshots as arrays.")
 
 
 def row_id(entry):
@@ -379,7 +423,7 @@ def bake_summary(entries, bake_file="cloudnative-pg-timescaledb/docker-bake.hcl"
                 "pg_major": entry["pg_major"],
                 "debian_variant": entry["debian_variant"],
                 "name": bake_target(entry),
-                "dockerfile": dockerfile_path(entry),
+                "skipped_marker": skipped_marker_path(entry),
                 "publish": entry["publish"],
                 "experimental": entry["experimental"],
                 "skip_reason": entry["skip_reason"],
@@ -419,7 +463,7 @@ Required `include[]` keys:
 | `provenance_ref` | Provenance artifact reference placeholder. |
 | `signature_ref` | Signature artifact reference placeholder. |
 
-`skipped[]` entries retain `publish: false`, PostgreSQL/Debian identity fields, `platforms`, `experimental`, `latest_eligible`, and `skip_reason` for workflow summaries.
+`skipped[]` entries retain `publish: false`, PostgreSQL/Debian identity fields, `platforms`, `bake_target`, `skipped_marker`, `experimental`, `latest_eligible`, and `skip_reason` for workflow summaries without exposing buildable Dockerfile paths.
 """
 
 
@@ -565,6 +609,8 @@ def matrix_summary(data, entries):
                     "pg_version": entry["pg_version"],
                     "debian_variant": entry["debian_variant"],
                     "platforms": entry["platforms"],
+                    "bake_target": bake_target(entry),
+                    "skipped_marker": skipped_marker_path(entry),
                     "publish": False,
                     "experimental": entry["experimental"],
                     "latest_eligible": entry["latest_eligible"],
@@ -673,6 +719,27 @@ def duplicate_release_record_diag(command, key, first_artifact, second_artifact,
     )
 
 
+def require_complete_stable_release_records(records, entries, command, artifact):
+    expected = {
+        (entry["pg_major"], entry["debian_variant"]): row_id(entry)
+        for entry in entries
+        if entry["publish"] is True and entry["experimental"] is not True
+    }
+    missing = sorted(
+        row
+        for key, row in expected.items()
+        if key not in records
+    )
+    if missing:
+        diag(
+            command,
+            artifact,
+            "release metadata includes every publishable stable PostgreSQL/Debian row",
+            {"missing": missing, "present": sorted(f"{key[0]}-{key[1]}" for key in records)},
+            "Pass the complete Story 4.5 release metadata set before generating or validating stable catalogs.",
+        )
+
+
 def normalize_release_record(data, entries, payload, command, artifact):
     image = f"{data['image']['registry']}/{data['image']['repository']}"
     required = {
@@ -690,6 +757,9 @@ def normalize_release_record(data, entries, payload, command, artifact):
     index_digest = payload.get("index_digest")
     if not isinstance(published_digest, str) or not DIGEST_RE.fullmatch(published_digest):
         diag(command, artifact, "published_digest is sha256:<64 lowercase hex>", repr(published_digest), "Catalogs must pin the manifest-list digest.")
+    release_metadata_record_id = payload.get("release_metadata_record_id")
+    if not isinstance(release_metadata_record_id, str) or not DIGEST_RE.fullmatch(release_metadata_record_id):
+        diag(command, artifact, "release_metadata_record_id is sha256:<64 lowercase hex>", repr(release_metadata_record_id), "Use the deterministic published digest identifier from Story 4.5 release metadata.")
     candidate_digest = payload.get("candidate_digest")
     if not isinstance(candidate_digest, str) or not DIGEST_RE.fullmatch(candidate_digest):
         diag(command, artifact, "candidate_digest is sha256:<64 lowercase hex>", repr(candidate_digest), "Carry candidate digest lineage from Story 4.5 release metadata.")
@@ -720,6 +790,10 @@ def normalize_release_record(data, entries, payload, command, artifact):
     if len(matches) != 1:
         diag(command, artifact, "release metadata final_tags match exactly one versions.yaml entry", [row_id(entry) for entry in matches], "Keep final tag policy unambiguous across PostgreSQL and Debian variants.")
     entry = matches[0]
+    if entry["experimental"]:
+        diag(command, artifact, "stable catalog excludes experimental PostgreSQL entries", entry["pg_major"], "Emit experimental entries only in an explicitly named experimental catalog.")
+    if entry["publish"] is not True:
+        diag(command, artifact, "release metadata row is publishable", row_id(entry), "Do not catalog skipped or non-publishable metadata rows.")
     if set(platform_digests) != set(entry["platforms"]):
         diag(command, artifact, f"platform_digests covers every publishable platform for {row_id(entry)}", {"expected": entry["platforms"], "actual": sorted(platform_digests)}, "Regenerate release metadata only after every publishable platform has completed.")
     for platform, digest in platform_digests.items():
@@ -734,7 +808,7 @@ def normalize_release_record(data, entries, payload, command, artifact):
         "image_ref": digest_ref(image, tag, published_digest),
         "final_tags": payload["final_tags"],
         "platform_digests": platform_digests,
-        "release_metadata_record_id": payload["release_metadata_record_id"],
+        "release_metadata_record_id": release_metadata_record_id,
         "release_metadata_ref": payload["release_metadata_ref"],
     }
     return (entry["pg_major"], entry["debian_variant"]), record
@@ -742,6 +816,8 @@ def normalize_release_record(data, entries, payload, command, artifact):
 
 def catalog_summary(data, entries, output_root="cloudnative-pg-timescaledb/catalog", release_metadata=None):
     release_records = load_release_records(data, entries, release_metadata or [], "generate-catalog")
+    if release_metadata:
+        require_complete_stable_release_records(release_records, entries, "generate-catalog", "release metadata set")
     catalogs = []
     for debian in ["trixie", "bookworm"]:
         rows = []
@@ -749,25 +825,34 @@ def catalog_summary(data, entries, output_root="cloudnative-pg-timescaledb/catal
             if entry["debian_variant"] != debian or entry["experimental"]:
                 continue
             record = release_records.get((entry["pg_major"], debian))
+            row = {
+                "pg_major": entry["pg_major"],
+                "debian_variant": debian,
+                "image": record["image_ref"] if record else image_ref(data, entry),
+                "digest": record["digest"] if record else "",
+                "publish": entry["publish"],
+                "experimental": entry["experimental"],
+                "latest_eligible": entry["latest_eligible"],
+                "skip_reason": entry["skip_reason"],
+            }
             if record:
-                rows.append(record)
+                row.update(
+                    {
+                        "major": int(numeric_pg_major(entry["pg_major"])),
+                        "tag": record["tag"],
+                        "source_entry": row_id(entry),
+                        "platforms": entry["platforms"],
+                        "release_metadata_record_id": record["release_metadata_record_id"],
+                    }
+                )
+            rows.append(row)
         catalogs.append(
             {
                 "debian_variant": debian,
                 "catalog_path": f"{output_root.rstrip('/')}/catalog-standard-{debian}.yaml",
                 "entries": [
-                    {
-                        "pg_major": record["entry"]["pg_major"],
-                        "major": int(numeric_pg_major(record["entry"]["pg_major"])),
-                        "debian_variant": debian,
-                        "image": record["image_ref"],
-                        "tag": record["tag"],
-                        "digest": record["digest"],
-                        "source_entry": row_id(record["entry"]),
-                        "platforms": record["entry"]["platforms"],
-                        "release_metadata_record_id": record["release_metadata_record_id"],
-                    }
-                    for record in rows
+                    row
+                    for row in rows
                 ],
             }
         )
@@ -777,18 +862,19 @@ def catalog_summary(data, entries, output_root="cloudnative-pg-timescaledb/catal
 def docs_summary(entries, doc_path="cloudnative-pg-timescaledb/docs/generated/compatibility.md", has_barman_plugin=False):
     docs_dir = Path(doc_path).parent
     table_path = (Path(doc_path).parent / "compatibility-table.md").as_posix()
-    manifest_paths = [
-        (doc_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "1.5", "metadata-rendered compatibility skeleton"),
-        (table_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "5.1", "metadata-rendered compatibility table"),
-        ((docs_dir / "release-candidate-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "4.2", "static generated schema documentation"),
-        ((docs_dir / "release-evidence-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "4.4", "static generated schema documentation"),
-        ((docs_dir / "failure-reason-catalog.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "5.8", "static generated failure reason catalog"),
-        ((docs_dir / "release-rehearsal-report.md").as_posix(), "cloudnative-pg-timescaledb/scripts/release-rehearsal.sh", "5.9", "dry-run release rehearsal report"),
-        ((docs_dir / "matrix-schema.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-matrix.sh", "4.1", "static generated matrix schema documentation"),
-    ]
     metadata_path = "cloudnative-pg-timescaledb/versions.yaml"
+    release_rehearsal_input = "cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures/valid-full-matrix.json;cloudnative-pg-timescaledb/config/release-rehearsal.yaml;DATE=20260609;DRY_RUN=1"
+    manifest_paths = [
+        (doc_path, metadata_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "1.5", "metadata-rendered compatibility skeleton"),
+        (table_path, metadata_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "5.1", "metadata-rendered compatibility table"),
+        ((docs_dir / "release-candidate-schema.md").as_posix(), metadata_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "4.2", "static generated schema documentation"),
+        ((docs_dir / "release-evidence-schema.md").as_posix(), metadata_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "4.4", "static generated schema documentation"),
+        ((docs_dir / "failure-reason-catalog.md").as_posix(), metadata_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "5.8", "static generated failure reason catalog"),
+        ((docs_dir / "release-rehearsal-report.md").as_posix(), release_rehearsal_input, "cloudnative-pg-timescaledb/scripts/release-rehearsal.sh", "5.9", "dry-run release rehearsal report"),
+        ((docs_dir / "matrix-schema.md").as_posix(), metadata_path, "cloudnative-pg-timescaledb/scripts/generate-matrix.sh", "4.1", "static generated matrix schema documentation"),
+    ]
     if has_barman_plugin:
-        manifest_paths.append(((docs_dir / "barman-plugin-reference.md").as_posix(), "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "2.7", "metadata-rendered Barman Cloud Plugin reference"))
+        manifest_paths.append(((docs_dir / "barman-plugin-reference.md").as_posix(), metadata_path, "cloudnative-pg-timescaledb/scripts/generate-docs.sh", "2.7", "metadata-rendered Barman Cloud Plugin reference"))
     return {
         "docs": [
             {
@@ -803,12 +889,12 @@ def docs_summary(entries, doc_path="cloudnative-pg-timescaledb/docs/generated/co
         "generated_docs_manifest": [
             {
                 "path": path,
-                "generator_input": metadata_path,
+                "generator_input": generator_input,
                 "generator_command": command,
                 "owner_story": owner_story,
                 "deterministic_generation_mode": mode,
             }
-            for path, command, owner_story, mode in manifest_paths
+            for path, generator_input, command, owner_story, mode in manifest_paths
         ],
     }
 
@@ -1041,6 +1127,7 @@ def validate_catalog_file(data, entries, release_metadata, catalog_path):
     release_records = load_release_records(data, entries, release_metadata, command)
     if not release_records:
         diag(command, catalog_path, "at least one release metadata record", "none", "Pass --release-metadata from Story 4.5 publish output before validating release catalogs.")
+    require_complete_stable_release_records(release_records, entries, command, catalog_path)
     image = f"{data['image']['registry']}/{data['image']['repository']}"
     payload = parse_catalog_yaml(catalog_path, command)
     if payload.get("apiVersion") != "postgresql.cnpg.io/v1" or payload.get("kind") != "ClusterImageCatalog":
@@ -1243,7 +1330,12 @@ def run(kind, metadata, output, check, as_json, release_metadata=None, validate_
             summary = catalog_summary(data, entries, output or "cloudnative-pg-timescaledb/catalog", release_metadata or [])
         if check or not as_json:
             for catalog in summary.get("catalogs", []):
-                records = [load_release_records(data, entries, release_metadata or [], command)[(row["pg_major"], catalog["debian_variant"])] for row in catalog["entries"]]
+                records_by_key = load_release_records(data, entries, release_metadata or [], command)
+                records = [
+                    records_by_key[(row["pg_major"], catalog["debian_variant"])]
+                    for row in catalog["entries"]
+                    if "release_metadata_record_id" in row
+                ]
                 write_or_check(catalog["catalog_path"], render_catalog(catalog["debian_variant"], records), check, command)
         if not as_json and not validate_catalog:
             print(f"generated release catalogs: {len(summary['catalogs'])}", file=sys.stderr)

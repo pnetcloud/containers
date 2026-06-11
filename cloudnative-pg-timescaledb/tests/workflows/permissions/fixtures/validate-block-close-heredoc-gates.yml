@@ -1,0 +1,23 @@
+name: Validate Block Close Heredoc Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: |
+          set -Eeuo pipefail
+          if [[ "${GITHUB_EVENT_NAME:-}" == "schedule" ]]; then
+            echo "schedule"
+          fi <<'EOF'
+          sudo apt-get install -y --no-install-recommends shellcheck
+          make validate
+          find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z | xargs -0 actionlint
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck
+          EOF

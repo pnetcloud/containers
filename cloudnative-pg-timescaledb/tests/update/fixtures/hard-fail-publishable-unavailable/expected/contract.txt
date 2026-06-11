@@ -1,0 +1,2 @@
+fixture=hard-fail-publishable-unavailable
+kind=no-diff

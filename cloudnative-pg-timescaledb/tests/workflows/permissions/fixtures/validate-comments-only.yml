@@ -1,0 +1,20 @@
+name: Validate Comments Only
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: "mentions make validate, actionlint, shellcheck, apt-get install, and bash -n"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # find .github/workflows -type f -print0 | sort -z | xargs -0 actionlint
+      # git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck
+      # sudo apt-get install -y shellcheck
+      - run: |
+          set -Eeuo pipefail
+          echo "comments and names are not executable validation gates"

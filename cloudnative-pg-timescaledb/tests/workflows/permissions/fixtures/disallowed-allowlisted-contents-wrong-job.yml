@@ -1,0 +1,11 @@
+name: Disallowed Allowlisted Contents Wrong Job
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  evil:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: echo denied

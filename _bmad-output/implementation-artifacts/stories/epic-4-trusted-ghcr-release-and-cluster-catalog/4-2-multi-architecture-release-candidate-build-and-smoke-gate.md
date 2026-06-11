@@ -3,7 +3,7 @@ storyId: 4.2
 storyKey: 4-2-multi-architecture-release-candidate-build-and-smoke-gate
 epic: 4
 title: 'Multi-Architecture Release Candidate Build and Smoke Gate'
-status: completed
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 ---

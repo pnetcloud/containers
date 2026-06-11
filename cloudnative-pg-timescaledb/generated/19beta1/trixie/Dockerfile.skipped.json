@@ -3,6 +3,6 @@
   "debian_variant": "trixie",
   "pg_major": "19beta1",
   "publish": false,
-  "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream support",
+  "skip_reason": "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists",
   "source_entry": "19beta1-trixie"
 }

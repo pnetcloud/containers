@@ -11,6 +11,10 @@ REQUIRED_INCLUDE = {
     "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental",
     "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref",
 }
+REQUIRED_SKIPPED = {
+    "pg_major", "pg_version", "debian_variant", "platforms", "bake_target", "skipped_marker",
+    "publish", "experimental", "latest_eligible", "skip_reason",
+}
 DOCKER_TAG_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
 ALLOWED_PG_MAJORS = {"17", "18", "19beta1"}
 ALLOWED_DEBIAN_VARIANTS = {"trixie", "bookworm"}
@@ -42,21 +46,45 @@ def load_payload(args):
 def validate(payload, artifact):
     if not isinstance(payload, dict):
         fail(artifact, "matrix payload is object", type(payload).__name__, "Emit a JSON object with include[] and skipped[].")
+    if set(payload) != {"include", "skipped"}:
+        fail(artifact, "top-level keys exactly include and skipped", sorted(payload), "Emit the Story 4.1 matrix schema only.")
     include = payload.get("include")
     if not isinstance(include, list):
         fail(artifact, "include is array", repr(include), "Emit include[] for GitHub Actions strategy matrix rows.")
+    skipped = payload.get("skipped")
+    if not isinstance(skipped, list):
+        fail(artifact, "skipped is array", repr(skipped), "Emit skipped[] for non-publishable matrix summary rows.")
+    seen_identities = set()
+    seen_bake_targets = set()
     for idx, row in enumerate(include):
         if not isinstance(row, dict):
             fail(artifact, f"include[{idx}] is object", type(row).__name__, "Emit object rows for matrix include[].")
         missing = sorted(REQUIRED_INCLUDE - set(row))
-        if missing:
-            fail(artifact, f"include[{idx}] required keys", f"missing {missing}", "Keep downstream workflow keys explicit; do not recompute release fields.")
+        extra = sorted(set(row) - REQUIRED_INCLUDE)
+        if missing or extra:
+            fail(artifact, f"include[{idx}] required keys exactly", f"missing {missing}, extra {extra}", "Keep downstream workflow keys explicit; do not recompute release fields.")
         if row["pg_major"] not in ALLOWED_PG_MAJORS:
             fail(artifact, f"include[{idx}].pg_major is supported", repr(row["pg_major"]), "Use only PostgreSQL 17, 18, or experimental 19beta1 matrix rows.")
         if row["debian_variant"] not in ALLOWED_DEBIAN_VARIANTS:
             fail(artifact, f"include[{idx}].debian_variant is supported", repr(row["debian_variant"]), "Use only trixie or bookworm matrix rows.")
+        identity = (row["pg_major"], row["debian_variant"])
+        if identity in seen_identities:
+            fail(artifact, f"include[{idx}] identity is unique across include and skipped", repr(row), "Emit one matrix row per PostgreSQL/Debian pair.")
+        seen_identities.add(identity)
+        if row["bake_target"] in seen_bake_targets:
+            fail(artifact, f"include[{idx}].bake_target is unique across include and skipped", repr(row), "Emit one Bake target per PostgreSQL/Debian pair.")
+        seen_bake_targets.add(row["bake_target"])
         if row["platforms"] != REQUIRED_PLATFORMS:
             fail(artifact, f"include[{idx}].platforms exactly {REQUIRED_PLATFORMS}", repr(row["platforms"]), "Publishable matrix rows must target both supported platforms in deterministic order.")
+        for key in ["publish", "experimental", "latest_eligible"]:
+            if not isinstance(row[key], bool):
+                fail(artifact, f"include[{idx}].{key} is boolean", repr(row[key]), "Use JSON booleans for matrix control fields.")
+        if row["publish"] is not True:
+            fail(artifact, f"include[{idx}].publish is true", repr(row), "Only publishable rows may enter the workflow build matrix.")
+        expected_target = f"pg{row['pg_major']}-{row['debian_variant']}"
+        expected_dockerfile = f"cloudnative-pg-timescaledb/generated/{row['pg_major']}/{row['debian_variant']}/Dockerfile"
+        if row["bake_target"] != expected_target or row["dockerfile"] != expected_dockerfile:
+            fail(artifact, f"include[{idx}] exposes metadata-derived Dockerfile and target", repr(row), f"Use bake_target={expected_target!r} and dockerfile={expected_dockerfile!r}.")
         intended_tags = row["intended_tags"]
         if not isinstance(intended_tags, list) or not intended_tags:
             fail(artifact, f"include[{idx}].intended_tags is non-empty array", repr(intended_tags), "Emit deterministic tag-policy output for every publishable matrix row.")
@@ -88,9 +116,49 @@ def validate(payload, artifact):
             fail(artifact, f"include[{idx}].trixie immutable tag has no Debian suffix", repr(immutable_tags[0]), "Primary trixie immutable tags omit the Debian suffix.")
         if row["debian_variant"] != "trixie" and not immutable_tags[0].endswith(f"-{row['debian_variant']}"):
             fail(artifact, f"include[{idx}].secondary immutable tag has Debian suffix", repr(immutable_tags[0]), "Secondary Debian variants must carry their suffix.")
+    for idx, row in enumerate(skipped):
+        if not isinstance(row, dict):
+            fail(artifact, f"skipped[{idx}] is object", type(row).__name__, "Emit object rows for matrix skipped[].")
+        missing = sorted(REQUIRED_SKIPPED - set(row))
+        extra = sorted(set(row) - REQUIRED_SKIPPED)
+        if missing or extra:
+            fail(artifact, f"skipped[{idx}] required keys exactly", f"missing {missing}, extra {extra}", "Keep skipped row marker, target, and policy fields explicit; do not expose publishable build fields.")
+        if row["pg_major"] not in ALLOWED_PG_MAJORS:
+            fail(artifact, f"skipped[{idx}].pg_major is supported", repr(row["pg_major"]), "Use only PostgreSQL 17, 18, or experimental 19beta1 matrix rows.")
+        expected_pg_version = row["pg_major"] if row["pg_major"] == "19beta1" else rf"{re.escape(str(row['pg_major']))}\.[0-9]+"
+        if row["pg_major"] == "19beta1" and row["pg_version"] != expected_pg_version:
+            fail(artifact, f"skipped[{idx}].pg_version matches pg_major", repr(row), "Skipped matrix rows must keep PostgreSQL identity unambiguous.")
+        if row["pg_major"] != "19beta1" and not re.fullmatch(expected_pg_version, str(row["pg_version"])):
+            fail(artifact, f"skipped[{idx}].pg_version matches pg_major version pattern", repr(row), "Skipped matrix rows must keep PostgreSQL identity unambiguous.")
+        if row["debian_variant"] not in ALLOWED_DEBIAN_VARIANTS:
+            fail(artifact, f"skipped[{idx}].debian_variant is supported", repr(row["debian_variant"]), "Use only trixie or bookworm matrix rows.")
+        identity = (row["pg_major"], row["debian_variant"])
+        if identity in seen_identities:
+            fail(artifact, f"skipped[{idx}] identity is unique across include and skipped", repr(row), "Emit one matrix row per PostgreSQL/Debian pair.")
+        seen_identities.add(identity)
+        if row["bake_target"] in seen_bake_targets:
+            fail(artifact, f"skipped[{idx}].bake_target is unique across include and skipped", repr(row), "Emit one Bake target per PostgreSQL/Debian pair.")
+        seen_bake_targets.add(row["bake_target"])
+        if row["platforms"] != REQUIRED_PLATFORMS:
+            fail(artifact, f"skipped[{idx}].platforms exactly {REQUIRED_PLATFORMS}", repr(row["platforms"]), "Skipped matrix rows must retain deterministic platform scope for summaries.")
+        for key in ["publish", "experimental", "latest_eligible"]:
+            if not isinstance(row[key], bool):
+                fail(artifact, f"skipped[{idx}].{key} is boolean", repr(row[key]), "Use JSON booleans for skipped matrix control fields.")
+        if not isinstance(row["skip_reason"], str) or not row["skip_reason"].strip():
+            fail(artifact, f"skipped[{idx}].skip_reason is non-empty string", repr(row["skip_reason"]), "Keep skipped summary entries actionable.")
+        if row["publish"] is not False:
+            fail(artifact, f"skipped[{idx}] publish false with skip_reason", repr(row), "Keep skipped summary entries actionable.")
+        expected_target = f"pg{row['pg_major']}-{row['debian_variant']}"
+        expected_marker = f"cloudnative-pg-timescaledb/generated/{row['pg_major']}/{row['debian_variant']}/Dockerfile.skipped.json"
+        if row["bake_target"] != expected_target or row["skipped_marker"] != expected_marker:
+            fail(artifact, f"skipped[{idx}] exposes metadata-derived marker and target", repr(row), f"Use bake_target={expected_target!r} and skipped_marker={expected_marker!r}.")
+        if row["latest_eligible"] is not False:
+            fail(artifact, f"skipped[{idx}].latest_eligible is false", repr(row), "Only publishable include[] rows may own latest; skipped rows are not built or promoted.")
+        if row["pg_major"] == "19beta1" and row["experimental"] is not True:
+            fail(artifact, f"skipped[{idx}].19beta1 rows are experimental", repr(row), "Keep PostgreSQL 19 preview rows experimental.")
     latest_rows = [(row["pg_major"], row["debian_variant"]) for row in include if row.get("latest_eligible") is True]
     if latest_rows != [("18", "trixie")]:
-        fail(artifact, "include has exactly one latest owner", repr(latest_rows), "Keep latest on the publishable PostgreSQL 18 trixie matrix row only.")
+        fail(artifact, "matrix has exactly one latest owner", repr(latest_rows), "Keep latest on PostgreSQL 18 trixie only across publishable and skipped matrix rows.")
 
 
 def main():

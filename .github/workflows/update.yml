@@ -19,8 +19,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      # actions/checkout v4.2.2
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      # actions/checkout v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: true
       - name: Run deterministic update
@@ -46,6 +46,7 @@ jobs:
           export NEW_VERSION_DIGEST="unchanged"
           if [[ -f /tmp/cloudnative-pg-timescaledb-update.json ]]; then
             eval "$(python3 - /tmp/cloudnative-pg-timescaledb-update.json <<'PY'
+          import hashlib
           import json
           import shlex
           import sys
@@ -65,8 +66,13 @@ jobs:
                       item = value[key]
                       if isinstance(item, (str, int, float, bool)):
                           parts.append(f"{key}={item}")
-                  return ",".join(parts) or "n/a"
-              return str(value) if value else "n/a"
+                  return ",".join(parts) or "unchanged"
+              if isinstance(value, str):
+                  stripped = value.strip()
+                  if not stripped:
+                      return "unchanged"
+                  return "sha256:" + hashlib.sha256(stripped.encode("utf-8")).hexdigest()
+              return str(value) if value else "unchanged"
           print("OLD_VERSION_DIGEST=" + shlex.quote(compact(old)))
           print("NEW_VERSION_DIGEST=" + shlex.quote(compact(new)))
           PY
@@ -118,8 +124,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      # actions/checkout v4.2.2
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      # actions/checkout v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: true
       - name: Refresh branch tip after resolver autocommit

@@ -1,0 +1,11 @@
+name: Disallowed Allowlisted Id Token Wrong Job
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  evil:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - run: echo denied

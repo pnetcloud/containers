@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | 17 | trixie | true | false | false | linux/amd64, linux/arm64 |  |
 | 18 | trixie | true | false | true | linux/amd64, linux/arm64 |  |
-| 19beta1 | trixie | false | true | false | linux/amd64, linux/arm64 | Experimental PostgreSQL 19beta1 pending upstream support |
+| 19beta1 | trixie | false | true | false | linux/amd64, linux/arm64 | timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists |
 | 17 | bookworm | true | false | false | linux/amd64, linux/arm64 |  |
 | 18 | bookworm | true | false | false | linux/amd64, linux/arm64 |  |
-| 19beta1 | bookworm | false | true | false | linux/amd64, linux/arm64 | Experimental PostgreSQL 19beta1 pending upstream support |
+| 19beta1 | bookworm | false | true | false | linux/amd64, linux/arm64 | timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 bookworm linux/amd64 linux/arm64 missing packages while CNPG exists |

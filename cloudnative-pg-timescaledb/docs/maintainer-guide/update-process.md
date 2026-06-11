@@ -20,7 +20,7 @@ For deterministic tests or scheduled automation rehearsals, pass fixture invento
 make update UPDATE_ARGS="--fixtures /path/to/upstream --json"
 ```
 
-The fixture root must contain `cnpg/` and `packages/` directories compatible with the Story 2.1 and Story 2.2 resolver fixtures.
+The fixture root must contain `cnpg/` and `packages/` directories compatible with the Story 2.1 and Story 2.2 resolver fixtures, plus `barman-plugin.json` compatible with the CloudNativePG Barman Cloud Plugin fixture schema. When `--fixtures` is set, update must not call live upstream services.
 
 Update invariants:
 

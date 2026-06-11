@@ -1,0 +1,2 @@
+fixture=reject-latest-moved-from-pg18-trixie
+kind=no-diff

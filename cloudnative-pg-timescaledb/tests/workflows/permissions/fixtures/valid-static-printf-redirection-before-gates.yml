@@ -1,0 +1,18 @@
+name: Valid Static Printf Redirection Before Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Static printf redirection before gates
+        run: |
+          true && printf '%s\n' metadata >/no/such/dir/out && exit 0
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          make validate
+          find .github/workflows -type f -name '*.yml' -print0 | sort -z | xargs -0 actionlint
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck

@@ -1,0 +1,12 @@
+name: Invalid Inline Comment Job Write Permission
+on:
+  push:
+permissions:
+  contents: read
+jobs:
+  autocommit: # inline comments must not hide the job key
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - run: true

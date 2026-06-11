@@ -3,7 +3,7 @@ storyId: 2.5
 storyKey: 2-5-scheduled-update-and-autocommit-workflow
 epic: 2
 title: 'Scheduled Update and Autocommit Workflow'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: 19532ac
@@ -124,7 +124,7 @@ Shellcheck evidence correction: the autocommit workflow and final validation wor
 - [x] Restrict permissions so only the `autocommit` job receives `contents: write` under the exact Story 2.5 policy allowlist entry.
 - [x] Add workflow/autocommit fixtures for no-op, metadata change, generated change, staged secret, untracked vendor, runtime artifact, and outside-allowlist cases.
 - [x] Run actionlint, shellcheck, permission tests, update-autocommit tests, `make update`, and `make validate` before marking the story complete.
-- [ ] Capture real GitHub Actions evidence after workflow publication: `gh workflow view update.yml`, `gh workflow run update.yml`, `gh run watch`, and `gh run view --json url,status,conclusion,headSha` for a no-op or controlled autocommit path. Local/static workflow validation is not sufficient for the final auto-update/autocommit product proof.
+- [x] Capture real GitHub Actions evidence after workflow publication: `gh workflow view update.yml`, `gh workflow run update.yml`, `gh run watch`, and `gh run view --json url,status,conclusion,headSha` for a no-op or controlled autocommit path. Local/static workflow validation is not sufficient for the final auto-update/autocommit product proof.
 
 ## Story Definition of Done
 
@@ -187,6 +187,9 @@ Every implementation story must finish with a working repository state and must 
 - Subagent review round 2 found YAML quoting issue for grant values; fixed by quoting grants and verifying standard YAML parsing.
 - Subagent review round 3 reported no blocking findings.
 - 2026-06-10 follow-up story validation found remote workflow availability is not yet proven: `gh workflow list --repo pnetcloud/containers --all` currently lists only `Build Release Candidates` and `Validate`; `update.yml` is not yet visible through the GitHub Actions API. Keep this story in review until remote/default-branch workflow evidence is recorded.
+- 2026-06-10 remote workflow evidence: `Update Metadata` became visible through `gh workflow list --all --repo pnetcloud/containers`; manual dispatch `27313619813` on `aadc461` reached `make update`, `make validate`, `autocommit-stage.sh`, and `validate-autocommit-staging.sh`, then failed in `Write update summary` because no-op update JSON overwrote `OLD_VERSION_DIGEST`/`NEW_VERSION_DIGEST` with `n/a`.
+- Fixed update summary rendering so no-op update JSON keeps `unchanged` for old/new digests and real text changes render bounded `sha256:<digest>` values instead of `n/a` or full metadata text.
+- 2026-06-11 remote workflow evidence: manual `Update Metadata` run `27314328403` on `63dbf24` completed successfully. `Update and autocommit resolver artifacts` passed checkout, deterministic update, repository validation, allowlisted staging, staged-path validation, summary writing, and commit/no-op handling. `Generate and autocommit release catalogs` passed branch refresh, release metadata location, catalog generation, catalog validation, allowlisted staging, staged-path validation, change capture, catalog commit/no-op handling, and summary writing.
 
 ### Validation Commands
 
@@ -199,6 +202,14 @@ Every implementation story must finish with a working repository state and must 
 - `make update` - passed, no-op `changed=false`.
 - Staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && make validate` - passed.
 - `git diff --cached --check` - passed.
+- `gh workflow list --all --repo pnetcloud/containers` - passed; `Update Metadata` is visible and active.
+- `gh workflow run update.yml --ref codex/bmad-cloudnativepg-timescaledb-execution` - dispatched run `27313619813`; failed at `Write update summary` with `OLD_VERSION_DIGEST` actual `n/a`, which is now fixed locally pending rerun.
+- Extracted `.github/workflows/update.yml` `Write update summary` run block, executed it with no-op update JSON and temporary `GITHUB_STEP_SUMMARY`, and asserted old/new digests render as `unchanged` - passed.
+- `actionlint .github/workflows/update.yml` - passed after the summary fix.
+- `bash cloudnative-pg-timescaledb/tests/workflows/summaries/run.sh` - passed after the summary fix.
+- `bash cloudnative-pg-timescaledb/tests/workflows/update-autocommit/run.sh` - passed after the summary fix.
+- `bash cloudnative-pg-timescaledb/scripts/validate-workflows.sh` - passed after the summary fix.
+- `gh run view 27314328403 --json status,conclusion,url,headSha,jobs` - passed; status `completed`, conclusion `success`, URL `https://github.com/pnetcloud/containers/actions/runs/27314328403`, head SHA `63dbf24207c2db6f71d08adb51d40be599149746`.
 
 ### Completion Notes
 
@@ -207,8 +218,7 @@ Every implementation story must finish with a working repository state and must 
 - NFR-3: workflow uses `GITHUB_TOKEN` via checkout credentials, no PAT fallback, read-only top-level permissions, and `contents: write` only for the exact allowlisted autocommit job.
 - NFR-5: Step Summary includes `Resolver-originated changes` and `Renovate-originated changes` headings.
 - NFR-8: autocommit staging is path-allowlisted and rejects secrets, vendor changes, runtime artifacts, and outside-allowlist staged paths.
-- Note: ordinary `make validate` in the current working tree is affected by unrelated unstaged Story 1.1 hardening edits; the committed Story 2.5 index state was validated in a clean checkout-index snapshot.
-- Final product proof is still pending remote workflow evidence: a real `update.yml` workflow dispatch/no-op or controlled autocommit run must be recorded before claiming the auto-update/autocommit path is operational on GitHub.
+- Remote product proof is complete for Story 2.5: `Update Metadata` run `27314328403` completed successfully on GitHub with both autocommit jobs passing.
 
 ## File List
 
@@ -230,3 +240,4 @@ Every implementation story must finish with a working repository state and must 
 - Added autocommit allowlist and shared staging safety scripts.
 - Added permission and staging fixtures for Story 2.5 safety invariants.
 - Extended workflow policy validation for exact update autocommit `contents: write` allowlist grants.
+- Fixed update workflow no-op summary rendering after remote dispatch exposed `n/a` old/new digest values.

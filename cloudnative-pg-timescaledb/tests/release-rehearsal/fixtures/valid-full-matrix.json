@@ -189,7 +189,7 @@
       "final_tags": [],
       "build_context": ".",
       "runtime_inputs": [],
-      "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream TimescaleDB support"
+      "skip_reason": "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists"
     },
     {
       "row_id": "19beta1-bookworm",
@@ -204,7 +204,7 @@
       "final_tags": [],
       "build_context": ".",
       "runtime_inputs": [],
-      "skip_reason": "Experimental PostgreSQL 19beta1 pending upstream TimescaleDB support"
+      "skip_reason": "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 bookworm linux/amd64 linux/arm64 missing packages while CNPG exists"
     }
   ]
 }

@@ -1,0 +1,8 @@
+name: Invalid Unpinned Reusable Workflow
+on:
+  push:
+permissions:
+  contents: read
+jobs:
+  reusable:
+    uses: third-party/repo/.github/workflows/build.yml@v1

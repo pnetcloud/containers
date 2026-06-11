@@ -186,6 +186,8 @@ def materialize_tags(data, release_date):
 
 def validate_invariants(data, command, artifact):
     rows = {(entry["pg_major"], entry["debian_variant"]) for entry in data["entries"]}
+    if len(data["entries"]) != len(EXPECTED_ROWS):
+        diag(command, artifact, f"exactly {len(EXPECTED_ROWS)} matrix entries", len(data["entries"]), "Do not duplicate supported PostgreSQL/Debian rows during update.")
     if rows != EXPECTED_ROWS:
         diag(command, artifact, f"matrix rows exactly {sorted(EXPECTED_ROWS)}", sorted(rows), "Do not add unsupported PostgreSQL or Debian rows during update.")
     latest = [(entry["pg_major"], entry["debian_variant"]) for entry in data["entries"] if entry["latest_eligible"]]
@@ -222,8 +224,8 @@ def validate_invariants(data, command, artifact):
             diag(command, artifact, "barman_plugin references derive from release", drift, "Update Barman plugin manifest and image references together.")
 
 
-def run_json(args, command, artifact):
-    proc = subprocess.run(args, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def run_json(args, command, artifact, env=None):
+    proc = subprocess.run(args, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     if proc.returncode != 0:
         diag(command, artifact, "resolver command succeeds", proc.stderr.strip() or proc.stdout.strip(), "Fix upstream fixtures or metadata before update.")
     try:
@@ -247,7 +249,7 @@ def update_entries(data, cnpg, packages):
         pkg_row = pkg_by_row[row]
         pg_version = cnpg_row["pg_version"]
         cnpg_tag = cnpg_row["cnpg_tag"]
-        if pg_version == entry["pg_major"] and entry["pg_major"] in {"17", "18"}:
+        if cnpg_row["cnpg_digest"] and pg_version == entry["pg_major"] and entry["pg_major"] in {"17", "18"}:
             match = re.search(rf"-{entry['pg_major']}(?P<minor>[0-9]{{2}})(?:$|[^0-9])", pkg_row["timescaledb_package_version"])
             if match:
                 pg_version = f"{entry['pg_major']}.{int(match.group('minor'))}"
@@ -270,7 +272,15 @@ def update_entries(data, cnpg, packages):
             missing.append("toolkit")
         current_reason = entry["skip_reason"]
         if missing:
-            reason = f"resolver:missing-{'-'.join(missing)}: {entry['pg_major']} {entry['debian_variant']} unresolved {'/'.join(missing)}"
+            reason = ""
+            if missing == ["cnpg"]:
+                reason = cnpg_row.get("skip_reason", "")
+            if not reason:
+                reason = pkg_row.get("skip_reason", "")
+            if not reason and "cnpg" in missing:
+                reason = cnpg_row.get("skip_reason", "")
+            if not reason or reason == current_reason:
+                reason = f"resolver:missing-{'-'.join(missing)}: {entry['pg_major']} {entry['debian_variant']} unresolved {'/'.join(missing)}"
             if current_reason == "" or current_reason.startswith("resolver:"):
                 entry["skip_reason"] = reason
         elif current_reason.startswith("resolver:"):
@@ -334,6 +344,10 @@ def capture_paths(paths):
     return snapshots
 
 
+def paths_changed(snapshots):
+    return snapshots != capture_paths(snapshots.keys())
+
+
 def restore_paths(snapshots):
     for target, (kind, payload) in snapshots.items():
         if target.is_dir():
@@ -351,16 +365,70 @@ def restore_paths(snapshots):
             target.write_bytes(payload)
 
 
+def require_clean_owned_paths(paths, command):
+    relative_paths = []
+    for path in paths:
+        target = ROOT / path if not Path(path).is_absolute() else Path(path)
+        try:
+            relative_paths.append(str(target.relative_to(ROOT)))
+        except ValueError:
+            relative_paths.append(str(target))
+    proc = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all", "--", *relative_paths],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        return
+    dirty = proc.stdout.strip()
+    if dirty:
+        diag(command, "git status", "clean resolver-owned metadata/generated paths before update", dirty, "Commit, stash, or remove changes under update-owned paths before running make update.")
+
+
+def resolve_fixture_path(fixture_root, relative, command, artifact):
+    path = fixture_root / relative
+    if not path.exists():
+        diag(command, artifact, f"--fixtures includes {relative}", str(path), "Provide a complete deterministic fixture root; update tests must not depend on live upstream.")
+    return path
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="Deterministically update resolver-owned metadata.")
     parser.add_argument("mode", choices=["update"])
     parser.add_argument("--metadata", default=str(DEFAULT_METADATA))
-    parser.add_argument("--fixtures", help="Fixture root containing cnpg/ and packages/ inventories.")
+    parser.add_argument("--fixtures", help="Complete fixture root containing cnpg/, packages/, and barman-plugin.json inventories.")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--summary", default=str(SUMMARY_PATH))
     parser.add_argument("--tag-date", default=os.environ.get("TAG_VALIDATION_DATE") or os.environ.get("DATE") or DEFAULT_TAG_DATE, help="UTC release date used to materialize deterministic image tags.")
     parser.add_argument("--generate", action="store_true", help="Run generators after metadata update.")
     return parser
+
+
+def summary_path_from_argv(argv):
+    for index, value in enumerate(argv):
+        if value == "--summary" and index + 1 < len(argv):
+            return Path(argv[index + 1])
+        if value.startswith("--summary="):
+            return Path(value.split("=", 1)[1])
+    return SUMMARY_PATH
+
+
+def failure_summary(summary_path, message):
+    summary = {
+        "changed": False,
+        "updated_entries": [],
+        "old": "",
+        "new": "",
+        "generated": [],
+        "summary_path": str(summary_path),
+        "exit_code": 1,
+        "failure_reason": message,
+    }
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    return summary
 
 
 def main(argv):
@@ -371,35 +439,37 @@ def main(argv):
     before_text = metadata.read_text()
     data = parse_metadata(metadata, command)
     validate_invariants(data, command, metadata)
-    cnpg_args = [str(RESOLVE_SCRIPT), "--check-cnpg", "--metadata", str(metadata), "--json", "--allow-digest-drift"]
-    pkg_args = [str(RESOLVE_SCRIPT), "--check-packages", "--metadata", str(metadata), "--json", "--preserve-manual-skip"]
-    if args.fixtures:
-        fixture_root = Path(args.fixtures)
-        cnpg_args.extend(["--fixtures", str(fixture_root / "cnpg")])
-        pkg_args.extend(["--fixtures", str(fixture_root / "packages")])
-    cnpg = run_json(cnpg_args, command, metadata)
-    packages = run_json(pkg_args, command, metadata)
-    barman_reference = run_json([str(BARMAN_PLUGIN_SCRIPT), "--json"], command, metadata)
-    updated = update_entries(data, cnpg, packages)
-    barman_plugin = update_barman_plugin(data, barman_reference)
-    materialize_tags(data, args.tag_date)
-    validate_invariants(data, command, metadata)
-    after_text = render_metadata(data)
-    changed = before_text != after_text
-    generated = []
     generated_paths = [
         "cloudnative-pg-timescaledb/generated",
         "cloudnative-pg-timescaledb/docker-bake.hcl",
         "cloudnative-pg-timescaledb/matrix.json",
         "cloudnative-pg-timescaledb/catalog",
-        "cloudnative-pg-timescaledb/docs/generated/compatibility.md",
-        "cloudnative-pg-timescaledb/docs/generated/compatibility-table.md",
-        "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md",
-        "cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md",
+        "cloudnative-pg-timescaledb/docs/generated",
     ]
+    require_clean_owned_paths([metadata] + generated_paths, command)
+    cnpg_args = [str(RESOLVE_SCRIPT), "--check-cnpg", "--metadata", str(metadata), "--json", "--allow-digest-drift", "--preserve-manual-skip"]
+    pkg_args = [str(RESOLVE_SCRIPT), "--check-packages", "--metadata", str(metadata), "--json", "--preserve-manual-skip"]
+    barman_env = None
+    if args.fixtures:
+        fixture_root = Path(args.fixtures)
+        cnpg_args.extend(["--fixtures", str(resolve_fixture_path(fixture_root, "cnpg", command, metadata))])
+        pkg_args.extend(["--fixtures", str(resolve_fixture_path(fixture_root, "packages", command, metadata))])
+        barman_env = os.environ.copy()
+        barman_env["BARMAN_PLUGIN_FIXTURE"] = str(resolve_fixture_path(fixture_root, "barman-plugin.json", command, metadata))
+    cnpg = run_json(cnpg_args, command, metadata)
+    packages = run_json(pkg_args, command, metadata)
+    barman_reference = run_json([str(BARMAN_PLUGIN_SCRIPT), "--json"], command, metadata, env=barman_env)
+    updated = update_entries(data, cnpg, packages)
+    barman_plugin = update_barman_plugin(data, barman_reference)
+    materialize_tags(data, args.tag_date)
+    validate_invariants(data, command, metadata)
+    after_text = render_metadata(data)
+    metadata_changed = before_text != after_text
+    generated = []
     snapshots = capture_paths([metadata] + generated_paths)
+    generated_changed = False
     try:
-        if changed:
+        if metadata_changed:
             metadata.write_text(after_text)
         if args.generate:
             try:
@@ -409,16 +479,17 @@ def main(argv):
             if proc.returncode != 0:
                 diag(command, "make generate", "generators succeed", proc.stderr.strip() or proc.stdout.strip(), "Fix generator drift before update can complete.")
             generated = generated_paths
+            generated_changed = paths_changed(snapshots)
             scan_barman_outputs(generated, command)
     except UpdateError:
         restore_paths(snapshots)
         raise
+    changed = metadata_changed or generated_changed
     summary = {
         "changed": changed,
         "updated_entries": updated,
-        "barman_plugin": barman_plugin,
-        "old": before_text if changed else "",
-        "new": after_text if changed else "",
+        "old": before_text if metadata_changed else "",
+        "new": after_text if metadata_changed else "",
         "generated": generated,
         "summary_path": str(Path(args.summary)),
         "exit_code": 0,
@@ -432,20 +503,12 @@ def main(argv):
 
 
 if __name__ == "__main__":
+    summary_path = summary_path_from_argv(sys.argv[1:])
     try:
         main(sys.argv[1:])
     except UpdateError as exc:
         message = str(exc)
         print(message, file=sys.stderr)
         if "--json" in sys.argv:
-            print(json.dumps({
-                "changed": False,
-                "updated_entries": [],
-                "old": "",
-                "new": "",
-                "generated": [],
-                "summary_path": str(SUMMARY_PATH),
-                "exit_code": 1,
-                "failure_reason": message,
-            }, separators=(",", ":"), sort_keys=True))
+            print(json.dumps(failure_summary(summary_path, message), separators=(",", ":"), sort_keys=True))
         sys.exit(1)

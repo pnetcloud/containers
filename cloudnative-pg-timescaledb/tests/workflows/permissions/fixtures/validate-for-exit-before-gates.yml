@@ -1,0 +1,21 @@
+name: Validate For Exit Before Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: For exit before gates
+        run: |
+          for value in 1; do
+            printf '%s\n' "${value}" >/dev/null
+            exit 0
+          done
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          make validate
+          find .github/workflows -type f -name '*.yml' -print0 | sort -z | xargs -0 actionlint
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck

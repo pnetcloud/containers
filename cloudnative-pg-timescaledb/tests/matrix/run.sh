@@ -17,6 +17,7 @@ validate_matrix() {
   python3 - "${file}" <<'PY'
 from pathlib import Path
 import json
+import re
 import sys
 
 path = Path(sys.argv[1])
@@ -26,7 +27,7 @@ required_include = {
     "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental",
     "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref",
 }
-required_skipped = {"pg_major", "pg_version", "debian_variant", "platforms", "publish", "experimental", "latest_eligible", "skip_reason"}
+required_skipped = {"pg_major", "pg_version", "debian_variant", "platforms", "bake_target", "skipped_marker", "publish", "experimental", "latest_eligible", "skip_reason"}
 
 def fail(expected, actual, remediation):
     raise SystemExit(f"command: {command}\nartifact: {path}\nexpected: {expected}\nactual: {actual}\nremediation: {remediation}")
@@ -40,13 +41,26 @@ if not isinstance(include, list) or not isinstance(skipped, list):
     fail("include and skipped are arrays", {"include": type(include).__name__, "skipped": type(skipped).__name__}, "Use arrays for GitHub Actions matrix and summaries.")
 
 latest_rows = []
+seen_identities = set()
+seen_bake_targets = set()
 for idx, row in enumerate(include):
     missing = sorted(required_include - set(row))
     extra = sorted(set(row) - required_include)
     if missing or extra:
         fail(f"include[{idx}] required keys", f"missing {missing}, extra {extra}", "Keep downstream workflow keys explicit; do not recompute release fields.")
+    identity = (row["pg_major"], row["debian_variant"])
+    if identity in seen_identities:
+        fail(f"include[{idx}] identity is unique across include and skipped", row, "Emit one matrix row per PostgreSQL/Debian pair.")
+    seen_identities.add(identity)
+    if row["bake_target"] in seen_bake_targets:
+        fail(f"include[{idx}].bake_target is unique across include and skipped", row, "Emit one Bake target per PostgreSQL/Debian pair.")
+    seen_bake_targets.add(row["bake_target"])
     if row["publish"] is not True:
         fail(f"include[{idx}].publish is true", row["publish"], "Only publishable rows belong in include[].")
+    expected_target = f"pg{row['pg_major']}-{row['debian_variant']}"
+    expected_dockerfile = f"cloudnative-pg-timescaledb/generated/{row['pg_major']}/{row['debian_variant']}/Dockerfile"
+    if row["bake_target"] != expected_target or row["dockerfile"] != expected_dockerfile:
+        fail(f"include[{idx}] exposes metadata-derived Dockerfile and target", row, "Build matrix rows must expose metadata-derived Dockerfile and Bake target.")
     if row["pg_major"] == "19beta1" and row["experimental"] is not True:
         fail("19beta1 include rows are experimental", row, "Keep PostgreSQL 19 preview rows experimental.")
     if row["latest_eligible"]:
@@ -59,17 +73,41 @@ for idx, row in enumerate(include):
     if not immutable or row["candidate_ref"] != f"{row['image']}:{immutable[0]}":
         fail(f"include[{idx}].candidate_ref uses immutable intended tag", row, "Use immutable tag-policy output for candidate_ref.")
 
-if latest_rows and latest_rows != [("18", "trixie")]:
-    fail("exactly one publishable latest row when latest is present", latest_rows, "Keep latest promotion on the primary trixie row only.")
-
 for idx, row in enumerate(skipped):
     missing = sorted(required_skipped - set(row))
-    if missing:
-        fail(f"skipped[{idx}] required summary keys", f"missing {missing}", "Skipped rows must keep publish:false and skip_reason for summaries.")
-    if row["publish"] is not False or not str(row["skip_reason"]).strip():
+    extra = sorted(set(row) - required_skipped)
+    if missing or extra:
+        fail(f"skipped[{idx}] required summary keys exactly", f"missing {missing}, extra {extra}", "Skipped rows must keep marker, target, publish:false, and skip_reason only.")
+    identity = (row["pg_major"], row["debian_variant"])
+    if identity in seen_identities:
+        fail(f"skipped[{idx}] identity is unique across include and skipped", row, "Emit one matrix row per PostgreSQL/Debian pair.")
+    seen_identities.add(identity)
+    if row["bake_target"] in seen_bake_targets:
+        fail(f"skipped[{idx}].bake_target is unique across include and skipped", row, "Emit one Bake target per PostgreSQL/Debian pair.")
+    seen_bake_targets.add(row["bake_target"])
+    for key in ["publish", "experimental", "latest_eligible"]:
+        if not isinstance(row[key], bool):
+            fail(f"skipped[{idx}].{key} is boolean", row[key], "Use JSON booleans for skipped matrix control fields.")
+    if not isinstance(row["skip_reason"], str) or not row["skip_reason"].strip():
+        fail(f"skipped[{idx}].skip_reason is non-empty string", row["skip_reason"], "Keep skipped summary entries actionable.")
+    if row["publish"] is not False:
         fail(f"skipped[{idx}] publish false with skip_reason", row, "Keep skipped summary entries actionable.")
+    expected_pg_version = row["pg_major"] if row["pg_major"] == "19beta1" else rf"{re.escape(str(row['pg_major']))}\.[0-9]+"
+    if row["pg_major"] == "19beta1" and row["pg_version"] != expected_pg_version:
+        fail(f"skipped[{idx}].pg_version matches pg_major", row, "Skipped rows must keep PostgreSQL identity unambiguous.")
+    if row["pg_major"] != "19beta1" and not re.fullmatch(expected_pg_version, str(row["pg_version"])):
+        fail(f"skipped[{idx}].pg_version matches pg_major version pattern", row, "Skipped rows must keep PostgreSQL identity unambiguous.")
+    expected_target = f"pg{row['pg_major']}-{row['debian_variant']}"
+    expected_marker = f"cloudnative-pg-timescaledb/generated/{row['pg_major']}/{row['debian_variant']}/Dockerfile.skipped.json"
+    if row["bake_target"] != expected_target or row["skipped_marker"] != expected_marker:
+        fail(f"skipped[{idx}] exposes marker and target", row, "Skipped rows must expose metadata-derived marker and Bake target.")
     if row["pg_major"] == "19beta1" and row["experimental"] is not True:
         fail("19beta1 skipped rows are experimental", row, "Keep PostgreSQL 19 preview rows experimental.")
+    if row["latest_eligible"] is not False:
+        fail("skipped latest_eligible is false", row, "Only publishable include[] rows may own latest.")
+
+if latest_rows != [("18", "trixie")]:
+    fail("exactly one latest row across include and skipped", latest_rows, "Keep latest promotion on the primary trixie row only.")
 PY
 }
 
@@ -133,8 +171,8 @@ validate_workflow() {
     diag "validate build workflow" "${file}" "workflow rejects missing required matrix keys with shared validator" "missing" "Call validate-matrix-json.py before exposing matrix outputs."
     return 1
   fi
-  if grep -Eq 'pg_major:\s*["'\'' ]?(17|18|19beta1)|debian_variant:\s*["'\'' ]?(trixie|bookworm)|standard-(trixie|bookworm)' "${file}"; then
-    diag "validate build workflow" "${file}" "no hard-coded PostgreSQL/Debian workflow rows" "$(grep -En 'pg_major:|debian_variant:|standard-(trixie|bookworm)' "${file}")" "Consume generated matrix rows instead of duplicating metadata."
+  if grep -Eq 'pg_major:\s*["'\'' ]?(17|18|19beta1)|debian_variant:\s*["'\'' ]?(trixie|bookworm)|(^|[^-])standard-(trixie|bookworm)' "${file}"; then
+    diag "validate build workflow" "${file}" "no hard-coded PostgreSQL/Debian workflow rows" "$(grep -En 'pg_major:|debian_variant:|(^|[^-])standard-(trixie|bookworm)' "${file}")" "Consume generated matrix rows instead of duplicating metadata."
     return 1
   fi
 }
@@ -220,6 +258,58 @@ PY
 validate_matrix "${ROOT_DIR}/cloudnative-pg-timescaledb/matrix.json"
 "${VALIDATE_MATRIX_JSON}" --file "${FIXTURE_DIR}/valid-publishable-matrix.json"
 expect_command_fail "shared workflow validator rejects missing required key" "missing .*digest" "${VALIDATE_MATRIX_JSON}" --file "${FIXTURE_DIR}/missing-required-key.json"
+extra_include_key_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${extra_include_key_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["unexpected"] = "extra"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects extra include key" "extra .*unexpected|required keys exactly" "${VALIDATE_MATRIX_JSON}" --file "${extra_include_key_matrix}"
+rm -f "${extra_include_key_matrix}"
+include_publish_false_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${include_publish_false_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["publish"] = False
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects non-publishable include rows" "publish is true" "${VALIDATE_MATRIX_JSON}" --file "${include_publish_false_matrix}"
+rm -f "${include_publish_false_matrix}"
+wrong_include_path_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${wrong_include_path_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["dockerfile"] = "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile.skipped.json"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects wrong include Dockerfile path" "metadata-derived Dockerfile and target" "${VALIDATE_MATRIX_JSON}" --file "${wrong_include_path_matrix}"
+rm -f "${wrong_include_path_matrix}"
+missing_skipped_key_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${missing_skipped_key_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload.pop("skipped", None)
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects missing skipped key" "top-level keys exactly include and skipped" "${VALIDATE_MATRIX_JSON}" --file "${missing_skipped_key_matrix}"
+rm -f "${missing_skipped_key_matrix}"
 invalid_tag_matrix="$(mktemp)"
 python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${invalid_tag_matrix}" <<'PY'
 from pathlib import Path
@@ -363,6 +453,151 @@ Path(output).write_text(json.dumps(payload, separators=(",", ":")))
 PY
 expect_command_fail "shared workflow validator rejects incomplete platforms" "platforms exactly" "${VALIDATE_MATRIX_JSON}" --file "${invalid_platform_matrix}"
 rm -f "${invalid_platform_matrix}"
+missing_skipped_path_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${missing_skipped_path_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"][0].pop("bake_target", None)
+payload["skipped"][0].pop("skipped_marker", None)
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects skipped rows without marker paths" "skipped\\[0\\] required keys|bake_target|skipped_marker" "${VALIDATE_MATRIX_JSON}" --file "${missing_skipped_path_matrix}"
+rm -f "${missing_skipped_path_matrix}"
+wrong_skipped_path_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${wrong_skipped_path_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"][0]["skipped_marker"] = "cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects wrong skipped marker path" "exposes metadata-derived marker and target|exposes marker and target" "${VALIDATE_MATRIX_JSON}" --file "${wrong_skipped_path_matrix}"
+rm -f "${wrong_skipped_path_matrix}"
+extra_skipped_dockerfile_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${extra_skipped_dockerfile_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"][0]["dockerfile"] = "cloudnative-pg-timescaledb/generated/19beta1/trixie/Dockerfile"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects extra skipped dockerfile" "extra .*dockerfile|required keys exactly" "${VALIDATE_MATRIX_JSON}" --file "${extra_skipped_dockerfile_matrix}"
+rm -f "${extra_skipped_dockerfile_matrix}"
+string_skipped_latest_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${string_skipped_latest_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"][0]["latest_eligible"] = "false"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects string skipped latest" "latest_eligible is boolean" "${VALIDATE_MATRIX_JSON}" --file "${string_skipped_latest_matrix}"
+rm -f "${string_skipped_latest_matrix}"
+null_skip_reason_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${null_skip_reason_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"][0]["skip_reason"] = None
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects null skip_reason" "skip_reason is non-empty string" "${VALIDATE_MATRIX_JSON}" --file "${null_skip_reason_matrix}"
+rm -f "${null_skip_reason_matrix}"
+wrong_skipped_pg_version_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${wrong_skipped_pg_version_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"][0]["pg_version"] = "19.0"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects wrong skipped pg_version" "pg_version matches pg_major|pg_version starts with pg_major" "${VALIDATE_MATRIX_JSON}" --file "${wrong_skipped_pg_version_matrix}"
+rm -f "${wrong_skipped_pg_version_matrix}"
+malformed_stable_skipped_pg_version_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${malformed_stable_skipped_pg_version_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+stable = payload["include"][1].copy()
+stable["publish"] = False
+stable["skip_reason"] = "Publish disabled until release gate enables image builds"
+stable["skipped_marker"] = f"cloudnative-pg-timescaledb/generated/{stable['pg_major']}/{stable['debian_variant']}/Dockerfile.skipped.json"
+stable["latest_eligible"] = False
+stable["pg_version"] = f"{stable['pg_major']}.bad"
+for key in ["timescaledb_version", "image", "candidate_ref", "digest", "dockerfile", "intended_tags", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"]:
+    stable.pop(key, None)
+payload["skipped"].append(stable)
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects malformed stable skipped pg_version" "pg_version matches pg_major version pattern" "${VALIDATE_MATRIX_JSON}" --file "${malformed_stable_skipped_pg_version_matrix}"
+rm -f "${malformed_stable_skipped_pg_version_matrix}"
+duplicate_skipped_identity_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${duplicate_skipped_identity_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"].append(payload["skipped"][0].copy())
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects duplicate skipped rows" "identity is unique|bake_target is unique" "${VALIDATE_MATRIX_JSON}" --file "${duplicate_skipped_identity_matrix}"
+rm -f "${duplicate_skipped_identity_matrix}"
+skipped_latest_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${skipped_latest_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["skipped"][0]["latest_eligible"] = True
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects skipped latest" "latest_eligible is false|matrix has exactly one latest owner" "${VALIDATE_MATRIX_JSON}" --file "${skipped_latest_matrix}"
+rm -f "${skipped_latest_matrix}"
+skipped_18_latest_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${skipped_18_latest_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+latest = payload["include"].pop(0)
+latest["publish"] = False
+latest["skip_reason"] = "Publish disabled until release gate enables image builds"
+latest["skipped_marker"] = f"cloudnative-pg-timescaledb/generated/{latest['pg_major']}/{latest['debian_variant']}/Dockerfile.skipped.json"
+for key in ["timescaledb_version", "image", "candidate_ref", "digest", "dockerfile", "intended_tags", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"]:
+    latest.pop(key, None)
+payload["skipped"].append(latest)
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects skipped 18-trixie latest" "skipped\\[[0-9]+\\]\\.latest_eligible is false|matrix has exactly one latest owner" "${VALIDATE_MATRIX_JSON}" --file "${skipped_18_latest_matrix}"
+rm -f "${skipped_18_latest_matrix}"
 expect_matrix_fail "missing required key" "missing .*digest" "${FIXTURE_DIR}/missing-required-key.json"
 expect_matrix_fail "19beta1 must be experimental" "19beta1 .*experimental" "${FIXTURE_DIR}/pg19beta1-not-experimental.json"
 expect_matrix_fail "bookworm cannot be latest" "latest_eligible only" "${FIXTURE_DIR}/bookworm-latest-eligible.json"

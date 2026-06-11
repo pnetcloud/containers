@@ -3,7 +3,7 @@ storyId: 5.9
 storyKey: 5-9-end-to-end-release-rehearsal
 epic: 5
 title: 'End-to-End Release Rehearsal'
-status: in-progress
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 ---
@@ -124,11 +124,11 @@ So that the completed stories prove the repository can update, validate, build, 
 - [x] Rehearse `make update`, `make generate`, `make validate`, Buildx/Bake, per-platform container and SQL smoke, vulnerability scan, SBOM/provenance, signing or signing dry-run, publish dry-run/staging, catalog generation, docs validation, and secret checks from a clean checkout.
 - [x] Replace fixture/evidence-only release rehearsal validation with an actual clean-checkout orchestration path, or explicitly split the evidence validator from the command runner, so the story proves the commands are executed rather than only proving that a report fixture claims they were executed. The default `make release-rehearsal` path now runs a clean-checkout command runner; `--fixture` remains the explicit evidence-validator mode for deterministic tests.
 - [x] Enumerate every publishable PostgreSQL/Debian/platform candidate and prove `publish: false`/`skip_reason`, PG19 experimental, and `latest=18-trixie` behavior.
-- [ ] Validate GitHub Actions `workflow_dispatch` dry-run/staging path and record `release-rehearsal.yml` workflow URL, status, and successful conclusion from the same repository workflow run. Blocked until `.github/workflows/release-rehearsal.yml` exists on GitHub remote/default branch; local `gh workflow run` returned `HTTP 404`.
+- [x] Validate GitHub Actions `workflow_dispatch` dry-run/staging path and record `release-rehearsal.yml` workflow URL, status, and successful conclusion from the same repository workflow run.
 - [x] Generate `cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md` with commands, image refs, digests, tags, catalogs, security evidence, skipped combinations, failures, and remediation.
-- [ ] Validate GitHub Actions `workflow_dispatch` dry-run/staging path by invoking the actual workflow, watching the run, and recording URL, status, and successful conclusion; local/static/actionlint-only evidence is not sufficient. Blocked by GitHub API `HTTP 404` for the new workflow before publication.
+- [x] Validate GitHub Actions `workflow_dispatch` dry-run/staging path by invoking the actual workflow, watching the run, and recording URL, status, and successful conclusion; local/static/actionlint-only evidence is not sufficient.
 - [x] Add release rehearsal fixtures for full matrix, update paths, missing candidates, stable PG17/18 trixie publishability/evidence gaps, missing smoke/evidence, missing workflow dispatch evidence, vulnerability failure, wrong latest, stale generated files, unpublished catalog references, secret leakage, PG19beta1 latest promotion, vendor build/runtime consumption, Alpine, `bullseye`, and unsupported Debian variants.
-- [ ] Run `bash cloudnative-pg-timescaledb/scripts/release-rehearsal.sh --dry-run --date 20260609`, `make release-rehearsal DATE=20260609 DRY_RUN=1`, `actionlint .github/workflows/release-rehearsal.yml`, the required `gh workflow run`/`gh run watch`/`gh run view` workflow dispatch validation, `bash cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh`, and `make validate`. Fixture validation, orchestration-shim proof, actionlint, shellcheck, and workflow policy checks passed; required GitHub dispatch is blocked until the workflow exists remotely/default-branch-visible.
+- [x] Run `bash cloudnative-pg-timescaledb/scripts/release-rehearsal.sh --dry-run --date 20260609`, `make release-rehearsal DATE=20260609 DRY_RUN=1`, `actionlint .github/workflows/release-rehearsal.yml`, the required `gh workflow run`/`gh run watch`/`gh run view` workflow dispatch validation, `bash cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh`, and `make validate`.
 
 ## Story Definition of Done
 
@@ -217,14 +217,16 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10 CI determinism gap found and fixed outside this story: `validate-generated.sh` previously inspected live CNPG manifests during `make validate`, causing a GitHub `502 Bad Gateway` failure; it now creates a deterministic manifest fixture from `versions.yaml` unless `CNPG_MANIFEST_FIXTURE` is already provided.
 - 2026-06-10 follow-up implementation split Story 5.9 into two explicit paths: default clean-checkout orchestration and `--fixture` evidence validation. The orchestration path refuses dirty source checkouts, clones the current HEAD, runs `make update`, `make generate`, `make validate`, `make matrix`, `make bake-print`, per-publishable-row `make build`, per-platform container and SQL smoke, `make catalog`, and docs validation, records command logs, and fail-fasts on the first failed release gate. Tests now use shims to prove commands are actually invoked rather than only present as JSON strings.
 - 2026-06-10 workflow self-certification was removed: `release-rehearsal.yml` no longer injects `WORKFLOW_RUN_STATUS=completed` or `WORKFLOW_RUN_CONCLUSION=success`. Completion evidence must come from external `gh run view` after the workflow finishes.
+- 2026-06-10 update/release rehearsal fixture handling was hardened so `make update --fixtures` consumes CNPG, packagecloud, and Barman plugin references from one deterministic fixture root, fails before update when resolver-owned generated paths are dirty, and preserves maintainer-authored skip reasons while updating resolver-owned CNPG/package skip evidence.
+- 2026-06-10 current remote evidence on commit `74ba26549cffbd7773c064c42a87e0a36f2b85b9`: `Validate` completed successfully at `https://github.com/pnetcloud/containers/actions/runs/27307233496`; `Build Release Candidates` completed successfully at `https://github.com/pnetcloud/containers/actions/runs/27307233530`; `Release Rehearsal` workflow_dispatch completed successfully at `https://github.com/pnetcloud/containers/actions/runs/27307826931` with job `Dry-run or staging release rehearsal` successful.
 
 ### Completion Notes
 
 - Local release rehearsal and all repository validation gates pass from a staged clean checkout snapshot.
 - `release-rehearsal.yml` is SHA-pinned, least-privilege (`contents: read`), and invokes the same `make release-rehearsal` command surface.
-- Story remains `in-progress` only because mandatory actual `workflow_dispatch` evidence cannot exist until the new workflow file is published to GitHub.
-- Successful `Validate` and `Build Release Candidates` runs now prove the repository validation path and publishable PG17/PG18 trixie/bookworm release-candidate build/smoke/security-scan path on GitHub Actions for commit `b28e37bc22f4f94c92244e8e2b069076e1b3ca3b`.
-- Story still cannot be closed because the required `release-rehearsal.yml` workflow dispatch evidence is missing, `update.yml`/`release-rehearsal.yml` are not yet visible through the GitHub Actions API on the remote/default branch, and final staging/publish/sign/catalog proof against real release metadata still has to be captured after workflow publication.
+- Successful `Validate` and `Build Release Candidates` runs prove the repository validation path and publishable PG17/PG18 trixie/bookworm release-candidate build/smoke/security-scan path on GitHub Actions for commit `74ba26549cffbd7773c064c42a87e0a36f2b85b9`.
+- Successful `Release Rehearsal` workflow_dispatch run proves the required GitHub Actions dry-run/staging path on the same commit line: URL `https://github.com/pnetcloud/containers/actions/runs/27307826931`, status `completed`, conclusion `success`.
+- Story 5.9 is closed because local fixture/orchestration tests, remote `Validate`, remote `Build Release Candidates`, and remote `release-rehearsal.yml` workflow_dispatch evidence now all pass.
 
 ### Validation Commands
 
@@ -233,6 +235,18 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh` passed.
 - `PATH="$(go env GOPATH)/bin:$PATH" actionlint .github/workflows/release-rehearsal.yml` passed.
 - `bash cloudnative-pg-timescaledb/scripts/validate-workflows.sh` passed.
+- `bash cloudnative-pg-timescaledb/tests/update/run.sh` passed after deterministic fixture-root and dirty-generated-path hardening.
+- `bash cloudnative-pg-timescaledb/tests/barman-plugin/run.sh` passed after moving Barman plugin update fixtures into the shared update fixture root.
+- `bash cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh` passed after release rehearsal consumed the shared update fixture root.
+- `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh` passed.
+- `bash cloudnative-pg-timescaledb/tests/workflows/update-autocommit/run.sh` passed.
+- `shellcheck -x cloudnative-pg-timescaledb/scripts/release-rehearsal.sh cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh cloudnative-pg-timescaledb/tests/update/run.sh cloudnative-pg-timescaledb/tests/barman-plugin/run.sh` passed.
+- `bash cloudnative-pg-timescaledb/scripts/validate-workflows.sh` passed.
+- `git diff --check` passed.
+- `gh workflow run release-rehearsal.yml --repo pnetcloud/containers --ref codex/bmad-cloudnativepg-timescaledb-execution -f dry_run=true -f date=20260609 -f staging_namespace=ghcr.io/pnetcloud/cloudnative-pg-timescaledb-rehearsal` dispatched successfully.
+- `gh run view 27307826931 --repo pnetcloud/containers --json status,conclusion,url,headSha,jobs` returned status `completed`, conclusion `success`, URL `https://github.com/pnetcloud/containers/actions/runs/27307826931`, head SHA `74ba26549cffbd7773c064c42a87e0a36f2b85b9`, and job `Dry-run or staging release rehearsal` conclusion `success`.
+- `gh run view 27307233496 --repo pnetcloud/containers --json status,conclusion,url,headSha,jobs` returned status `completed`, conclusion `success`, URL `https://github.com/pnetcloud/containers/actions/runs/27307233496`, and head SHA `74ba26549cffbd7773c064c42a87e0a36f2b85b9`.
+- `gh run view 27307233530 --repo pnetcloud/containers --json status,conclusion,url,headSha,jobs` returned status `completed`, conclusion `success`, URL `https://github.com/pnetcloud/containers/actions/runs/27307233530`, and head SHA `74ba26549cffbd7773c064c42a87e0a36f2b85b9`.
 - `bash cloudnative-pg-timescaledb/scripts/validate-generated.sh` passed.
 - `bash cloudnative-pg-timescaledb/scripts/validate-docs.sh` passed.
 - `bash cloudnative-pg-timescaledb/tests/generated-drift/run.sh` passed.
@@ -258,6 +272,8 @@ Every implementation story must finish with a working repository state and must 
 - `cloudnative-pg-timescaledb/config/release-rehearsal.yaml`
 - `cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md`
 - `cloudnative-pg-timescaledb/scripts/release-rehearsal.sh`
+- `cloudnative-pg-timescaledb/scripts/lib/cnpg.sh`
+- `cloudnative-pg-timescaledb/scripts/lib/update_contract.py`
 - `cloudnative-pg-timescaledb/scripts/lib/generator_contract.py`
 - `cloudnative-pg-timescaledb/scripts/make-help.sh`
 - `cloudnative-pg-timescaledb/scripts/validate-docs.sh`
@@ -268,6 +284,7 @@ Every implementation story must finish with a working repository state and must 
 - `cloudnative-pg-timescaledb/tests/generators/run.sh`
 - `cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures/*.json`
 - `cloudnative-pg-timescaledb/tests/release-rehearsal/run.sh`
+- `cloudnative-pg-timescaledb/tests/barman-plugin/run.sh`
 - `cloudnative-pg-timescaledb/tests/update/run.sh`
 - `cloudnative-pg-timescaledb/tests/docs-validation/run.sh`
 - `docs/generator-contracts.md`
@@ -277,3 +294,4 @@ Every implementation story must finish with a working repository state and must 
 - Added deterministic release rehearsal command, config, workflow dispatch, generated report, fixture suite, and validation integration.
 - Extended generated-doc manifest ownership so `release-rehearsal-report.md` is accepted by drift checks while remaining owned by `release-rehearsal.sh`.
 - Hardened rehearsal evidence validation for latest policy, Debian/PostgreSQL scope, platform coverage, supply-chain digest binding, secret redaction, and reference-tree exclusion.
+- Hardened deterministic update fixture roots, resolver-owned skip evidence, dirty generated path guards, and closed Story 5.9 with successful current `release-rehearsal.yml` workflow_dispatch evidence.

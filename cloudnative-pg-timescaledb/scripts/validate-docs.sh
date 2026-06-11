@@ -150,26 +150,78 @@ try:
     manifest = payload.get("generated_docs_manifest")
     if not isinstance(manifest, list) or not manifest:
         fail("generate-docs --json", "generated_docs_manifest lists generated docs", payload, "Add manifest entries with path, generator input, owner story, and deterministic mode.")
-    required_manifest_paths = {
-        "cloudnative-pg-timescaledb/docs/generated/compatibility.md",
-        "cloudnative-pg-timescaledb/docs/generated/compatibility-table.md",
-        "cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md",
-        "cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md",
-        "cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md",
-        "cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md",
-        "cloudnative-pg-timescaledb/docs/generated/matrix-schema.md",
-        "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md",
+    expected_manifest = {
+        "cloudnative-pg-timescaledb/docs/generated/compatibility.md": {
+            "generator_command": "cloudnative-pg-timescaledb/scripts/generate-docs.sh",
+            "generator_input": "cloudnative-pg-timescaledb/versions.yaml",
+            "owner_story": "1.5",
+            "deterministic_generation_mode": "metadata-rendered compatibility skeleton",
+        },
+        "cloudnative-pg-timescaledb/docs/generated/compatibility-table.md": {
+            "generator_command": "cloudnative-pg-timescaledb/scripts/generate-docs.sh",
+            "generator_input": "cloudnative-pg-timescaledb/versions.yaml",
+            "owner_story": "5.1",
+            "deterministic_generation_mode": "metadata-rendered compatibility table",
+        },
+        "cloudnative-pg-timescaledb/docs/generated/release-candidate-schema.md": {
+            "generator_command": "cloudnative-pg-timescaledb/scripts/generate-docs.sh",
+            "generator_input": "cloudnative-pg-timescaledb/versions.yaml",
+            "owner_story": "4.2",
+            "deterministic_generation_mode": "static generated schema documentation",
+        },
+        "cloudnative-pg-timescaledb/docs/generated/release-evidence-schema.md": {
+            "generator_command": "cloudnative-pg-timescaledb/scripts/generate-docs.sh",
+            "generator_input": "cloudnative-pg-timescaledb/versions.yaml",
+            "owner_story": "4.4",
+            "deterministic_generation_mode": "static generated schema documentation",
+        },
+        "cloudnative-pg-timescaledb/docs/generated/failure-reason-catalog.md": {
+            "generator_command": "cloudnative-pg-timescaledb/scripts/generate-docs.sh",
+            "generator_input": "cloudnative-pg-timescaledb/versions.yaml",
+            "owner_story": "5.8",
+            "deterministic_generation_mode": "static generated failure reason catalog",
+        },
+        "cloudnative-pg-timescaledb/docs/generated/release-rehearsal-report.md": {
+            "generator_command": "cloudnative-pg-timescaledb/scripts/release-rehearsal.sh",
+            "generator_input": "cloudnative-pg-timescaledb/tests/release-rehearsal/fixtures/valid-full-matrix.json;cloudnative-pg-timescaledb/config/release-rehearsal.yaml;DATE=20260609;DRY_RUN=1",
+            "owner_story": "5.9",
+            "deterministic_generation_mode": "dry-run release rehearsal report",
+        },
+        "cloudnative-pg-timescaledb/docs/generated/matrix-schema.md": {
+            "generator_command": "cloudnative-pg-timescaledb/scripts/generate-matrix.sh",
+            "generator_input": "cloudnative-pg-timescaledb/versions.yaml",
+            "owner_story": "4.1",
+            "deterministic_generation_mode": "static generated matrix schema documentation",
+        },
+        "cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md": {
+            "generator_command": "cloudnative-pg-timescaledb/scripts/generate-docs.sh",
+            "generator_input": "cloudnative-pg-timescaledb/versions.yaml",
+            "owner_story": "2.7",
+            "deterministic_generation_mode": "metadata-rendered Barman Cloud Plugin reference",
+        },
     }
-    actual_manifest_paths = {str(row.get("path")) for row in manifest if isinstance(row, dict)}
-    missing = sorted(required_manifest_paths - actual_manifest_paths)
-    if missing:
-        fail("generate-docs --json", "manifest covers all generated docs from completed stories", missing, "Include compatibility, tables, schemas, and Barman reference docs.")
+    expected_manifest_paths = list(expected_manifest)
+    actual_manifest_paths = [str(row.get("path")) for row in manifest if isinstance(row, dict)]
+    if actual_manifest_paths != expected_manifest_paths:
+        fail("generate-docs --json", "manifest paths exactly match generated docs contract order", actual_manifest_paths, "Emit exactly the completed generated docs manifest paths in deterministic order.")
+    manifest_by_path = {}
     for row in manifest:
         if not isinstance(row, dict):
             fail("generate-docs --json", "manifest rows are objects", row, "Use structured manifest rows.")
-        missing_keys = sorted({"path", "generator_input", "generator_command", "owner_story", "deterministic_generation_mode"} - set(row))
-        if missing_keys:
-            fail("generate-docs --json", "manifest row includes required keys", missing_keys, "Expose path, generator input, owner story, and deterministic mode.")
+        required_manifest_keys = {"path", "generator_input", "generator_command", "owner_story", "deterministic_generation_mode"}
+        missing_keys = sorted(required_manifest_keys - set(row))
+        extra_keys = sorted(set(row) - required_manifest_keys)
+        if missing_keys or extra_keys:
+            fail("generate-docs --json", "manifest row includes exactly required keys", {"missing": missing_keys, "extra": extra_keys, "row": row}, "Expose only path, generator input, owner story, and deterministic mode.")
+        path = str(row.get("path"))
+        if path in manifest_by_path:
+            fail("generate-docs --json", "manifest paths are unique", path, "Emit one manifest row per generated document.")
+        manifest_by_path[path] = row
+    for path, expected in expected_manifest.items():
+        row = manifest_by_path[path]
+        for key, value in expected.items():
+            if row.get(key) != value:
+                fail("generate-docs --json", f"{path} manifest {key} is deterministic", row, f"Set {key} to {value!r}.")
 
     run_plain([str(root / "cloudnative-pg-timescaledb/scripts/generate-docs.sh"), "--metadata", str(metadata), "--output", str(generated_doc)], "generate-docs temp")
     compare("cloudnative-pg-timescaledb/docs/generated/compatibility.md", generated_doc.read_text(), "Run make generate and commit regenerated compatibility docs.")

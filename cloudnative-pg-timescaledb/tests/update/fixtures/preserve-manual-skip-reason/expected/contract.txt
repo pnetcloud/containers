@@ -1,0 +1,2 @@
+fixture=preserve-manual-skip-reason
+kind=diff

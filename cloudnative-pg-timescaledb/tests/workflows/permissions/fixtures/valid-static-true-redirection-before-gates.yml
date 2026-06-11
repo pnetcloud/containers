@@ -1,0 +1,19 @@
+name: Valid Static True Redirection Before Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Static true redirection before gates
+        run: |
+          true >"${RUNNER_TEMP}/workflow-validator-marker" && :
+          : >"${RUNNER_TEMP}/workflow-validator-marker-2" && :
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          make validate
+          find .github/workflows -type f -name '*.yml' -print0 | sort -z | xargs -0 actionlint
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck

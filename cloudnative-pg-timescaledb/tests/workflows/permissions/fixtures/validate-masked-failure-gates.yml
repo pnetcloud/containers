@@ -1,0 +1,19 @@
+name: Validate Masked Failure Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: |
+          set -Eeuo pipefail
+          sudo apt-get install -y --no-install-recommends shellcheck || echo "install skipped"
+          make validate || echo "validate skipped"
+          find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z | xargs -0 actionlint || echo "actionlint skipped"
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck || echo "shellcheck skipped"

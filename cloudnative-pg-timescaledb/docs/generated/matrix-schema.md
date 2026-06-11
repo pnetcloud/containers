@@ -27,4 +27,4 @@ Required `include[]` keys:
 | `provenance_ref` | Provenance artifact reference placeholder. |
 | `signature_ref` | Signature artifact reference placeholder. |
 
-`skipped[]` entries retain `publish: false`, PostgreSQL/Debian identity fields, `platforms`, `experimental`, `latest_eligible`, and `skip_reason` for workflow summaries.
+`skipped[]` entries retain `publish: false`, PostgreSQL/Debian identity fields, `platforms`, `bake_target`, `skipped_marker`, `experimental`, `latest_eligible`, and `skip_reason` for workflow summaries without exposing buildable Dockerfile paths.

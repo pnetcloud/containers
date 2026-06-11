@@ -78,7 +78,7 @@ require("needs:" in evidence and "security_scan" in evidence and "candidate" in 
 require("id-token: write" in evidence, "release_evidence has id-token write for GitHub OIDC", "missing", "Grant OIDC only to the signing job.")
 require("contents: read" in evidence, "release_evidence has contents read", "missing", "Keep workflow permissions explicit.")
 require("packages: write" in evidence, "release_evidence can upload cosign signature artifacts to GHCR", "missing", "Cosign registry signatures require GHCR package write on the signing job.")
-require("sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22" in evidence and "cosign-release: v3.0.2" in evidence, "workflow installs pinned cosign", "missing pinned cosign installer", "Pin the third-party installer action and cosign release.")
+require("sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6" in evidence and "cosign-release: v3.1.1" in evidence, "workflow installs pinned cosign", "missing pinned cosign installer", "Pin the third-party installer action and cosign release.")
 require("EXPECTED_CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/build.yml@${{ github.ref }}" in evidence, "workflow derives exact certificate identity from current ref", "missing", "Use the repository workflow identity for the active release ref.")
 require("COSIGN_CERTIFICATE_ISSUER: https://token.actions.githubusercontent.com" in evidence, "workflow uses GitHub Actions OIDC issuer", "missing", "Verify with GitHub's OIDC issuer only.")
 require("cosign sign --yes" in evidence, "workflow signs immutable digest references", "cosign sign missing", "Sign ghcr.io/...@sha256 digest references before publish.")

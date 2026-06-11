@@ -12,6 +12,9 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 
 
 ROOT = Path(os.environ["CNPG_RESOLVER_ROOT"])
@@ -183,6 +186,10 @@ def load_fixture_inventory(fixtures_dir, fixture_files, command):
         manifests.extend(load_fixture_file(Path(file_name), command))
     inventory = {}
     for manifest in manifests:
+        if "-standard-" in manifest["tag"] and parse_standard_tag(manifest["tag"]) is None:
+            match = re.fullmatch(r"(?P<pg>[^-]+)(?:-[0-9]{8,12})?-standard-(?P<debian>[^-]+)", manifest["tag"])
+            actual = f"pg_major={match.group('pg') if match else 'unknown'} debian_variant={match.group('debian') if match else 'unknown'} tag={manifest['tag']}"
+            diag(command, manifest["source"], "CNPG standard fixture tags use only PostgreSQL 17, 18, 19beta1 and Debian trixie/bookworm", actual, "Remove unsupported upstream CNPG standard tags from deterministic update fixtures.")
         previous = inventory.get(manifest["tag"])
         if previous and previous != manifest:
             diag(command, manifest["source"], "one manifest per CNPG tag", manifest["tag"], "Remove duplicate/conflicting fixture tag entries.")
@@ -203,6 +210,79 @@ def inspect_remote(tag, command, artifact):
     if not digest_match:
         return {"tag": tag, "reference": reference, "digest": "", "platforms": platforms, "source": "docker buildx imagetools inspect"}, "missing digest in docker output"
     return {"tag": tag, "reference": reference, "digest": digest_match.group(1), "platforms": platforms, "source": "docker buildx imagetools inspect"}, ""
+
+
+def registry_request_json(url, command, artifact, token=None):
+    headers = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode()), response.headers
+    except urllib.error.HTTPError as exc:
+        if exc.code == 401 and token is None:
+            auth = exc.headers.get("WWW-Authenticate", "")
+            realm = re.search(r'realm="([^"]+)"', auth)
+            service = re.search(r'service="([^"]+)"', auth)
+            scope = re.search(r'scope="([^"]+)"', auth)
+            if realm and service:
+                query = {"service": service.group(1)}
+                if scope:
+                    query["scope"] = scope.group(1)
+                token_url = f"{realm.group(1)}?{urllib.parse.urlencode(query)}"
+                token_payload, _ = registry_request_json(token_url, command, artifact, "")
+                bearer = token_payload.get("token") or token_payload.get("access_token")
+                if bearer:
+                    return registry_request_json(url, command, artifact, bearer)
+        diag(command, artifact, "GHCR tag inventory request succeeds", f"HTTP {exc.code}: {exc.reason}", "Pass --fixtures in tests or allow anonymous pull access to ghcr.io/cloudnative-pg/postgresql.")
+    except Exception as exc:
+        diag(command, artifact, "GHCR tag inventory request succeeds", str(exc), "Pass --fixtures in tests or ensure network access to ghcr.io.")
+
+
+def response_next_url(headers):
+    link = headers.get("Link", "")
+    match = re.search(r'<([^>]+)>;\s*rel="next"', link)
+    if not match:
+        return None
+    next_url = match.group(1)
+    if next_url.startswith("http"):
+        return next_url
+    return f"https://ghcr.io{next_url}"
+
+
+def list_remote_tags(command, artifact):
+    tags = []
+    url = "https://ghcr.io/v2/cloudnative-pg/postgresql/tags/list?n=1000"
+    while url:
+        payload, headers = registry_request_json(url, command, artifact)
+        batch = payload.get("tags")
+        if not isinstance(batch, list):
+            diag(command, artifact, "GHCR tags/list returns tags[]", repr(payload), "Use a registry endpoint compatible with Docker Registry HTTP API V2.")
+        tags.extend(tag for tag in batch if isinstance(tag, str))
+        url = response_next_url(headers)
+    return sorted(set(tags))
+
+
+def live_inventory(data, command, artifact):
+    if not shutil_which("docker"):
+        diag(command, artifact, "Docker CLI for live CNPG manifest inspection", "docker missing", "Pass --fixtures in tests or install Docker for live registry resolution.")
+    wanted = {
+        (entry["pg_major"], entry["debian_variant"])
+        for entry in data["entries"]
+    }
+    inventory = {}
+    for tag in list_remote_tags(command, artifact):
+        parsed = parse_standard_tag(tag)
+        if not parsed:
+            continue
+        if (parsed["pg_major"], parsed["debian_variant"]) not in wanted:
+            continue
+        manifest, actual = inspect_remote(tag, command, artifact)
+        if manifest is None:
+            diag(command, artifact, f"live CNPG manifest inspect succeeds for {UPSTREAM_IMAGE}:{tag}", actual, "Verify upstream tag availability or use deterministic fixtures.")
+        inventory[tag] = manifest
+    return inventory
 
 
 def shutil_which(command):
@@ -280,7 +360,15 @@ def skip_reason_specific(skip_reason, expected_ref, missing_dimension):
     return expected_ref in skip_reason and missing_dimension in skip_reason
 
 
-def resolve_entries(data, inventory, use_remote, command, artifact, allow_digest_drift=False):
+def resolver_skip_reason(code, entry, expected_ref, detail):
+    return f"resolver:{code}: {expected_ref} PostgreSQL {entry['pg_major']} {entry['debian_variant']} {detail}"
+
+
+def resolver_owned(skip_reason):
+    return not str(skip_reason).strip() or str(skip_reason).startswith("resolver:")
+
+
+def resolve_entries(data, inventory, use_remote, command, artifact, allow_digest_drift=False, preserve_manual_skip=False):
     resolved = []
     for idx, entry in enumerate(data["entries"]):
         for required in ["pg_major", "pg_version", "debian_variant", "cnpg_tag", "cnpg_digest", "platforms", "publish", "experimental", "skip_reason"]:
@@ -310,7 +398,9 @@ def resolve_entries(data, inventory, use_remote, command, artifact, allow_digest
             actual = remote_actual or "missing tag"
             if entry["publish"]:
                 fail_entry(command, artifact, entry, "all", expected_ref, actual, "Publishable rows require an available standard-* CNPG base image tag.")
-            if not skip_reason_specific(entry["skip_reason"], expected_ref, "missing tag"):
+            if preserve_manual_skip and resolver_owned(entry["skip_reason"]):
+                entry["skip_reason"] = resolver_skip_reason("cnpg-unavailable", entry, expected_ref, "missing tag")
+            elif not preserve_manual_skip and not skip_reason_specific(entry["skip_reason"], expected_ref, "missing tag"):
                 fail_entry(command, artifact, entry, "all", expected_ref, f"{actual}; skip_reason={entry['skip_reason']!r}", "For publish: false, include the upstream reference and missing tag in skip_reason.")
             digest = ""
             platforms = entry["platforms"]
@@ -321,7 +411,9 @@ def resolve_entries(data, inventory, use_remote, command, artifact, allow_digest
             if not digest:
                 if entry["publish"]:
                     fail_entry(command, artifact, entry, "all", expected_ref, "missing digest", "Publishable rows require a resolved CNPG digest.")
-                if not skip_reason_specific(entry["skip_reason"], expected_ref, "missing digest"):
+                if preserve_manual_skip and resolver_owned(entry["skip_reason"]):
+                    entry["skip_reason"] = resolver_skip_reason("cnpg-unavailable", entry, expected_ref, "missing digest")
+                elif not preserve_manual_skip and not skip_reason_specific(entry["skip_reason"], expected_ref, "missing digest"):
                     fail_entry(command, artifact, entry, "all", expected_ref, f"missing digest; skip_reason={entry['skip_reason']!r}", "For publish: false, include the upstream reference and missing digest in skip_reason.")
             for platform in entry["platforms"]:
                 if platform not in platforms:
@@ -329,7 +421,9 @@ def resolve_entries(data, inventory, use_remote, command, artifact, allow_digest
                     actual = f"missing platform {platform}; available platforms={platforms}"
                     if entry["publish"]:
                         fail_entry(command, artifact, entry, platform, expected_ref, actual, "Publishable rows require all metadata platforms in the upstream manifest list.")
-                    if not skip_reason_specific(entry["skip_reason"], expected_ref, f"missing platform {platform}"):
+                    if preserve_manual_skip and resolver_owned(entry["skip_reason"]):
+                        entry["skip_reason"] = resolver_skip_reason("cnpg-unavailable", entry, expected_ref, f"missing platform {platform}")
+                    elif not preserve_manual_skip and not skip_reason_specific(entry["skip_reason"], expected_ref, f"missing platform {platform}"):
                         fail_entry(command, artifact, entry, platform, expected_ref, f"{actual}; skip_reason={entry['skip_reason']!r}", "For publish: false, include the upstream reference and missing platform in skip_reason.")
             if missing_platforms:
                 digest = ""
@@ -363,6 +457,7 @@ def build_parser():
     parser.add_argument("--fixtures", help="Directory with positive CNPG upstream inventory fixtures.")
     parser.add_argument("--fixture-file", action="append", default=[], help="Additional CNPG upstream inventory fixture JSON file.")
     parser.add_argument("--allow-digest-drift", action="store_true", help="Return resolved digests without failing when metadata contains an older resolver-owned digest.")
+    parser.add_argument("--preserve-manual-skip", action="store_true", help="Update resolver-owned CNPG skip reasons while preserving maintainer-authored skip reasons.")
     parser.add_argument("--json", action="store_true", help="Emit compact JSON resolver output.")
     return parser
 
@@ -381,8 +476,9 @@ def main(argv):
     data = parse_metadata(metadata_path, command)
     validate_resolver_metadata(data, command, metadata_path)
     inventory = load_fixture_inventory(args.fixtures, args.fixture_file, command)
-    use_remote = not inventory and not args.fixtures and not args.fixture_file
-    entries = resolve_entries(data, inventory, use_remote, command, metadata_path, args.allow_digest_drift)
+    if not inventory and not args.fixtures and not args.fixture_file:
+        inventory = live_inventory(data, command, metadata_path)
+    entries = resolve_entries(data, inventory, False, command, metadata_path, args.allow_digest_drift, args.preserve_manual_skip)
     payload = {"entries": entries}
     if args.json:
         print(json.dumps(payload, separators=(",", ":"), sort_keys=True))

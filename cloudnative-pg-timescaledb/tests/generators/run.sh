@@ -9,14 +9,27 @@ diag() {
   printf 'command: %s\nartifact: %s\nexpected: %s\nactual: %s\nremediation: %s\n' "$@" >&2
 }
 
+catalog_release_metadata_args() {
+  local release_metadata_dir="${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata"
+  if compgen -G "${release_metadata_dir}/*.json" >/dev/null; then
+    printf '%s\0%s\0' --release-metadata "${release_metadata_dir}"
+  fi
+}
+
 json_compare() {
   local description="$1"
   local fixture="$2"
   shift 2
-  local tmp
-  tmp="$(mktemp)"
-  "$@" >"${tmp}"
-  python3 - "$fixture" "${tmp}" <<'PY'
+  local stdout stderr
+  stdout="$(mktemp)"
+  stderr="$(mktemp)"
+  "$@" >"${stdout}" 2>"${stderr}"
+  if [[ -s "${stderr}" ]]; then
+    diag "${*}" "${description}" "no stderr when --json succeeds" "$(tr '\n' ' ' <"${stderr}")" "Keep machine JSON on stdout and human diagnostics off the success path."
+    rm -f "${stdout}" "${stderr}"
+    exit 1
+  fi
+  python3 - "$fixture" "${stdout}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -25,7 +38,7 @@ actual = json.loads(Path(sys.argv[2]).read_text())
 if actual != expected:
     raise SystemExit(f"expected {sys.argv[1]} but got {actual!r}")
 PY
-  rm -f "${tmp}"
+  rm -f "${stdout}" "${stderr}"
 }
 
 schema_check() {
@@ -93,7 +106,11 @@ elif kind == "bake":
         rows.append((match.group(1), match.group(2)))
     skipped_rows = []
     for row in payload["skipped"]:
-        require_keys(row, {"pg_major", "debian_variant", "name", "dockerfile", "publish", "experimental", "skip_reason"}, "bake skipped row")
+        expected_keys = {"pg_major", "debian_variant", "name", "skipped_marker", "publish", "experimental", "skip_reason"}
+        require_keys(row, expected_keys, "bake skipped row")
+        extra = sorted(set(row) - expected_keys)
+        if extra:
+            fail("bake skipped rows expose only marker fields", repr(row), "Do not expose buildable Dockerfile paths for skipped Bake rows.")
         if row["publish"] is not False:
             fail("bake skipped rows are non-publishable", repr(row), "Do not let skipped combinations become publishable Bake targets.")
         if not row["skip_reason"]:
@@ -111,13 +128,19 @@ elif kind == "matrix":
             fail("publishable matrix rows expose release inputs", repr(row), "Build matrix rows must expose Dockerfile, Bake target, candidate ref, and intended tags.")
         rows.append((row["pg_major"], row["debian_variant"]))
     for row in payload["skipped"]:
-        require_keys(row, {"pg_major", "pg_version", "debian_variant", "platforms", "publish", "experimental", "latest_eligible", "skip_reason"}, "matrix skipped row")
+        expected_keys = {"pg_major", "pg_version", "debian_variant", "platforms", "bake_target", "skipped_marker", "publish", "experimental", "latest_eligible", "skip_reason"}
+        require_keys(row, expected_keys, "matrix skipped row")
+        extra = sorted(set(row) - expected_keys)
+        if extra:
+            fail("matrix skipped rows expose only marker fields", repr(row), "Do not expose publishable build fields for skipped matrix rows.")
         if row["publish"] is not False or not row["skip_reason"]:
             fail("matrix skipped rows are non-publishable with skip_reason", repr(row), "Skipped matrix rows must remain summaries only.")
+        if not row["skipped_marker"] or not row["bake_target"]:
+            fail("skipped matrix rows expose stable marker paths", repr(row), "Expose skipped marker path and Bake target for skipped rows so consumers do not recompute them.")
         rows.append((row["pg_major"], row["debian_variant"]))
-    latest = latest_rows_from_matrix(payload["include"])
-    if latest and latest != [("18", "trixie")]:
-        fail("matrix latest_eligible exactly 18-trixie when publishable latest is present", repr(latest), "Preserve latest eligibility from metadata without recomputing it downstream.")
+    latest = latest_rows_from_matrix(payload["include"] + payload["skipped"])
+    if latest != [("18", "trixie")]:
+        fail("matrix latest_eligible exactly 18-trixie and skipped rows false", repr(latest), "Preserve latest eligibility from metadata without recomputing it downstream.")
     require_exact_rows(rows, "matrix include plus skipped")
 elif kind == "catalog":
     require_keys(payload, {"catalogs"}, "catalog payload")
@@ -126,7 +149,13 @@ elif kind == "catalog":
         require_keys(catalog, {"debian_variant", "catalog_path", "entries"}, "catalog row")
         catalog_variants.append(catalog["debian_variant"])
         for row in catalog["entries"]:
-            require_keys(row, {"pg_major", "major", "debian_variant", "image", "tag", "digest", "source_entry", "platforms", "release_metadata_record_id"}, "catalog entry")
+            base_keys = {"pg_major", "debian_variant", "image", "digest", "publish", "experimental", "latest_eligible", "skip_reason"}
+            release_keys = {"major", "tag", "source_entry", "platforms", "release_metadata_record_id"}
+            expected_keys = base_keys | (release_keys if row.get("release_metadata_record_id") else set())
+            require_keys(row, expected_keys, "catalog entry")
+            extra = sorted(set(row) - expected_keys)
+            if extra:
+                fail("catalog entry exposes only metadata or release-complete fields", repr(row), "Do not mix release-only catalog fields into metadata-only JSON summaries.")
             if row["debian_variant"] != catalog["debian_variant"]:
                 fail("catalog row Debian variant matches catalog", repr(row), "Keep trixie and bookworm release catalogs separated.")
     if catalog_variants != ["trixie", "bookworm"]:
@@ -170,56 +199,74 @@ expect_schema_fail() {
   local kind="$2"
   local fixture="$3"
   local pattern="$4"
-  local tmp status
-  tmp="$(mktemp)"
+  local stdout stderr status
+  stdout="$(mktemp)"
+  stderr="$(mktemp)"
   set +e
-  schema_check "${kind}" "${fixture}" >"${tmp}" 2>&1
+  schema_check "${kind}" "${fixture}" >"${stdout}" 2>"${stderr}"
   status="$?"
   set -e
   if [[ "${status}" == "0" ]]; then
     diag "validate-generator-schema ${kind} ${fixture}" "${description}" "fixture fails" "passed" "Make malformed generator JSON fail schema validation."
-    rm -f "${tmp}"
+    rm -f "${stdout}" "${stderr}"
     exit 1
   fi
-  if ! grep -E -q "${pattern}" "${tmp}"; then
-    diag "validate-generator-schema ${kind} ${fixture}" "${description}" "diagnostic matches ${pattern}" "$(tr '\n' ' ' <"${tmp}")" "Make the fixture fail on its intended schema invariant."
-    rm -f "${tmp}"
+  if [[ -s "${stdout}" ]]; then
+    diag "validate-generator-schema ${kind} ${fixture}" "${description}" "schema diagnostics go to stderr only" "$(tr '\n' ' ' <"${stdout}")" "Keep schema validation output stream-safe for consumers."
+    rm -f "${stdout}" "${stderr}"
     exit 1
   fi
-  rm -f "${tmp}"
+  if ! grep -E -q "${pattern}" "${stderr}"; then
+    diag "validate-generator-schema ${kind} ${fixture}" "${description}" "diagnostic matches ${pattern}" "$(tr '\n' ' ' <"${stderr}")" "Make the fixture fail on its intended schema invariant."
+    rm -f "${stdout}" "${stderr}"
+    exit 1
+  fi
+  rm -f "${stdout}" "${stderr}"
 }
 
 expect_command_fail() {
   local description="$1"
   local pattern="$2"
   shift 2
-  local tmp status
-  tmp="$(mktemp)"
+  local stdout stderr status
+  stdout="$(mktemp)"
+  stderr="$(mktemp)"
   set +e
-  "$@" >"${tmp}" 2>&1
+  "$@" >"${stdout}" 2>"${stderr}"
   status="$?"
   set -e
   if [[ "${status}" == "0" ]]; then
     diag "${*}" "${description}" "command fails" "passed" "Make invalid generator command usage fail deterministically."
-    rm -f "${tmp}"
+    rm -f "${stdout}" "${stderr}"
     exit 1
   fi
-  if ! grep -E -q "${pattern}" "${tmp}"; then
-    diag "${*}" "${description}" "diagnostic matches ${pattern}" "$(tr '\n' ' ' <"${tmp}")" "Make command fail on its intended invariant."
-    rm -f "${tmp}"
+  if [[ -s "${stdout}" ]]; then
+    diag "${*}" "${description}" "failure diagnostics go to stderr only" "$(tr '\n' ' ' <"${stdout}")" "Keep stdout reserved for successful --json payloads."
+    rm -f "${stdout}" "${stderr}"
     exit 1
   fi
-  rm -f "${tmp}"
+  if ! grep -E -q "${pattern}" "${stderr}"; then
+    diag "${*}" "${description}" "diagnostic matches ${pattern}" "$(tr '\n' ' ' <"${stderr}")" "Make command fail on its intended invariant."
+    rm -f "${stdout}" "${stderr}"
+    exit 1
+  fi
+  rm -f "${stdout}" "${stderr}"
 }
 
 assert_json_field() {
   local description="$1"
   local expected="$2"
   shift 2
-  local tmp actual
-  tmp="$(mktemp)"
-  "$@" >"${tmp}"
-  actual="$(python3 - "$tmp" <<'PY'
+  local stdout stderr actual
+  stdout="$(mktemp)"
+  stderr="$(mktemp)"
+  "$@" >"${stdout}" 2>"${stderr}"
+  if [[ -s "${stderr}" ]]; then
+    diag "${*}" "${description}" "no stderr when --json succeeds" "$(tr '\n' ' ' <"${stderr}")" "Keep machine JSON output stream-safe."
+    rm -f "${stdout}" "${stderr}"
+    exit 1
+  fi
+  actual="$(python3 - "$stdout" <<'PY'
 import json
 import sys
 payload = json.load(open(sys.argv[1]))
@@ -231,22 +278,108 @@ PY
 )"
   if [[ "${actual}" != "${expected}" ]]; then
     diag "${*}" "${description}" "json artifact path ${expected}" "${actual}" "Reflect --output in machine JSON summaries."
-    rm -f "${tmp}"
+    rm -f "${stdout}" "${stderr}"
     exit 1
   fi
-  rm -f "${tmp}"
+  rm -f "${stdout}" "${stderr}"
 }
-
-make -C "${ROOT_DIR}" generate >/tmp/story-1-5-generate.out
 
 "${SCRIPT_DIR}/generate-dockerfiles.sh" --check
 "${SCRIPT_DIR}/generate-bake.sh" --check
 "${SCRIPT_DIR}/generate-matrix.sh" --check
-"${SCRIPT_DIR}/generate-catalog.sh" --check
+mapfile -d '' -t catalog_release_metadata_args_array < <(catalog_release_metadata_args)
+"${SCRIPT_DIR}/generate-catalog.sh" "${catalog_release_metadata_args_array[@]}" --check
 "${SCRIPT_DIR}/generate-docs.sh" --check
 
 expect_command_fail "dockerfiles check-json detects missing output root" "committed output matches generated content" "${SCRIPT_DIR}/generate-dockerfiles.sh" --output /tmp/story-1-5-missing-generated --check --json
 expect_command_fail "matrix check-json detects missing output" "committed output matches generated content" "${SCRIPT_DIR}/generate-matrix.sh" --output /tmp/story-1-5-missing-matrix.json --check --json
+
+missing_metadata="$(mktemp)"
+python3 - "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${missing_metadata}" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text().splitlines()
+removed = False
+out = []
+for line in source:
+    if not removed and line.strip() == "latest_eligible: true":
+        removed = True
+        continue
+    out.append(line)
+Path(sys.argv[2]).write_text("\n".join(out) + "\n")
+PY
+expect_command_fail "metadata missing latest_eligible emits structured diagnostic" "entries\\[[0-9]+\\] keys include.*latest_eligible" "${SCRIPT_DIR}/generate-matrix.sh" --metadata "${missing_metadata}" --json
+rm -f "${missing_metadata}"
+
+null_tags_metadata="$(mktemp)"
+python3 - "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${null_tags_metadata}" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text().splitlines()
+inserted = False
+out = []
+for line in source:
+    out.append(line)
+    if not inserted and line.strip() == '- pg_major: "19beta1"':
+        out.append("    tags: null")
+        inserted = True
+if not inserted:
+    raise SystemExit("failed to inject tags:null into metadata fixture")
+Path(sys.argv[2]).write_text("\n".join(out) + "\n")
+PY
+expect_command_fail "metadata tags null emits structured diagnostic" "tags is a list when present" "${SCRIPT_DIR}/generate-matrix.sh" --metadata "${null_tags_metadata}" --json
+rm -f "${null_tags_metadata}"
+
+latest_skipped_metadata="$(mktemp)"
+latest_skipped_matrix="$(mktemp)"
+python3 - "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${latest_skipped_metadata}" <<'PY'
+from pathlib import Path
+import sys
+
+source, output = sys.argv[1:]
+lines = Path(source).read_text().splitlines()
+out = []
+in_pg18_trixie = False
+patched_publish = False
+patched_reason = False
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("- pg_major:"):
+        in_pg18_trixie = stripped == '- pg_major: "18"' and not patched_publish
+    if in_pg18_trixie and stripped == "debian_variant: trixie":
+        out.append(line)
+        continue
+    if in_pg18_trixie and stripped == "publish: true":
+        out.append(line.replace("true", "false"))
+        patched_publish = True
+        continue
+    if in_pg18_trixie and stripped == 'skip_reason: ""':
+        out.append('    skip_reason: "Publish disabled until release gate enables image builds"')
+        patched_reason = True
+        in_pg18_trixie = False
+        continue
+    out.append(line)
+if not patched_publish or not patched_reason:
+    raise SystemExit("failed to patch pg18 trixie publish/skip_reason")
+Path(output).write_text("\n".join(out) + "\n")
+PY
+"${SCRIPT_DIR}/generate-matrix.sh" --metadata "${latest_skipped_metadata}" --json >"${latest_skipped_matrix}"
+python3 - "${latest_skipped_matrix}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+rows = [row for row in payload["skipped"] if row["pg_major"] == "18" and row["debian_variant"] == "trixie"]
+if len(rows) != 1:
+    raise SystemExit(f"expected one skipped 18-trixie row, got {rows!r}")
+if rows[0]["latest_eligible"] is not True:
+    raise SystemExit(f"generator must preserve metadata latest_eligible in skipped summaries: {rows[0]!r}")
+PY
+expect_command_fail "shared matrix validator rejects skipped latest owner" "latest_eligible is false|exactly one latest owner" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-matrix-json.py" --file "${latest_skipped_matrix}"
+rm -f "${latest_skipped_metadata}" "${latest_skipped_matrix}"
 
 assert_json_field "bake output json path" "/tmp/story-1-5-custom-bake.hcl" "${SCRIPT_DIR}/generate-bake.sh" --output /tmp/story-1-5-custom-bake.hcl --json
 assert_json_field "docs output json path" "/tmp/story-1-5-custom-compatibility.md" "${SCRIPT_DIR}/generate-docs.sh" --output /tmp/story-1-5-custom-compatibility.md --json

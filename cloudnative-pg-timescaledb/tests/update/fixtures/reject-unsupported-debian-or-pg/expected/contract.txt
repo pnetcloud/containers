@@ -1,0 +1,2 @@
+fixture=reject-unsupported-debian-or-pg
+kind=no-diff

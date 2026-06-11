@@ -1,0 +1,17 @@
+name: Validate Hash Suffixed Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fake hash-suffixed gates
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck#not-a-package
+          make validate#not-the-target
+          find .github/workflows -type f -name '*.yml' -print0 | sort -z | xargs -0 actionlint#not-the-command
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck#not-the-command

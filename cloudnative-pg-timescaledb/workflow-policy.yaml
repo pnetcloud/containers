@@ -29,7 +29,7 @@ permission_allowlist:
   - workflow: .github/workflows/build.yml
     job: release_evidence
     permission: "packages: write"
-    reason: Upload keyless cosign signature artifacts for immutable candidate digests
+    reason: Upload keyless cosign registry signatures for release evidence to GHCR
     owner_story: 4.4
   - workflow: .github/workflows/build.yml
     job: publish

@@ -1,0 +1,138 @@
+schema_version: "1"
+image:
+  registry: "ghcr.io"
+  repository: "pnetcloud/cloudnative-pg-timescaledb"
+  current_major: "18"
+  primary_debian_variant: trixie
+allowed:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: ["trixie", "bookworm"]
+  platforms: ["linux/amd64", "linux/arm64"]
+barman_plugin:
+  release: "v0.13.0"
+  manifest_url: "https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.13.0/manifest.yaml"
+  plugin_image: "ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0"
+  sidecar_image: "ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0"
+  source_url: "https://github.com/cloudnative-pg/plugin-barman-cloud/releases"
+  updated_at_utc: "2026-06-10"
+entries:
+  - pg_major: "17"
+    pg_version: "17"
+    debian_variant: trixie
+    cnpg_tag: "17-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-17"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-17"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: false
+    skip_reason: "Manual maintainer hold"
+  - pg_major: "18"
+    pg_version: "18"
+    debian_variant: trixie
+    cnpg_tag: "18-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: true
+    skip_reason: "Pending resolver update fixture"
+  - pg_major: "19beta1"
+    pg_version: "19beta1"
+    debian_variant: trixie
+    cnpg_tag: "19beta1-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-19"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-19"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: true
+    latest_eligible: false
+    skip_reason: "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 trixie linux/amd64 linux/arm64 missing packages while CNPG exists"
+  - pg_major: "17"
+    pg_version: "17"
+    debian_variant: bookworm
+    cnpg_tag: "17-standard-bookworm"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-17"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-17"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: false
+    skip_reason: "Pending resolver update fixture"
+  - pg_major: "18"
+    pg_version: "18"
+    debian_variant: bookworm
+    cnpg_tag: "18-standard-bookworm"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-18"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-18"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: false
+    latest_eligible: false
+    skip_reason: "Pending resolver update fixture"
+  - pg_major: "19beta1"
+    pg_version: "19beta1"
+    debian_variant: bookworm
+    cnpg_tag: "19beta1-standard-bookworm"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_name: "timescaledb-2-postgresql-19"
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_name: "timescaledb-toolkit-postgresql-19"
+    toolkit_package_version: ""
+    pgvector_source: base
+    pgvector_package_version: ""
+    pgaudit_source: base
+    pgaudit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: false
+    experimental: true
+    latest_eligible: false
+    skip_reason: "timescaledb-2-postgresql-19 timescaledb-toolkit-postgresql-19 PostgreSQL 19beta1 bookworm linux/amd64 linux/arm64 missing packages while CNPG exists"

@@ -6,6 +6,7 @@ packagecloud_resolve_versions() {
   root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
   PACKAGECLOUD_RESOLVER_ROOT="${root_dir}" python3 - "$@" <<'PY'
 import argparse
+from functools import cmp_to_key
 import json
 import os
 from pathlib import Path
@@ -138,10 +139,17 @@ def validate_metadata(data, command, artifact):
         diag(command, artifact, "entries is non-empty list", type(data["entries"]).__name__, "Define image entries before resolving packages.")
 
 
+def pg_package_major(pg_major):
+    if pg_major == "19beta1":
+        return "19"
+    return pg_major
+
+
 def expected_package_name(package_type, pg_major):
+    package_major = pg_package_major(pg_major)
     if package_type == "timescaledb":
-        return f"timescaledb-2-postgresql-{pg_major}"
-    return f"timescaledb-toolkit-postgresql-{pg_major}"
+        return f"timescaledb-2-postgresql-{package_major}"
+    return f"timescaledb-toolkit-postgresql-{package_major}"
 
 
 def extension_version(package_type, package_version):
@@ -160,6 +168,91 @@ def version_key(version):
     return parts or [0]
 
 
+def debian_order_char(char):
+    if char == "":
+        return 0
+    if char == "~":
+        return -1
+    if char.isalpha():
+        return ord(char)
+    return ord(char) + 256
+
+
+def compare_debian_non_digit(left, right):
+    left_index = 0
+    right_index = 0
+    while left_index < len(left) or right_index < len(right):
+        left_char = left[left_index] if left_index < len(left) else ""
+        right_char = right[right_index] if right_index < len(right) else ""
+        if left_char == right_char:
+            left_index += 1 if left_index < len(left) else 0
+            right_index += 1 if right_index < len(right) else 0
+            if left_char == "":
+                return 0
+            continue
+        left_order = debian_order_char(left_char)
+        right_order = debian_order_char(right_char)
+        if left_order != right_order:
+            return -1 if left_order < right_order else 1
+        left_index += 1 if left_index < len(left) else 0
+        right_index += 1 if right_index < len(right) else 0
+    return 0
+
+
+def split_debian_version(version):
+    parts = []
+    cursor = 0
+    while cursor < len(version):
+        digit_match = re.match(r"[0-9]+", version[cursor:])
+        if digit_match:
+            token = digit_match.group(0)
+            parts.append(("digit", token.lstrip("0") or "0"))
+            cursor += len(token)
+            continue
+        non_digit_match = re.match(r"[^0-9]+", version[cursor:])
+        token = non_digit_match.group(0)
+        parts.append(("non-digit", token))
+        cursor += len(token)
+    return parts
+
+
+def split_debian_epoch(version):
+    if ":" not in version:
+        return 0, version
+    epoch, remainder = version.split(":", 1)
+    if re.fullmatch(r"[0-9]+", epoch):
+        return int(epoch), remainder
+    return 0, version
+
+
+def compare_debian_version(left, right):
+    left_epoch, left = split_debian_epoch(left)
+    right_epoch, right = split_debian_epoch(right)
+    if left_epoch != right_epoch:
+        return -1 if left_epoch < right_epoch else 1
+    left_parts = split_debian_version(left)
+    right_parts = split_debian_version(right)
+    index = 0
+    while index < len(left_parts) or index < len(right_parts):
+        left_type, left_value = left_parts[index] if index < len(left_parts) else ("non-digit", "")
+        right_type, right_value = right_parts[index] if index < len(right_parts) else ("non-digit", "")
+        if left_type == "digit" and right_type == "digit":
+            if len(left_value) != len(right_value):
+                return -1 if len(left_value) < len(right_value) else 1
+            if left_value != right_value:
+                return -1 if left_value < right_value else 1
+        elif left_type == "digit":
+            return 1
+        elif right_type == "digit":
+            return -1
+        else:
+            result = compare_debian_non_digit(left_value, right_value)
+            if result != 0:
+                return result
+        index += 1
+    return 0
+
+
 def normalize_record(raw, source, command):
     required = {"name", "version", "distribution", "architecture", "pg_major", "package_type", "source_url"}
     if not isinstance(raw, dict):
@@ -175,8 +268,8 @@ def normalize_record(raw, source, command):
         diag(command, source, "distribution is trixie or bookworm", raw["distribution"], "Do not use Alpine, bullseye, or Debian aliases in package fixtures.")
     if raw["architecture"] not in {"amd64", "arm64"}:
         diag(command, source, "architecture is amd64 or arm64", raw["architecture"], "Map linux/amd64 to amd64 and linux/arm64 to arm64 only.")
-    if raw["pg_major"] not in {"17", "18", "19beta1"}:
-        diag(command, source, "pg_major is 17, 18, or 19beta1", raw["pg_major"], "Do not broaden PostgreSQL package resolver scope.")
+    if raw["pg_major"] not in {"17", "18", "19"}:
+        diag(command, source, "package record pg_major is ABI major 17, 18, or 19", raw["pg_major"], "Use PostgreSQL package ABI majors in package records; metadata 19beta1 maps to package major 19.")
     if raw["package_type"] not in PACKAGE_TYPES:
         diag(command, source, "package_type is timescaledb or toolkit", raw["package_type"], "Use only TimescaleDB and Toolkit package records.")
     expected_name = expected_package_name(raw["package_type"], raw["pg_major"])
@@ -301,7 +394,7 @@ def load_live_inventory(data, repo, command):
             if not arch:
                 continue
             for package_type in sorted(PACKAGE_TYPES):
-                requested.add((entry["debian_variant"], arch, entry["pg_major"], package_type))
+                requested.add((entry["debian_variant"], arch, pg_package_major(entry["pg_major"]), package_type))
     for distribution, arch, pg_major, package_type in sorted(requested):
         records.extend(fetch_package_versions(repo, distribution, arch, pg_major, package_type, command))
     inventory = {}
@@ -322,33 +415,52 @@ def fail_entry(command, artifact, entry, package_type, platform, expected, actua
 
 
 def skip_reason_specific(skip_reason, package_name, entry, platform):
-    return package_name in skip_reason and entry["pg_major"] in skip_reason and entry["debian_variant"] in skip_reason and platform in skip_reason
+    tokens = set(re.split(r"[^A-Za-z0-9_./:+~-]+", skip_reason))
+    return package_name in tokens and entry["pg_major"] in tokens and entry["debian_variant"] in tokens and platform in tokens
 
 
 def manual_skip_preserved(entry, preserve_manual_skip):
     reason = str(entry.get("skip_reason", ""))
-    return preserve_manual_skip and reason.strip() and not entry["publish"]
+    return preserve_manual_skip and reason.strip() and not reason.startswith("resolver:") and not entry["publish"]
 
 
-def resolve_package(command, artifact, inventory, entry, package_type, preserve_manual_skip=False):
+def contract_skip_reason(entry, package_name, platforms, detail):
+    platform_text = " ".join(platforms)
+    return f"{package_name} PostgreSQL {entry['pg_major']} {entry['debian_variant']} {platform_text} {detail}"
+
+
+def append_resolver_skip_reason(entry, package_name, platforms, detail):
+    entry.setdefault("_resolver_skip_reasons", []).append(contract_skip_reason(entry, package_name, platforms, detail))
+
+
+def resolve_package(command, artifact, inventory, entry, package_type, preserve_manual_skip=False, resolver_managed_skip=False):
     package_name = expected_package_name(package_type, entry["pg_major"])
     versions_by_platform = {}
+    missing_platforms = []
     for platform in entry["platforms"]:
         arch = PLATFORM_ARCH.get(platform)
         if not arch:
             fail_entry(command, artifact, entry, package_type, platform, package_name, f"unsupported platform {platform}", "Use only linux/amd64 and linux/arm64.")
-        records = inventory.get((package_type, entry["pg_major"], entry["debian_variant"], arch), [])
+        records = inventory.get((package_type, pg_package_major(entry["pg_major"]), entry["debian_variant"], arch), [])
         versions = {record["version"] for record in records if record["name"] == package_name}
         if not versions:
             actual = f"missing package for architecture {arch}"
             if entry["publish"]:
                 fail_entry(command, artifact, entry, package_type, platform, package_name, actual, "Publishable rows require TimescaleDB and Toolkit packages on every required platform.")
-            if manual_skip_preserved(entry, preserve_manual_skip):
-                return package_name, "", ""
-            if not skip_reason_specific(entry["skip_reason"], package_name, entry, platform):
-                fail_entry(command, artifact, entry, package_type, platform, package_name, f"{actual}; skip_reason={entry['skip_reason']!r}", "For publish: false, include package name, PostgreSQL major, Debian variant, and missing platform in skip_reason.")
-            return package_name, "", ""
+            missing_platforms.append((platform, arch))
+            continue
         versions_by_platform[platform] = versions
+    if missing_platforms:
+        missing_platform_names = [platform for platform, _arch in missing_platforms]
+        if manual_skip_preserved(entry, preserve_manual_skip):
+            return package_name, "", ""
+        if resolver_managed_skip:
+            append_resolver_skip_reason(entry, package_name, missing_platform_names, "missing packages while CNPG exists")
+            return package_name, "", ""
+        for platform, arch in missing_platforms:
+            if not skip_reason_specific(entry["skip_reason"], package_name, entry, platform):
+                fail_entry(command, artifact, entry, package_type, platform, package_name, f"missing package for architecture {arch}; skip_reason={entry['skip_reason']!r}", "For publish: false, include package name, PostgreSQL major, Debian variant, and every missing platform in skip_reason.")
+        return package_name, "", ""
     common = set.intersection(*versions_by_platform.values()) if versions_by_platform else set()
     if not common:
         actual = "; ".join(f"{platform}={sorted(versions)}" for platform, versions in sorted(versions_by_platform.items()))
@@ -356,19 +468,26 @@ def resolve_package(command, artifact, inventory, entry, package_type, preserve_
             fail_entry(command, artifact, entry, package_type, ",".join(entry["platforms"]), package_name, f"mismatched package versions: {actual}", "Choose one package version available on every required platform.")
         if manual_skip_preserved(entry, preserve_manual_skip):
             return package_name, "", ""
-        if package_name not in entry["skip_reason"] or "mismatched package versions" not in entry["skip_reason"]:
+        if resolver_managed_skip:
+            append_resolver_skip_reason(entry, package_name, entry["platforms"], "mismatched package versions")
+            return package_name, "", ""
+        skip_tokens = set(re.split(r"[^A-Za-z0-9_./:+~-]+", entry["skip_reason"]))
+        if package_name not in skip_tokens or "mismatched package versions" not in entry["skip_reason"]:
             fail_entry(command, artifact, entry, package_type, ",".join(entry["platforms"]), package_name, f"mismatched package versions: {actual}; skip_reason={entry['skip_reason']!r}", "For publish: false, include package name and mismatched package versions in skip_reason.")
         return package_name, "", ""
-    package_version = sorted(common, key=version_key)[-1]
+    package_version = sorted(common, key=cmp_to_key(compare_debian_version))[-1]
     return package_name, package_version, extension_version(package_type, package_version)
 
 
 def resolve_entries(command, artifact, data, inventory, preserve_manual_skip=False):
     results = []
+    allowed_pg_majors = set(data["allowed"]["postgres_majors"])
     for idx, entry in enumerate(data["entries"]):
         for required in ["pg_major", "debian_variant", "platforms", "publish", "experimental", "skip_reason"]:
             if required not in entry:
                 diag(command, artifact, f"entries[{idx}].{required} exists", f"missing in {entry}", "Use the Story 1 metadata schema before resolving packages.")
+        if entry["pg_major"] not in allowed_pg_majors:
+            fail_entry(command, artifact, entry, "all", "all", f"pg_major in allowed.postgres_majors {sorted(allowed_pg_majors)}", entry["pg_major"], "Use metadata PostgreSQL majors 17, 18, or 19beta1; derive package ABI major separately.")
         if entry["debian_variant"] not in DEBIAN_VARIANTS:
             fail_entry(command, artifact, entry, "all", "all", "trixie or bookworm", entry["debian_variant"], "Do not use Alpine, bullseye, or Debian aliases.")
         if not isinstance(entry["platforms"], list) or not entry["platforms"]:
@@ -381,11 +500,18 @@ def resolve_entries(command, artifact, data, inventory, preserve_manual_skip=Fal
             missing_platforms = sorted(required_platforms - platform_set)
             if missing_platforms and not all(platform in entry["skip_reason"] for platform in missing_platforms):
                 fail_entry(command, artifact, entry, "all", ",".join(entry["platforms"]), f"skip_reason names omitted platforms {missing_platforms}", entry["skip_reason"], "For publish: false with a reduced platform set, name every omitted required platform in skip_reason.")
-        ts_name, ts_pkg_version, ts_version = resolve_package(command, artifact, inventory, entry, "timescaledb", preserve_manual_skip)
-        tk_name, tk_pkg_version, tk_version = resolve_package(command, artifact, inventory, entry, "toolkit", preserve_manual_skip)
+        resolver_managed_skip = preserve_manual_skip and str(entry.get("skip_reason", "")).startswith("resolver:")
+        if resolver_managed_skip:
+            entry["_resolver_skip_reasons"] = []
+        ts_name, ts_pkg_version, ts_version = resolve_package(command, artifact, inventory, entry, "timescaledb", preserve_manual_skip, resolver_managed_skip)
+        tk_name, tk_pkg_version, tk_version = resolve_package(command, artifact, inventory, entry, "toolkit", preserve_manual_skip, resolver_managed_skip)
+        if resolver_managed_skip and entry["_resolver_skip_reasons"]:
+            entry["skip_reason"] = "resolver:package-unavailable: " + "; ".join(entry["_resolver_skip_reasons"])
+        entry.pop("_resolver_skip_reasons", None)
         results.append(
             {
                 "pg_major": entry["pg_major"],
+                "pg_package_major": pg_package_major(entry["pg_major"]),
                 "debian_variant": entry["debian_variant"],
                 "platforms": entry["platforms"],
                 "timescaledb_version": ts_version,

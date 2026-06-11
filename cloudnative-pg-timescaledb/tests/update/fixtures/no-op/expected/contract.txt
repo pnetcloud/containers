@@ -1,0 +1,2 @@
+fixture=no-op
+kind=no-diff
