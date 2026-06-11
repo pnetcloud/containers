@@ -24,11 +24,11 @@ write_allowlist_policy() {
 action_pin_exceptions: []
 strict_mode_exceptions: []
 permission_allowlist:
-  - workflow: .github/workflows/update.yml
+  - workflow: .github/workflows/build.yml
     job: publish
     permission: "packages: write"
-    reason: Story fixture release permission
-    owner_story: Story 4.5
+    reason: Promote validated GHCR final tags after release gates pass
+    owner_story: 4.5
 EOF
 }
 
@@ -88,6 +88,21 @@ permission_allowlist:
 EOF
 }
 
+write_wrong_category_policy() {
+  local target="$1"
+  local permission="$2"
+  cat >"${target}" <<EOF
+action_pin_exceptions: []
+strict_mode_exceptions: []
+permission_allowlist:
+  - workflow: .github/workflows/build.yml
+    job: evil
+    permission: "${permission}: write"
+    reason: Wrong category fixture
+    owner_story: 4.5
+EOF
+}
+
 write_full_release_policy() {
   local target="$1"
   cat >"${target}" <<'EOF'
@@ -122,7 +137,7 @@ permission_allowlist:
   - workflow: .github/workflows/build.yml
     job: release_evidence
     permission: "packages: write"
-    reason: Upload keyless cosign signature artifacts for immutable candidate digests
+    reason: Upload keyless cosign registry signatures for release evidence to GHCR
     owner_story: 4.4
   - workflow: .github/workflows/build.yml
     job: publish
@@ -239,10 +254,16 @@ for fixture in \
   valid-ansi-c-heredoc-delimiter.yml \
   valid-conditional-exit-before-gates.yml \
   valid-case-nonmatching-exit-before-gates.yml \
+  valid-case-quoted-glob-before-gates.yml \
+  valid-exec-redirection-before-gates.yml \
+  valid-exec-brace-fd-redirection-before-gates.yml \
+  valid-exec-process-substitution-before-gates.yml \
   valid-escaped-dollar-before-single-quote.yml \
   valid-conditional-hash-heredoc-before-gates.yml \
   valid-escaped-space-hash-heredoc-before-gates.yml \
   valid-function-brace-one-line-before-gates.yml \
+  valid-function-command-substitution-close-before-gates.yml \
+  valid-function-close-and-true-before-gates.yml \
   valid-function-literal-brace-before-gates.yml \
   valid-function-command-substitution-before-gates.yml \
   valid-function-one-line-subshell-group-before-gates.yml \
@@ -250,12 +271,19 @@ for fixture in \
   valid-function-subshell-semicolon-before-gates.yml \
   valid-quoted-heredoc-body-continuation-before-gates.yml \
   valid-short-circuit-false-and-exit-before-gates.yml \
+  valid-short-circuit-false-true-exit-before-gates.yml \
   valid-short-circuit-true-false-exit-before-gates.yml \
+  valid-short-circuit-true-or-false-or-exit-before-gates.yml \
   valid-pipeline-exit-before-gates.yml \
+  valid-static-printf-redirection-before-gates.yml \
   valid-shellcheck-version-package.yml \
   valid-shellcheck-apt-selectors.yml \
   valid-gate-redirections.yml \
   valid-release-allowlisted-permissions.yml \
+  disallowed-allowlisted-contents-wrong-job.yml \
+  disallowed-allowlisted-packages-wrong-job.yml \
+  disallowed-allowlisted-id-token-wrong-job.yml \
+  disallowed-allowlisted-security-events-wrong-job.yml \
   write-all.yml \
   top-level-write.yml \
   broad-top-level-write.yml \
@@ -295,6 +323,7 @@ for fixture in \
   validate-run-comments-only.yml \
   validate-conditional-gates.yml \
   validate-exit-before-gates.yml \
+  validate-exec-before-gates.yml \
   validate-for-exit-before-gates.yml \
   validate-if-colon-exit-before-gates.yml \
   validate-function-brace-group-gates.yml \
@@ -311,12 +340,21 @@ for fixture in \
   validate-shell-conditional-gates.yml \
   validate-block-close-mask-gates.yml \
   validate-backgrounded-gates.yml \
+  validate-backtick-pipe-exit-before-gates.yml \
+  validate-backtick-and-exit-before-gates.yml \
+  validate-case-negated-bracket-exit-before-gates.yml \
+  validate-case-quoted-paren-exit-before-gates.yml \
+  validate-case-range-exit-before-gates.yml \
+  validate-case-posix-class-exit-before-gates.yml \
+  validate-continue-on-error-gates.yml \
   validate-quoted-text-gates.yml \
   validate-pipe-ampersand-gates.yml \
   validate-quoted-pipe-exit-before-gates.yml \
   validate-command-substitution-pipe-exit-before-gates.yml \
   validate-ansi-c-quoted-text-gates.yml \
   validate-multiple-heredoc-gates.yml \
+  validate-mixed-and-or-exit-before-gates.yml \
+  validate-mixed-or-and-exit-before-gates.yml \
   validate-escaped-dollar-heredoc-gates.yml \
   validate-hash-heredoc-delimiter-gates.yml \
   validate-hash-suffixed-gates.yml \
@@ -324,7 +362,12 @@ for fixture in \
   validate-one-line-if-exit-before-gates.yml \
   validate-one-line-case-exit-before-gates.yml \
   validate-one-line-case-command-exit-before-gates.yml \
+  validate-one-line-case-later-arm-exit-before-gates.yml \
   validate-redirection-suffixed-gates.yml \
+  validate-quoted-case-terminator-exit-before-gates.yml \
+  validate-process-substitution-pipe-exit-before-gates.yml \
+  validate-process-substitution-and-exit-before-gates.yml \
+  validate-set-plus-e-gates.yml \
   validate-short-circuit-or-exit-gates.yml \
   validate-unquoted-hash-heredoc-gates.yml \
   validate-conditional-heredoc-gates.yml \
@@ -391,6 +434,26 @@ prepare_root "${case_nonmatching_exit_root}"
 cp "${FIXTURE_DIR}/valid-case-nonmatching-exit-before-gates.yml" "${case_nonmatching_exit_root}/.github/workflows/validate.yml"
 expect_pass "valid case nonmatching exit before gates" "${case_nonmatching_exit_root}"
 
+case_quoted_glob_root="${tmp_root}/valid-case-quoted-glob-before-gates"
+prepare_root "${case_quoted_glob_root}"
+cp "${FIXTURE_DIR}/valid-case-quoted-glob-before-gates.yml" "${case_quoted_glob_root}/.github/workflows/validate.yml"
+expect_pass "valid case quoted glob before gates" "${case_quoted_glob_root}"
+
+exec_redirection_root="${tmp_root}/valid-exec-redirection-before-gates"
+prepare_root "${exec_redirection_root}"
+cp "${FIXTURE_DIR}/valid-exec-redirection-before-gates.yml" "${exec_redirection_root}/.github/workflows/validate.yml"
+expect_pass "valid exec redirection before gates" "${exec_redirection_root}"
+
+exec_brace_fd_redirection_root="${tmp_root}/valid-exec-brace-fd-redirection-before-gates"
+prepare_root "${exec_brace_fd_redirection_root}"
+cp "${FIXTURE_DIR}/valid-exec-brace-fd-redirection-before-gates.yml" "${exec_brace_fd_redirection_root}/.github/workflows/validate.yml"
+expect_pass "valid exec brace fd redirection before gates" "${exec_brace_fd_redirection_root}"
+
+exec_process_substitution_root="${tmp_root}/valid-exec-process-substitution-before-gates"
+prepare_root "${exec_process_substitution_root}"
+cp "${FIXTURE_DIR}/valid-exec-process-substitution-before-gates.yml" "${exec_process_substitution_root}/.github/workflows/validate.yml"
+expect_pass "valid exec process substitution before gates" "${exec_process_substitution_root}"
+
 escaped_dollar_root="${tmp_root}/valid-escaped-dollar-before-single-quote"
 prepare_root "${escaped_dollar_root}"
 cp "${FIXTURE_DIR}/valid-escaped-dollar-before-single-quote.yml" "${escaped_dollar_root}/.github/workflows/validate.yml"
@@ -410,6 +473,16 @@ function_brace_one_line_root="${tmp_root}/valid-function-brace-one-line-before-g
 prepare_root "${function_brace_one_line_root}"
 cp "${FIXTURE_DIR}/valid-function-brace-one-line-before-gates.yml" "${function_brace_one_line_root}/.github/workflows/validate.yml"
 expect_pass "valid function brace one line before gates" "${function_brace_one_line_root}"
+
+function_command_substitution_close_root="${tmp_root}/valid-function-command-substitution-close-before-gates"
+prepare_root "${function_command_substitution_close_root}"
+cp "${FIXTURE_DIR}/valid-function-command-substitution-close-before-gates.yml" "${function_command_substitution_close_root}/.github/workflows/validate.yml"
+expect_pass "valid function command substitution close before gates" "${function_command_substitution_close_root}"
+
+function_close_and_true_root="${tmp_root}/valid-function-close-and-true-before-gates"
+prepare_root "${function_close_and_true_root}"
+cp "${FIXTURE_DIR}/valid-function-close-and-true-before-gates.yml" "${function_close_and_true_root}/.github/workflows/validate.yml"
+expect_pass "valid function close and true before gates" "${function_close_and_true_root}"
 
 function_literal_brace_root="${tmp_root}/valid-function-literal-brace-before-gates"
 prepare_root "${function_literal_brace_root}"
@@ -441,10 +514,20 @@ prepare_root "${false_and_exit_root}"
 cp "${FIXTURE_DIR}/valid-short-circuit-false-and-exit-before-gates.yml" "${false_and_exit_root}/.github/workflows/validate.yml"
 expect_pass "valid short circuit false and exit before gates" "${false_and_exit_root}"
 
+false_true_exit_root="${tmp_root}/valid-short-circuit-false-true-exit-before-gates"
+prepare_root "${false_true_exit_root}"
+cp "${FIXTURE_DIR}/valid-short-circuit-false-true-exit-before-gates.yml" "${false_true_exit_root}/.github/workflows/validate.yml"
+expect_pass "valid short circuit false true exit before gates" "${false_true_exit_root}"
+
 true_false_exit_root="${tmp_root}/valid-short-circuit-true-false-exit-before-gates"
 prepare_root "${true_false_exit_root}"
 cp "${FIXTURE_DIR}/valid-short-circuit-true-false-exit-before-gates.yml" "${true_false_exit_root}/.github/workflows/validate.yml"
 expect_pass "valid short circuit true false exit before gates" "${true_false_exit_root}"
+
+true_or_false_or_exit_root="${tmp_root}/valid-short-circuit-true-or-false-or-exit-before-gates"
+prepare_root "${true_or_false_or_exit_root}"
+cp "${FIXTURE_DIR}/valid-short-circuit-true-or-false-or-exit-before-gates.yml" "${true_or_false_or_exit_root}/.github/workflows/validate.yml"
+expect_pass "valid short circuit true or false or exit before gates" "${true_or_false_or_exit_root}"
 
 pipeline_exit_root="${tmp_root}/valid-pipeline-exit-before-gates"
 prepare_root "${pipeline_exit_root}"
@@ -471,9 +554,14 @@ prepare_root "${gate_redirections_root}"
 cp "${FIXTURE_DIR}/valid-gate-redirections.yml" "${gate_redirections_root}/.github/workflows/validate.yml"
 expect_pass "valid gate redirections" "${gate_redirections_root}"
 
+static_printf_redirection_root="${tmp_root}/valid-static-printf-redirection-before-gates"
+prepare_root "${static_printf_redirection_root}"
+cp "${FIXTURE_DIR}/valid-static-printf-redirection-before-gates.yml" "${static_printf_redirection_root}/.github/workflows/validate.yml"
+expect_pass "valid static printf redirection before gates" "${static_printf_redirection_root}"
+
 allow_root="${tmp_root}/allowlisted"
 prepare_root "${allow_root}"
-cp "${FIXTURE_DIR}/valid-allowlisted-permission.yml" "${allow_root}/.github/workflows/update.yml"
+cp "${FIXTURE_DIR}/valid-allowlisted-permission.yml" "${allow_root}/.github/workflows/build.yml"
 write_allowlist_policy "${allow_root}/cloudnative-pg-timescaledb/workflow-policy.yaml"
 expect_pass "valid allowlisted permission" "${allow_root}"
 
@@ -560,6 +648,19 @@ for tuple in \
   expect_fail "${fixture}" "${pattern}" "${target}"
 done
 
+for tuple in \
+  "disallowed-allowlisted-contents-wrong-job.yml contents" \
+  "disallowed-allowlisted-packages-wrong-job.yml packages" \
+  "disallowed-allowlisted-id-token-wrong-job.yml id-token" \
+  "disallowed-allowlisted-security-events-wrong-job.yml security-events"; do
+  read -r fixture permission <<<"${tuple}"
+  target="${tmp_root}/${fixture%.yml}"
+  prepare_root "${target}"
+  cp "${FIXTURE_DIR}/${fixture}" "${target}/.github/workflows/build.yml"
+  write_wrong_category_policy "${target}/cloudnative-pg-timescaledb/workflow-policy.yaml" "${permission}"
+  expect_fail "${fixture}" "write permissions are explicitly allowlisted" "${target}"
+done
+
 invalid_policy_root="${tmp_root}/invalid-policy"
 prepare_root "${invalid_policy_root}"
 cp "${FIXTURE_DIR}/invalid-allowlist-entry.yml" "${invalid_policy_root}/cloudnative-pg-timescaledb/workflow-policy.yaml"
@@ -595,10 +696,35 @@ prepare_root "${validate_case_quoted_literal_exit_root}"
 cp "${FIXTURE_DIR}/validate-case-quoted-literal-exit-before-gates.yml" "${validate_case_quoted_literal_exit_root}/.github/workflows/validate.yml"
 expect_fail "validate case quoted literal exit before gates" "validate workflow runs make validate" "${validate_case_quoted_literal_exit_root}"
 
+validate_case_negated_bracket_exit_root="${tmp_root}/validate-case-negated-bracket-exit-before-gates"
+prepare_root "${validate_case_negated_bracket_exit_root}"
+cp "${FIXTURE_DIR}/validate-case-negated-bracket-exit-before-gates.yml" "${validate_case_negated_bracket_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate case negated bracket exit before gates" "validate workflow runs make validate" "${validate_case_negated_bracket_exit_root}"
+
+validate_case_quoted_paren_exit_root="${tmp_root}/validate-case-quoted-paren-exit-before-gates"
+prepare_root "${validate_case_quoted_paren_exit_root}"
+cp "${FIXTURE_DIR}/validate-case-quoted-paren-exit-before-gates.yml" "${validate_case_quoted_paren_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate case quoted paren exit before gates" "validate workflow runs make validate" "${validate_case_quoted_paren_exit_root}"
+
+validate_case_range_exit_root="${tmp_root}/validate-case-range-exit-before-gates"
+prepare_root "${validate_case_range_exit_root}"
+cp "${FIXTURE_DIR}/validate-case-range-exit-before-gates.yml" "${validate_case_range_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate case range exit before gates" "validate workflow runs make validate" "${validate_case_range_exit_root}"
+
+validate_case_posix_class_exit_root="${tmp_root}/validate-case-posix-class-exit-before-gates"
+prepare_root "${validate_case_posix_class_exit_root}"
+cp "${FIXTURE_DIR}/validate-case-posix-class-exit-before-gates.yml" "${validate_case_posix_class_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate case posix class exit before gates" "validate workflow runs make validate" "${validate_case_posix_class_exit_root}"
+
 validate_run_comments_root="${tmp_root}/validate-run-comments-only"
 prepare_root "${validate_run_comments_root}"
 cp "${FIXTURE_DIR}/validate-run-comments-only.yml" "${validate_run_comments_root}/.github/workflows/validate.yml"
 expect_fail "validate run comments only" "validate workflow runs make validate" "${validate_run_comments_root}"
+
+validate_continue_on_error_root="${tmp_root}/validate-continue-on-error-gates"
+prepare_root "${validate_continue_on_error_root}"
+cp "${FIXTURE_DIR}/validate-continue-on-error-gates.yml" "${validate_continue_on_error_root}/.github/workflows/validate.yml"
+expect_fail "validate continue on error gates" "validate workflow runs make validate" "${validate_continue_on_error_root}"
 
 validate_conditional_root="${tmp_root}/validate-conditional-gates"
 prepare_root "${validate_conditional_root}"
@@ -609,6 +735,11 @@ validate_exit_root="${tmp_root}/validate-exit-before-gates"
 prepare_root "${validate_exit_root}"
 cp "${FIXTURE_DIR}/validate-exit-before-gates.yml" "${validate_exit_root}/.github/workflows/validate.yml"
 expect_fail "validate exit before gates" "validate workflow runs make validate" "${validate_exit_root}"
+
+validate_exec_root="${tmp_root}/validate-exec-before-gates"
+prepare_root "${validate_exec_root}"
+cp "${FIXTURE_DIR}/validate-exec-before-gates.yml" "${validate_exec_root}/.github/workflows/validate.yml"
+expect_fail "validate exec before gates" "validate workflow runs make validate" "${validate_exec_root}"
 
 validate_for_exit_root="${tmp_root}/validate-for-exit-before-gates"
 prepare_root "${validate_for_exit_root}"
@@ -690,6 +821,16 @@ prepare_root "${validate_backgrounded_root}"
 cp "${FIXTURE_DIR}/validate-backgrounded-gates.yml" "${validate_backgrounded_root}/.github/workflows/validate.yml"
 expect_fail "validate backgrounded gates" "validate workflow runs make validate" "${validate_backgrounded_root}"
 
+validate_backtick_pipe_exit_root="${tmp_root}/validate-backtick-pipe-exit-before-gates"
+prepare_root "${validate_backtick_pipe_exit_root}"
+cp "${FIXTURE_DIR}/validate-backtick-pipe-exit-before-gates.yml" "${validate_backtick_pipe_exit_root}/.github/workflows/validate.yml"
+expect_fail_with_stubbed_optional_tools "validate backtick pipe exit before gates" "validate workflow runs make validate" "${validate_backtick_pipe_exit_root}"
+
+validate_backtick_and_exit_root="${tmp_root}/validate-backtick-and-exit-before-gates"
+prepare_root "${validate_backtick_and_exit_root}"
+cp "${FIXTURE_DIR}/validate-backtick-and-exit-before-gates.yml" "${validate_backtick_and_exit_root}/.github/workflows/validate.yml"
+expect_fail_with_stubbed_optional_tools "validate backtick and exit before gates" "validate workflow runs make validate" "${validate_backtick_and_exit_root}"
+
 validate_quoted_text_root="${tmp_root}/validate-quoted-text-gates"
 prepare_root "${validate_quoted_text_root}"
 cp "${FIXTURE_DIR}/validate-quoted-text-gates.yml" "${validate_quoted_text_root}/.github/workflows/validate.yml"
@@ -719,6 +860,16 @@ validate_multiple_heredoc_root="${tmp_root}/validate-multiple-heredoc-gates"
 prepare_root "${validate_multiple_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-multiple-heredoc-gates.yml" "${validate_multiple_heredoc_root}/.github/workflows/validate.yml"
 expect_fail "validate multiple heredoc gates" "validate workflow runs make validate" "${validate_multiple_heredoc_root}"
+
+validate_mixed_and_or_exit_root="${tmp_root}/validate-mixed-and-or-exit-before-gates"
+prepare_root "${validate_mixed_and_or_exit_root}"
+cp "${FIXTURE_DIR}/validate-mixed-and-or-exit-before-gates.yml" "${validate_mixed_and_or_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate mixed and or exit before gates" "validate workflow runs make validate" "${validate_mixed_and_or_exit_root}"
+
+validate_mixed_or_and_exit_root="${tmp_root}/validate-mixed-or-and-exit-before-gates"
+prepare_root "${validate_mixed_or_and_exit_root}"
+cp "${FIXTURE_DIR}/validate-mixed-or-and-exit-before-gates.yml" "${validate_mixed_or_and_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate mixed or and exit before gates" "validate workflow runs make validate" "${validate_mixed_or_and_exit_root}"
 
 validate_escaped_dollar_heredoc_root="${tmp_root}/validate-escaped-dollar-heredoc-gates"
 prepare_root "${validate_escaped_dollar_heredoc_root}"
@@ -755,10 +906,35 @@ prepare_root "${validate_one_line_case_command_exit_root}"
 cp "${FIXTURE_DIR}/validate-one-line-case-command-exit-before-gates.yml" "${validate_one_line_case_command_exit_root}/.github/workflows/validate.yml"
 expect_fail "validate one line case command exit before gates" "validate workflow runs make validate" "${validate_one_line_case_command_exit_root}"
 
+validate_one_line_case_later_arm_exit_root="${tmp_root}/validate-one-line-case-later-arm-exit-before-gates"
+prepare_root "${validate_one_line_case_later_arm_exit_root}"
+cp "${FIXTURE_DIR}/validate-one-line-case-later-arm-exit-before-gates.yml" "${validate_one_line_case_later_arm_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate one line case later arm exit before gates" "validate workflow runs make validate" "${validate_one_line_case_later_arm_exit_root}"
+
 validate_redirection_suffixed_root="${tmp_root}/validate-redirection-suffixed-gates"
 prepare_root "${validate_redirection_suffixed_root}"
 cp "${FIXTURE_DIR}/validate-redirection-suffixed-gates.yml" "${validate_redirection_suffixed_root}/.github/workflows/validate.yml"
 expect_fail "validate redirection suffixed gates" "validate workflow runs make validate" "${validate_redirection_suffixed_root}"
+
+validate_quoted_case_terminator_exit_root="${tmp_root}/validate-quoted-case-terminator-exit-before-gates"
+prepare_root "${validate_quoted_case_terminator_exit_root}"
+cp "${FIXTURE_DIR}/validate-quoted-case-terminator-exit-before-gates.yml" "${validate_quoted_case_terminator_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate quoted case terminator exit before gates" "validate workflow runs make validate" "${validate_quoted_case_terminator_exit_root}"
+
+validate_process_substitution_pipe_exit_root="${tmp_root}/validate-process-substitution-pipe-exit-before-gates"
+prepare_root "${validate_process_substitution_pipe_exit_root}"
+cp "${FIXTURE_DIR}/validate-process-substitution-pipe-exit-before-gates.yml" "${validate_process_substitution_pipe_exit_root}/.github/workflows/validate.yml"
+expect_fail_with_stubbed_optional_tools "validate process substitution pipe exit before gates" "validate workflow runs make validate" "${validate_process_substitution_pipe_exit_root}"
+
+validate_process_substitution_and_exit_root="${tmp_root}/validate-process-substitution-and-exit-before-gates"
+prepare_root "${validate_process_substitution_and_exit_root}"
+cp "${FIXTURE_DIR}/validate-process-substitution-and-exit-before-gates.yml" "${validate_process_substitution_and_exit_root}/.github/workflows/validate.yml"
+expect_fail "validate process substitution and exit before gates" "validate workflow runs make validate" "${validate_process_substitution_and_exit_root}"
+
+validate_set_plus_e_root="${tmp_root}/validate-set-plus-e-gates"
+prepare_root "${validate_set_plus_e_root}"
+cp "${FIXTURE_DIR}/validate-set-plus-e-gates.yml" "${validate_set_plus_e_root}/.github/workflows/validate.yml"
+expect_fail "validate set plus e gates" "validate workflow runs make validate" "${validate_set_plus_e_root}"
 
 validate_short_circuit_or_exit_root="${tmp_root}/validate-short-circuit-or-exit-gates"
 prepare_root "${validate_short_circuit_or_exit_root}"

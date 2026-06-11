@@ -1,0 +1,18 @@
+name: Valid Function Close And True Before Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Function close and true before gates
+        run: |
+          metadata_only() { echo metadata; } && true
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          make validate
+          find .github/workflows -type f -name '*.yml' -print0 | sort -z | xargs -0 actionlint
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck

@@ -1,0 +1,19 @@
+name: Valid Exec Brace Fd Redirection Before Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Exec brace fd redirection before gates
+        run: |
+          exec {log_fd}>workflow.log
+          printf '%s\n' metadata >&${log_fd}
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          make validate
+          find .github/workflows -type f -name '*.yml' -print0 | sort -z | xargs -0 actionlint
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck

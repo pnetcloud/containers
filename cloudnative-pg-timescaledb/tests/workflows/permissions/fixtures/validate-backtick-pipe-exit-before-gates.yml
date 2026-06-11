@@ -1,0 +1,19 @@
+name: Validate Backtick Pipe Exit Before Gates
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Backtick pipe exit before gates
+        run: |
+          # shellcheck disable=SC2006,SC2046,SC2317
+          exit `printf 0 | cat`
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          make validate
+          find .github/workflows -type f -name '*.yml' -print0 | sort -z | xargs -0 actionlint
+          git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck

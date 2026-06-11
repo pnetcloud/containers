@@ -34,7 +34,6 @@ fi
 
 python3 - "${ROOT_DIR}" "${POLICY_FILE}" <<'PY'
 from pathlib import Path
-import fnmatch
 import re
 import shlex
 import sys
@@ -52,6 +51,52 @@ REQUIRED_POLICY_KEYS = {
     "permission_allowlist": {"workflow", "job", "permission", "reason", "owner_story"},
 }
 RELEASE_WRITE_PERMISSIONS = {"contents", "packages", "id-token", "security-events"}
+POSIX_CLASS_RANGES = {
+    "alnum": "0-9A-Za-z",
+    "alpha": "A-Za-z",
+    "digit": "0-9",
+    "lower": "a-z",
+    "upper": "A-Z",
+    "xdigit": "0-9A-Fa-f",
+}
+ALLOWED_WRITE_GRANTS = {
+    (".github/workflows/update.yml", "autocommit", "contents: write"): (
+        "Commit resolver-owned metadata and generated artifacts after make validate",
+        "2.5",
+    ),
+    (".github/workflows/update.yml", "catalog-autocommit", "contents: write"): (
+        "Commit release catalog manifests after digest-aware catalog validation",
+        "4.6",
+    ),
+    (".github/workflows/build.yml", "candidate", "packages: write"): (
+        "Push GHCR release candidate tags after per-platform smoke gates",
+        "4.2",
+    ),
+    (".github/workflows/build.yml", "security_scan", "security-events: write"): (
+        "Delegate SARIF upload permission to required reusable security scan gate",
+        "4.3",
+    ),
+    (".github/workflows/build.yml", "release_evidence", "id-token: write"): (
+        "Request GitHub OIDC token for keyless cosign release evidence signing",
+        "4.4",
+    ),
+    (".github/workflows/build.yml", "release_evidence", "packages: write"): (
+        "Upload keyless cosign registry signatures for release evidence to GHCR",
+        "4.4",
+    ),
+    (".github/workflows/build.yml", "publish", "packages: write"): (
+        "Promote validated GHCR final tags after release gates pass",
+        "4.5",
+    ),
+    (".github/workflows/build.yml", "release_metadata_autocommit", "contents: write"): (
+        "Commit release metadata and digest-aware catalogs after successful publish",
+        "4.6",
+    ),
+    (".github/workflows/security-scan.yml", "upload_sarif", "security-events: write"): (
+        "Upload vulnerability scan SARIF after candidate scan evaluation",
+        "4.3",
+    ),
+}
 
 
 def diag(artifact, expected, actual, remediation):
@@ -101,13 +146,13 @@ def parse_policy(path):
                 if ":" not in item:
                     diag(path, "policy list mapping", f"line {line_no}: {text}", "Use key/value list entries.")
                 key, value = item.split(":", 1)
-                current_item[key.strip()] = value.strip().strip('"')
+                current_item[key.strip()] = value.strip().strip('"\'')
             continue
         if indent == 4 and current_item is not None:
             if ":" not in text:
                 diag(path, "policy mapping item", f"line {line_no}: {text}", "Use key/value list entries.")
             key, value = text.split(":", 1)
-            current_item[key.strip()] = value.strip().strip('"')
+            current_item[key.strip()] = value.strip().strip('"\'')
             continue
         diag(path, "parseable workflow policy YAML subset", f"line {line_no}: {raw}", "Use documented indentation.")
     if set(policy) != set(REQUIRED_POLICY_KEYS):
@@ -505,17 +550,97 @@ def case_patterns_match(pattern_text, literal):
     if not literal:
         return False
     for raw_pattern in split_case_patterns(pattern_text):
-        pattern = simple_shell_word(raw_pattern)
-        if pattern is not None and fnmatch.fnmatchcase(literal, pattern):
+        if shell_case_pattern_matches(raw_pattern, literal):
             return True
     return False
 
 
+def shell_case_pattern_matches(raw_pattern, literal):
+    if any(token in raw_pattern for token in ("$", "`", "\n")):
+        return False
+    regex = []
+    quote = None
+    escaped = False
+    idx = 0
+    while idx < len(raw_pattern):
+        char = raw_pattern[idx]
+        if escaped:
+            regex.append(re.escape(char))
+            escaped = False
+            idx += 1
+            continue
+        if char == "\\":
+            escaped = True
+            idx += 1
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            else:
+                regex.append(re.escape(char))
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            idx += 1
+            continue
+        if char == "*":
+            regex.append(".*")
+        elif char == "?":
+            regex.append(".")
+        elif char == "[":
+            end = idx + 1
+            while end < len(raw_pattern):
+                if raw_pattern.startswith("[:", end):
+                    posix_end = raw_pattern.find(":]", end + 2)
+                    if posix_end != -1:
+                        end = posix_end + 2
+                        continue
+                if raw_pattern[end] == "]":
+                    break
+                end += 1
+            if end >= len(raw_pattern):
+                end = -1
+            if end == -1:
+                regex.append(re.escape(char))
+            else:
+                expression = raw_pattern[idx + 1 : end]
+                for class_name, class_range in POSIX_CLASS_RANGES.items():
+                    expression = expression.replace(f"[:{class_name}:]", class_range)
+                if expression.startswith("!"):
+                    expression = "^" + re.escape(expression[1:]).replace(r"\-", "-")
+                elif expression.startswith("^"):
+                    expression = r"\^" + re.escape(expression[1:]).replace(r"\-", "-")
+                else:
+                    expression = re.escape(expression).replace(r"\-", "-")
+                regex.append("[" + expression + "]")
+                idx = end
+        else:
+            regex.append(re.escape(char))
+        idx += 1
+    return bool(re.fullmatch("".join(regex), literal))
+
+
 def case_arm(value):
-    match = re.match(r"^(.+?)\)\s*(.*)$", value)
-    if not match:
-        return None
-    return match.group(1), match.group(2)
+    quote = None
+    escaped = False
+    for idx, char in enumerate(value):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            continue
+        if char == ")":
+            return value[:idx], value[idx + 1 :].strip()
+    return None
 
 
 def case_exit_matches(value, literal):
@@ -524,21 +649,23 @@ def case_exit_matches(value, literal):
 
 
 def one_line_case_exit(value):
-    match = re.match(r"^case\s+(.+?)\s+in\s+(.+?)\)\s*(.*)$", value)
-    if not match:
+    case_start = one_line_case_start(value)
+    if not case_start:
         return False
-    literal = simple_shell_word(match.group(1))
-    return case_patterns_match(match.group(2), literal) and unconditional_exit_segment(match.group(3))
+    return case_start[1] and unconditional_exit_segment(case_start[2])
 
 
 def one_line_case_start(value):
-    match = re.match(r"^case\s+(.+?)\s+in\s+(.+?)\)\s*(.*)$", value)
+    match = re.match(r"^case\s+(.+?)\s+in\s+(.+)$", value)
     if not match:
         return None
     literal = simple_shell_word(match.group(1))
-    if case_patterns_match(match.group(2), literal):
-        return literal, match.group(3)
-    return None
+    if not literal:
+        return None
+    arm = case_arm(match.group(2))
+    if not arm:
+        return None
+    return literal, case_patterns_match(arm[0], literal), arm[1]
 
 
 def case_arm_matches(value, literal):
@@ -546,12 +673,15 @@ def case_arm_matches(value, literal):
     return bool(arm and case_patterns_match(arm[0], literal))
 
 
-def split_top_level_and(value):
+def split_top_level_operator(value, operator):
     parts = []
     current = []
     quote = None
     escaped = False
+    backtick = False
     command_substitution_depth = 0
+    process_substitution_depth = 0
+    substitution_quote = None
     idx = 0
     while idx < len(value):
         char = value[idx]
@@ -565,13 +695,37 @@ def split_top_level_and(value):
             escaped = True
             idx += 1
             continue
-        if quote != "'" and value.startswith("$(", idx):
-            command_substitution_depth += 1
-            current.append("$(")
+        if char == "`" and not quote:
+            backtick = not backtick
+            current.append(char)
+            idx += 1
+            continue
+        if (quote != "'" and value.startswith("$(", idx)) or (quote != "'" and value.startswith(("<(", ">("), idx)):
+            if value.startswith("$(", idx):
+                command_substitution_depth += 1
+            else:
+                process_substitution_depth += 1
+            current.append(value[idx : idx + 2])
             idx += 2
+            continue
+        if (command_substitution_depth or process_substitution_depth) and substitution_quote:
+            current.append(char)
+            if char == substitution_quote:
+                substitution_quote = None
+            idx += 1
+            continue
+        if (command_substitution_depth or process_substitution_depth) and char in {"'", '"'}:
+            substitution_quote = char
+            current.append(char)
+            idx += 1
             continue
         if command_substitution_depth and char == ")":
             command_substitution_depth -= 1
+            current.append(char)
+            idx += 1
+            continue
+        if process_substitution_depth and char == ")":
+            process_substitution_depth -= 1
             current.append(char)
             idx += 1
             continue
@@ -586,10 +740,10 @@ def split_top_level_and(value):
             current.append(char)
             idx += 1
             continue
-        if command_substitution_depth == 0 and value.startswith("&&", idx):
+        if command_substitution_depth == 0 and process_substitution_depth == 0 and not backtick and value.startswith(operator, idx):
             parts.append("".join(current).strip())
             current = []
-            idx += 2
+            idx += len(operator)
             continue
         current.append(char)
         idx += 1
@@ -597,12 +751,150 @@ def split_top_level_and(value):
     return parts
 
 
+def split_top_level_and(value):
+    return split_top_level_operator(value, "&&")
+
+
+def split_top_level_or(value):
+    return split_top_level_operator(value, "||")
+
+
+def split_top_level_shell_list(value):
+    parts = []
+    current = []
+    quote = None
+    escaped = False
+    backtick = False
+    command_substitution_depth = 0
+    process_substitution_depth = 0
+    substitution_quote = None
+    idx = 0
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            current.append(char)
+            escaped = False
+            idx += 1
+            continue
+        if char == "\\" and (quote != "'" or command_substitution_depth):
+            current.append(char)
+            escaped = True
+            idx += 1
+            continue
+        if char == "`" and not quote:
+            backtick = not backtick
+            current.append(char)
+            idx += 1
+            continue
+        if (quote != "'" and value.startswith("$(", idx)) or (quote != "'" and value.startswith(("<(", ">("), idx)):
+            if value.startswith("$(", idx):
+                command_substitution_depth += 1
+            else:
+                process_substitution_depth += 1
+            current.append(value[idx : idx + 2])
+            idx += 2
+            continue
+        if (command_substitution_depth or process_substitution_depth) and substitution_quote:
+            current.append(char)
+            if char == substitution_quote:
+                substitution_quote = None
+            idx += 1
+            continue
+        if (command_substitution_depth or process_substitution_depth) and char in {"'", '"'}:
+            substitution_quote = char
+            current.append(char)
+            idx += 1
+            continue
+        if command_substitution_depth and char == ")":
+            command_substitution_depth -= 1
+            current.append(char)
+            idx += 1
+            continue
+        if process_substitution_depth and char == ")":
+            process_substitution_depth -= 1
+            current.append(char)
+            idx += 1
+            continue
+        if quote:
+            current.append(char)
+            if char == quote and not command_substitution_depth:
+                quote = None
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            current.append(char)
+            idx += 1
+            continue
+        if command_substitution_depth == 0 and process_substitution_depth == 0 and not backtick and value.startswith(("&&", "||"), idx):
+            parts.append(("".join(current).strip(), value[idx : idx + 2]))
+            current = []
+            idx += 2
+            continue
+        current.append(char)
+        idx += 1
+    parts.append(("".join(current).strip(), None))
+    return parts
+
+
+def has_top_level_redirection(value):
+    quote = None
+    escaped = False
+    command_substitution_depth = 0
+    idx = 0
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            escaped = False
+            idx += 1
+            continue
+        if char == "\\":
+            escaped = True
+            idx += 1
+            continue
+        if quote != "'" and value.startswith("$(", idx):
+            command_substitution_depth += 1
+            idx += 2
+            continue
+        if command_substitution_depth and char == ")":
+            command_substitution_depth -= 1
+            idx += 1
+            continue
+        if quote:
+            if char == quote and not command_substitution_depth:
+                quote = None
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            idx += 1
+            continue
+        if command_substitution_depth == 0 and char in {"<", ">"}:
+            return True
+        idx += 1
+    return False
+
+
 def static_success_segment(value):
-    return bool(re.match(r"^(true|:|echo|printf)(?:\s|$)", value))
+    if re.match(r"^(true|:)(?:\s|$)", value):
+        return True
+    return bool(re.match(r"^(echo|printf)(?:\s|$)", value) and not has_top_level_redirection(value))
+
+
+def static_failure_segment(value):
+    return bool(re.match(r"^false(?:\s|$)", value))
 
 
 def exit_segment(value):
     return bool(re.match(r"^(exit|return)\b", value) or re.match(r"^\{\s*(exit|return)\b", value))
+
+
+def terminal_exec_segment(value):
+    if not re.match(r"^exec(?:\s|$)", value):
+        return False
+    remainder = re.sub(r"^exec\b", "", value).strip()
+    remainder = re.sub(r"(?:^|\s)(?:\d+|\{[A-Za-z_][A-Za-z0-9_]*\})?(?:<|>|>>|<>|>&|<&|&>)(?:\s*>\([^)]+\)|\s*\S+)?", " ", remainder).strip()
+    return bool(remainder)
 
 
 def static_and_chain_exit(value):
@@ -610,11 +902,42 @@ def static_and_chain_exit(value):
     return len(parts) > 1 and exit_segment(parts[-1]) and all(static_success_segment(part) for part in parts[:-1])
 
 
+def static_or_chain_exit(value):
+    parts = split_top_level_or(value)
+    return len(parts) > 1 and exit_segment(parts[-1]) and all(static_failure_segment(part) for part in parts[:-1])
+
+
+def static_shell_list_exit(value):
+    parts = split_top_level_shell_list(value)
+    should_execute = True
+    status = None
+    for segment, operator_after in parts:
+        if should_execute:
+            if exit_segment(segment):
+                return True
+            if static_success_segment(segment):
+                status = True
+            elif static_failure_segment(segment):
+                status = False
+            else:
+                return False
+        if operator_after == "&&":
+            should_execute = status is True
+        elif operator_after == "||":
+            should_execute = status is False
+        else:
+            break
+    return False
+
+
 def has_pipeline(value):
     quote = None
     escaped = False
     ansi_single_quote = False
+    backtick = False
     command_substitution_depth = 0
+    process_substitution_depth = 0
+    substitution_quote = None
     previous = ""
     previous_escaped = False
     idx = 0
@@ -632,14 +955,42 @@ def has_pipeline(value):
             previous_escaped = False
             idx += 1
             continue
-        if quote != "'" and value.startswith("$(", idx):
-            command_substitution_depth += 1
+        if char == "`" and not quote:
+            backtick = not backtick
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if (quote != "'" and value.startswith("$(", idx)) or (quote != "'" and value.startswith(("<(", ">("), idx)):
+            if value.startswith("$(", idx):
+                command_substitution_depth += 1
+            else:
+                process_substitution_depth += 1
             previous = "("
             previous_escaped = False
             idx += 2
             continue
+        if (command_substitution_depth or process_substitution_depth) and substitution_quote:
+            if char == substitution_quote:
+                substitution_quote = None
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if (command_substitution_depth or process_substitution_depth) and char in {"'", '"'}:
+            substitution_quote = char
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
         if command_substitution_depth and char == ")":
             command_substitution_depth -= 1
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if process_substitution_depth and char == ")":
+            process_substitution_depth -= 1
             previous = char
             previous_escaped = False
             idx += 1
@@ -661,6 +1012,8 @@ def has_pipeline(value):
             continue
         if (
             command_substitution_depth == 0
+            and process_substitution_depth == 0
+            and not backtick
             and char == "|"
             and (idx == 0 or value[idx - 1] != "|")
             and (idx + 1 >= len(value) or value[idx + 1] != "|")
@@ -677,22 +1030,80 @@ def unconditional_exit_segment(value):
         return False
     return bool(
         re.match(r"^(exit|return)\b", value)
+        or terminal_exec_segment(value)
         or re.match(r"^(then|do)\s*(exit|return)\b", value)
         or re.match(r"^(then|do)\s*\{\s*(exit|return)\b", value)
-        or re.search(r"(^|\s)true\s+&&\s*(exit|return)\b", value)
         or static_and_chain_exit(value)
-        or re.search(r"(^|\s)true\s+&&\s*\{\s*(exit|return)\b", value)
-        or re.search(r"(^|\s)false\s+\|\|\s*(exit|return)\b", value)
-        or re.search(r"(^|\s)false\s+\|\|\s*\{\s*(exit|return)\b", value)
+        or static_or_chain_exit(value)
+        or static_shell_list_exit(value)
         or re.match(r"^\{\s*(exit|return)\b", value)
     )
 
 
 def structural_closes_same_segment(value, close_token):
-    if close_token == ")":
-        if "$(" in value:
-            return False
-        return bool(re.search(r"\)(?:\s|[;&|]|$)", value))
+    quote = None
+    escaped = False
+    command_substitution_depth = 0
+    idx = 0
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            escaped = False
+            idx += 1
+            continue
+        if char == "\\":
+            escaped = True
+            idx += 1
+            continue
+        if quote != "'" and value.startswith("$(", idx):
+            command_substitution_depth += 1
+            idx += 2
+            continue
+        if command_substitution_depth and char == ")":
+            command_substitution_depth -= 1
+            idx += 1
+            continue
+        if quote:
+            if char == quote and not command_substitution_depth:
+                quote = None
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            idx += 1
+            continue
+        if command_substitution_depth == 0 and char == close_token and (idx + 1 >= len(value) or re.match(r"[\s;&|]", value[idx + 1])):
+            return True
+        idx += 1
+    return False
+
+
+def has_case_terminator(value):
+    quote = None
+    escaped = False
+    idx = 0
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            escaped = False
+            idx += 1
+            continue
+        if char == "\\":
+            escaped = True
+            idx += 1
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            idx += 1
+            continue
+        if value.startswith(";;", idx):
+            return True
+        idx += 1
     return False
 
 
@@ -751,8 +1162,9 @@ def executable_run_text(run):
                         heredoc_queue.extend(heredoc_delimiters(trailing))
                         executable.append(trailing)
                         if trailing.startswith(("||", "&&")):
-                            stop_after_unsafe_control = True
-                            break
+                            if static_shell_list_exit(f"true {trailing}"):
+                                stop_after_unsafe_control = True
+                                break
                 continue
             if pending_function_header:
                 pending_function_header = False
@@ -798,7 +1210,7 @@ def executable_run_text(run):
                 ):
                     stop_after_unsafe_control = True
                     break
-                if ";;" in stripped:
+                if has_case_terminator(stripped):
                     active_case_depths.discard(shell_block_depth)
                 if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                     shell_block_depth += 1
@@ -810,9 +1222,12 @@ def executable_run_text(run):
                 continue
             if re.match(r"^(echo|printf)\b", stripped):
                 continue
+            if re.match(r"^set\s+(?:\+e|\+o\s+errexit)\b", stripped):
+                stop_after_unsafe_control = True
+                break
             if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                 one_line_case = one_line_case_start(stripped)
-                if one_line_case and unconditional_exit_segment(one_line_case[1]):
+                if one_line_case and one_line_case[1] and unconditional_exit_segment(one_line_case[2]):
                     stop_after_unsafe_control = True
                     break
                 shell_block_depth += 1
@@ -823,7 +1238,8 @@ def executable_run_text(run):
                     case_literals[shell_block_depth] = case_literal
                 if one_line_case:
                     case_literals[shell_block_depth] = one_line_case[0]
-                    active_case_depths.add(shell_block_depth)
+                    if one_line_case[1]:
+                        active_case_depths.add(shell_block_depth)
                 continue
             heredoc_queue.extend(segment_heredocs)
             if unconditional_exit_segment(stripped):
@@ -849,6 +1265,8 @@ def workflow_run_text(payload, path, unconditional_only=False):
             run = step.get("run")
             if isinstance(run, str):
                 if unconditional_only and step.get("if") is not None:
+                    continue
+                if unconditional_only and str(step.get("continue-on-error", "")).lower() == "true":
                     continue
                 runs.append(executable_run_text(run))
             elif run is not None:
@@ -954,16 +1372,14 @@ def action_allowed(policy, workflow, job, action):
 
 def permission_allowed(policy, workflow, job, permission, level):
     grant = f"{permission}: {level}"
+    expected = ALLOWED_WRITE_GRANTS.get((workflow, job, grant))
+    if expected is None:
+        return False
     matches = [item for item in policy["permission_allowlist"] if item["workflow"] == workflow and item["job"] == job and item["permission"] == grant]
     if not matches:
         return False
-    if workflow == ".github/workflows/update.yml" and job == "autocommit" and grant == "contents: write":
-        return any(
-            item["reason"] == "Commit resolver-owned metadata and generated artifacts after make validate"
-            and item["owner_story"] == "2.5"
-            for item in matches
-        )
-    return True
+    expected_reason, expected_owner = expected
+    return any(item["reason"] == expected_reason and item["owner_story"] == expected_owner for item in matches)
 
 
 def strict_allowed(policy, path):

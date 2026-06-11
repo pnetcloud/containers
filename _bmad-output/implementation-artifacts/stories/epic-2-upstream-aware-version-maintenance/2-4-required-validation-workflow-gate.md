@@ -227,6 +227,10 @@ Every implementation story must finish with a working repository state and must 
 - Addressed BMAD review findings for overly broad `true && ... && exit` detection, top-level pipeline detection with `$(... | ...)`, and shell pattern matching in static `case` arms.
 - Added regression fixtures for `true && false && exit` positive flow, command-substitution pipeline exits, glob-matching case exits, and quoted case literals.
 - Addressed BMAD review finding for one-line matching `case` arms that run a command before an exit across semicolon-split segments.
+- Addressed BMAD review findings for embedded short-circuit exits, quoted glob literals in case patterns, quoted `;;` case terminators, `exec` before gates, printf redirection false failures, and subshell function closes beside command substitutions.
+- Added regression fixtures for quoted case globs, command-substitution subshell closes, embedded short-circuit non-exits, printf redirection non-exits, `exec true`, later one-line case arms, and quoted case terminators.
+- Addressed BMAD review findings for mixed `&&`/`||` shell lists, redirection-only `exec`, backtick command substitutions with pipes, shell case bracket negation, quoted `)` case arms, and release-sensitive permission allowlist category enforcement.
+- Added regression fixtures for mixed shell-list exits, redirection-only exec positives, backtick pipe exits, negated bracket case exits, quoted parenthesis case exits, and allowlisted wrong-category write permissions.
 
 ### Validation Commands
 
@@ -271,10 +275,15 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: one-line brace helper functions are now covered as a positive workflow fixture so later parser changes cannot hide required gates.
 - Review follow-up: static `&&` exit detection now requires known-success prior commands, pipeline detection ignores `|` inside command substitutions, and static `case` matching now uses shell-style patterns for known literals.
 - Review follow-up: one-line matching `case` arms now keep active-arm state across semicolon-split segments until the exit is detected.
+- Review follow-up: case pattern matching now preserves quoted glob metacharacters, case terminator detection is quote-aware, static short-circuit handling respects top-level `&&`/`||`, and `exec` is treated as terminal before required gates.
+- Review follow-up: release-sensitive write permissions now require exact workflow/job/permission/reason/story category matches; shell-list reachability handles mixed operators and backtick substitutions.
+- Review follow-up: release evidence `packages: write` remains explicitly allowlisted for GHCR cosign registry signatures; range/POSIX case patterns, quoted one-line case arms, backtick/process-substitution shell-list operators, redirection-only `exec`, and non-blocking required gate steps are covered.
+- Review follow-up: required gate evidence now ignores `continue-on-error` steps and disabled errexit, process substitutions are excluded from top-level operator/pipeline parsing, and function-close `&& true` remains a valid positive flow.
 
 ## File List
 
 - `.github/workflows/validate.yml`
+- `.github/workflows/build.yml`
 - `.github/actionlint.yaml`
 - `cloudnative-pg-timescaledb/workflow-policy.yaml`
 - `cloudnative-pg-timescaledb/scripts/validate-workflows.sh`
@@ -316,3 +325,7 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-11: Added positive regression coverage for one-line brace helper functions before validation gates.
 - 2026-06-11: Hardened static `&&` chains, command-substitution pipeline handling, and glob/quoted static case matching.
 - 2026-06-11: Hardened semicolon-split one-line matching case arms with commands before exits.
+- 2026-06-11: Hardened embedded short-circuit, quoted case pattern/terminator, exec, redirection, and subshell close reachability edges.
+- 2026-06-11: Hardened mixed shell-list reachability, backtick/case bracket parsing, and exact write-permission category allowlisting.
+- 2026-06-11: Preserved release-evidence package write allowlisting for cosign registry signatures and hardened range/POSIX case, quoted one-line case, backtick/process-substitution operator, and exec-redirection edges.
+- 2026-06-11: Hardened non-blocking validation gates, process substitutions, POSIX case classes, and harmless function-close continuations.
