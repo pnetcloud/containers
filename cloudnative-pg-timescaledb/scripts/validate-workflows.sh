@@ -438,21 +438,48 @@ def structural_close(value):
 def always_entered_block(value):
     return bool(
         re.match(r"^if\s+true(?:\s*;?\s*then\b)?$", value)
+        or re.match(r"^if\s+:(?:\s*;?\s*then\b)?$", value)
         or re.match(r"^if\s+\[\[\s*1\s+-eq\s+1\s*\]\](?:\s*;?\s*then\b)?$", value)
         or re.match(r"^if\s+\[\s*1\s+-eq\s+1\s*\](?:\s*;?\s*then\b)?$", value)
         or re.match(r"^while\s+true(?:\s*;?\s*do\b)?$", value)
-        or re.match(r"^for\s+[A-Za-z_][A-Za-z0-9_]*\s+in\s+\S+(?:\s*;?\s*do\b)?$", value)
-        or re.match(r"^case\s+\S+\s+in$", value)
+        or re.match(r"^while\s+:(?:\s*;?\s*do\b)?$", value)
+        or re.match(r"^until\s+false(?:\s*;?\s*do\b)?$", value)
+        or re.match(r"^for\s+[A-Za-z_][A-Za-z0-9_]*\s+in\s+[A-Za-z0-9_.-]+(?:\s*;?\s*do\b)?$", value)
     )
 
 
+def static_case_literal(value):
+    match = re.match(r"^case\s+([A-Za-z0-9_.-]+)\s+in$", value)
+    if match:
+        return match.group(1)
+    return None
+
+
+def case_exit_matches(value, literal):
+    if not literal:
+        return False
+    escaped = re.escape(literal)
+    return bool(
+        re.match(rf"^({escaped}|\*)\)\s*(exit|return)\b", value)
+        or re.match(rf"^case\s+{escaped}\s+in\s+({escaped}|\*)\)\s*(exit|return)\b", value)
+    )
+
+
+def has_pipeline(value):
+    return bool(re.search(r"(?<![|])\|(?![|&])", value))
+
+
 def unconditional_exit_segment(value):
+    if has_pipeline(value):
+        return False
     return bool(
         re.match(r"^(exit|return)\b", value)
+        or re.match(r"^(then|do)\s*(exit|return)\b", value)
         or re.search(r"(^|\s)true\s+&&\s*(exit|return)\b", value)
+        or re.search(r"(^|\s)true\s+&&\s*\{\s*(exit|return)\b", value)
         or re.search(r"(^|\s)false\s+\|\|\s*(exit|return)\b", value)
+        or re.search(r"(^|\s)false\s+\|\|\s*\{\s*(exit|return)\b", value)
         or re.match(r"^\{\s*(exit|return)\b", value)
-        or re.match(r"^[^;\s)]+\)\s*(exit|return)\b", value)
     )
 
 
@@ -469,6 +496,7 @@ def executable_run_text(run):
     heredoc_queue = []
     shell_block_depth = 0
     always_true_depths = set()
+    case_literals = {}
     shell_function_stack = []
     pending_function_header = False
     stop_after_unsafe_control = False
@@ -502,6 +530,8 @@ def executable_run_text(run):
                     continue
                 close_token = structural_close(stripped)
                 if close_token and shell_function_stack and shell_function_stack[-1] == close_token:
+                    shell_function_stack.pop()
+                elif shell_function_stack and structural_closes_same_segment(stripped, shell_function_stack[-1]):
                     shell_function_stack.pop()
                 else:
                     open_token = structural_open(stripped)
@@ -540,6 +570,7 @@ def executable_run_text(run):
                 continue
             if re.match(r"^(fi|done|esac)\b", stripped):
                 always_true_depths.discard(shell_block_depth)
+                case_literals.pop(shell_block_depth, None)
                 shell_block_depth = max(shell_block_depth - 1, 0)
                 trailing = re.sub(r"^(fi|done|esac)\b", "", stripped, count=1).strip()
                 if trailing:
@@ -551,13 +582,16 @@ def executable_run_text(run):
                 continue
             if shell_block_depth:
                 heredoc_queue.extend(segment_heredocs)
-                if shell_block_depth in always_true_depths and unconditional_exit_segment(stripped):
+                if (shell_block_depth in always_true_depths and unconditional_exit_segment(stripped)) or case_exit_matches(stripped, case_literals.get(shell_block_depth)):
                     stop_after_unsafe_control = True
                     break
                 if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                     shell_block_depth += 1
                     if always_entered_block(stripped):
                         always_true_depths.add(shell_block_depth)
+                    case_literal = static_case_literal(stripped)
+                    if case_literal:
+                        case_literals[shell_block_depth] = case_literal
                 continue
             if re.match(r"^(echo|printf)\b", stripped):
                 continue
@@ -565,6 +599,9 @@ def executable_run_text(run):
                 shell_block_depth += 1
                 if always_entered_block(stripped):
                     always_true_depths.add(shell_block_depth)
+                case_literal = static_case_literal(stripped)
+                if case_literal:
+                    case_literals[shell_block_depth] = case_literal
                 continue
             heredoc_queue.extend(segment_heredocs)
             if unconditional_exit_segment(stripped):

@@ -217,6 +217,8 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for `true && exit 0` before gates, one-line subshell helper functions before real gates, and non-constant conditional exits before real gates.
 - Addressed BMAD review findings for constant `false || exit`, `false && exit` false positives, always-entered `case`/`for`/`while` exit blocks, and one-line subshell groups inside function bodies.
 - Added regression fixtures for constant OR exit bypasses, constant false AND non-exit paths, case/for/while exit before gates, and one-line subshell groups inside functions before real gates.
+- Addressed BMAD review findings for `if :` and one-line `then/do exit` reachability, non-matching case-arm false failures, pipeline-exit false failures, and semicolon-separated one-line subshell function helpers.
+- Added regression fixtures for `if :` exit, one-line `if true; then exit`, non-matching case exits before real gates, pipeline exit before real gates, and semicolon-separated subshell helper functions before real gates.
 
 ### Validation Commands
 
@@ -255,6 +257,7 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: required gate suffix validation now requires a real shell separator before fd redirections, function tracking covers subshell bodies, literal brace arguments do not alter function tracking, and `exit`/`return` before gates prevents later gate evidence from being accepted.
 - Review follow-up: reachability handling catches direct and short-circuit exits before gates without rejecting non-constant conditional exits followed by direct gates; one-line subshell helper functions no longer hide later gates.
 - Review follow-up: reachability handling distinguishes static `true && exit` and `false || exit` from `false && exit`, catches simple always-entered loop/case exits, and does not treat one-line subshell groups inside functions as unclosed function bodies.
+- Review follow-up: static reachability now covers `if :` and one-line `then/do exit`, avoids non-matching case and pipeline false failures, and closes semicolon-separated one-line subshell helpers.
 
 ## File List
 
@@ -294,3 +297,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-11: Hardened redirection suffix boundaries, subshell function bodies, literal brace handling, and exit-before-gate reachability.
 - 2026-06-11: Hardened short-circuit exit reachability and one-line subshell helper parsing.
 - 2026-06-11: Hardened constant short-circuit reachability, simple always-entered loop/case exits, and one-line subshell groups inside function bodies.
+- 2026-06-11: Hardened one-line control-flow exits, case-arm matching, pipeline-exit handling, and semicolon-separated subshell helper parsing.
