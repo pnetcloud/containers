@@ -2003,8 +2003,6 @@ git_product_files() {
     'docs/generated-files.md' \
     ':(exclude)vendor/**' \
     ':(exclude)cloudnative-pg-timescaledb/vendor/**' \
-    ':(exclude)_bmad/**' \
-    ':(exclude)_bmad-output/**' \
     ':(exclude).agents/**' \
     ':(exclude)**/__pycache__/**' \
     ':(exclude)**/*.pyc' \

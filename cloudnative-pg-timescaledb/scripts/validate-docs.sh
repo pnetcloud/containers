@@ -108,7 +108,7 @@ def markdown_files():
     reference_prefix = reference_tree + slash
     for path in candidates:
         rel = path.relative_to(docs_root).as_posix()
-        if rel.startswith(("_bmad-output/", reference_prefix, "cloudnative-pg-timescaledb/tests/")):
+        if rel.startswith((reference_prefix, "cloudnative-pg-timescaledb/tests/")):
             continue
         if slash + reference_prefix in rel or "/tests/" in rel:
             continue

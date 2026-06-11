@@ -1,5 +1,5 @@
 diff --git a/cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml b/cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
-index 9be60ab..ad7f4ff 100644
+index 038fa83..ad7f4ff 100644
 --- a/cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
 +++ b/cloudnative-pg-timescaledb/catalog/catalog-standard-bookworm.yaml
 @@ -4,8 +4,4 @@ kind: ClusterImageCatalog
@@ -8,12 +8,12 @@ index 9be60ab..ad7f4ff 100644
  spec:
 -  images:
 -    - major: 17
--      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609-bookworm@sha256:b0dc5fb71a029ba46b83211a96e443e504365b5355f9005bfdbaef2fd499e3b2
+-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609-bookworm@sha256:7512812174f6a994e1bb990411cb0ac28e86994652cff47524a6af32414b7ba2
 -    - major: 18
--      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609-bookworm@sha256:906d0275f6030e45f164a5866cfebd287a407655c7d83b1316afd747693c8dc8
+-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609-bookworm@sha256:713ac7c4f8e523dee8597fb96125d6cfb1e9956bedb5e2eeafc9564e8b18dab6
 +  images: []
 diff --git a/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml b/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
-index b845964..e1f93b5 100644
+index 67df073..e1f93b5 100644
 --- a/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
 +++ b/cloudnative-pg-timescaledb/catalog/catalog-standard-trixie.yaml
 @@ -4,8 +4,4 @@ kind: ClusterImageCatalog
@@ -22,9 +22,9 @@ index b845964..e1f93b5 100644
  spec:
 -  images:
 -    - major: 17
--      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609@sha256:4e555145268a3f81ca35667ddcafea59f43142ac9af1f51ded6082243f88d584
+-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609@sha256:b88730743a9991666a6b7fb4a839de7e9d258dac9a824da3c02e37858e0ecae2
 -    - major: 18
--      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:16d532e04dec8c5d41094c2df4f40ff7a1134d983f359a359115eeb6075a5e7a
+-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:d9575abe3647115075f83015f90cf71857aa90bbf6158413f7c5165ec110ea8b
 +  images: []
 diff --git a/cloudnative-pg-timescaledb/docker-bake.hcl b/cloudnative-pg-timescaledb/docker-bake.hcl
 index edd2c6c..7a442ea 100644
