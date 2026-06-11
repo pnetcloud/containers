@@ -3,7 +3,7 @@ storyId: 3.5
 storyKey: 3-5-sql-extension-smoke-checks
 epic: 3
 title: 'SQL Extension Smoke Checks'
-status: ready-for-review
+status: done
 baseline_commit: 506c422f6c9b26cef1947a64811a86bacf9834663a1b34b3f7
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
@@ -159,6 +159,7 @@ Every implementation story must finish with a working repository state and must 
 - Addressed BMAD review findings by adding a Docker-backed live SQL collector path, rejecting env-only non-creatable policy files, sourcing validation-only policy from selected metadata entry `extensions.<ext>.*` fields, and requiring control-file expectations for pgvector/PGAudit when exact package versions are absent.
 - Extended non-creatable handling from a single policy to a per-extension policy map, including live collector skip-create behavior and validation target/result emission for multiple validation-only extensions.
 - Extended metadata validation so future real `versions.yaml` rows can carry strictly scoped `extensions.<ext>.*` policy fields without bypassing schema validation.
+- 2026-06-11 evidence closure: SQL smoke fixtures pass locally, and GitHub Actions `Build Release Candidates` run `27315292356` ran candidate build/smoke jobs for publishable 17/18 bookworm/trixie images.
 
 ### Completion Notes
 
@@ -167,6 +168,7 @@ Every implementation story must finish with a working repository state and must 
 - FR-14 / Smoke gate: SQL smoke failures now produce deterministic publish-blocking diagnostics and are integrated into `make validate`.
 - Additional policy: non-creatable validation is allowed only with documented reason, supported validation mode, and non-empty validation target.
 - Review closure: BMAD code review re-check reported no remaining BLOCKER/MAJOR findings after live collector, metadata policy, and multi-extension fixes.
+- Remote repository proof is complete for Story 3.5: SQL smoke gates are covered by local fixtures and candidate image smoke jobs passed on GitHub for publishable combinations.
 
 ### Validation Commands
 
@@ -177,6 +179,8 @@ Every implementation story must finish with a working repository state and must 
 - `make smoke PG=18 DEBIAN=trixie CHECKS=sql` executed; expected non-zero skipped diagnostic on production metadata: `Publish disabled until release gate enables image builds`
 - `git diff --check` PASS
 - Staged snapshot `make validate` PASS
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/smoke/sql/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Build Release Candidates` run `27315292356` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292356`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 ### File List
 

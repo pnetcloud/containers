@@ -3,7 +3,7 @@ storyId: 3.4
 storyKey: 3-4-container-runtime-smoke-checks
 epic: 3
 title: 'Container Runtime Smoke Checks'
-status: ready-for-review
+status: done
 baseline_commit: 4fb0709e1ff178b5fa6c867f9834663a1b34b3f7
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
@@ -143,6 +143,7 @@ Every implementation story must finish with a working repository state and must 
 - The smoke runner checks Debian release, PostgreSQL major/version, TimescaleDB/Toolkit/vector/PGAudit control files, Dockerfile label contract, CNPG runtime binaries, `postgres` user, data directory permissions, and temporary PostgreSQL startup without validating legacy `system-*` Barman tooling.
 - Subagent review found two issues: the live `/bin/sh -eu` collector used bash-only `${RANDOM}`, and beta major comparison normalized `19beta1` to `19`. Fixed by using POSIX `mktemp -d`, comparing PostgreSQL major exactly to metadata, adding a `19beta1` fixture, and adding a fake-Docker live collector test that fails if `RANDOM` appears in the shell path.
 - Subagent re-review found one remaining major: runtime binaries were verified as executable but not checked against the expected PostgreSQL path. Fixed by collecting and asserting `/usr/lib/postgresql/<pg_major>/bin/<binary>` for `postgres`, `initdb`, `pg_ctl`, and `psql`, plus a `wrong-binary-path` negative fixture.
+- 2026-06-11 evidence closure: container smoke fixtures pass locally, and GitHub Actions `Build Release Candidates` run `27315292356` ran candidate build/smoke jobs for publishable 17/18 bookworm/trixie images.
 
 ### Completion Notes
 
@@ -152,6 +153,8 @@ Every implementation story must finish with a working repository state and must 
 - CNPG standard base: smoke checks align with generated standard-image Dockerfile labels and runtime assumptions, with Barman legacy tooling left out of the container path.
 
 ### Validation Commands
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/smoke/container/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Build Release Candidates` run `27315292356` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292356`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 - `bash cloudnative-pg-timescaledb/tests/smoke/container/run.sh` PASS
 - `bash cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh` PASS

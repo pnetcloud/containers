@@ -3,7 +3,7 @@ storyId: 3.2
 storyKey: 3-2-timescaledb-toolkit-pgvector-and-pgaudit-installation
 epic: 3
 title: 'TimescaleDB, Toolkit, pgvector, and PGAudit Installation'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: fb4e79e
@@ -175,6 +175,7 @@ Every implementation story must finish with a working repository state and must 
 - Added `tests/package-install/run.sh` with publishable Dockerfile fixtures, fake `dpkg-query` pass/missing/mismatch coverage, all four `trixie/bookworm x amd64/arm64` positive fixture assertions, package-source branches, and negative metadata cases.
 - Updated legacy schema fixtures and Story 1.1/tag validators so the expanded entry schema remains compatible with existing gates.
 - Sidecar review round 1 identified missing verification coverage and non-executed arm64 fixtures; both were fixed. Re-review requested after fixes.
+- 2026-06-11 evidence closure: package-install fixtures pass locally, and GitHub Actions `Build Release Candidates` run `27315292356` completed candidate builds and smoke checks for publishable 17/18 bookworm/trixie images.
 
 ### Validation Commands
 
@@ -190,6 +191,8 @@ Every implementation story must finish with a working repository state and must 
 - `git diff --cached --check` - passed.
 - Clean staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && make validate` - passed.
 - Required production `docker build -f cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile ...` was not runnable because current production metadata intentionally keeps all rows `publish:false`; equivalent buildable Dockerfile coverage is exercised through publishable fixtures until a later publish-policy story creates committed buildable Dockerfiles.
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/package-install/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Build Release Candidates` run `27315292356` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292356`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 ### Completion Notes
 
@@ -197,6 +200,7 @@ Every implementation story must finish with a working repository state and must 
 - FR-6: Toolkit package identity and exact version now follow the same resolver-owned metadata path and are verified with `dpkg-query`.
 - FR-7: pgvector and PGAudit source is explicit per metadata entry as `base` or `package`; `base` verifies CNPG standard image control files, and `package` renders exact package install/version checks.
 - NFR-2: The image install plan is reproducible from metadata fields, exact package versions, Debian codename, target architecture, and generated Dockerfile content.
+- Remote repository proof is complete for Story 3.2: candidate image builds and smoke checks passed on GitHub for publishable combinations after package installation logic was integrated.
 
 ## File List
 

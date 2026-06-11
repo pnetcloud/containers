@@ -3,7 +3,7 @@ storyId: 3.3
 storyKey: 3-3-local-build-and-bake-execution
 epic: 3
 title: 'Local Build and Bake Execution'
-status: ready-for-review
+status: done
 baseline_commit: 245684269a59983d23355c01b6b327daea65e92a
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
@@ -139,6 +139,7 @@ Every implementation story must finish with a working repository state and must 
 - Updated stable-row `skip_reason` from the stale Story 2 resolver wording to release-gate wording and regenerated derived artifacts.
 - Live `make validate` was run and failed before Story 3.3 gates because unrelated unstaged Story 1.1 validator changes reject the already-committed package/source metadata fields. Staged snapshot validation is the authoritative clean-checkout validation for this story.
 - Subagent review found one blocker: root `BUILD_ARGS` passthrough could override local `output=type=docker` with registry push output. Fixed by rejecting all extra Bake passthrough args in Epic 3 `build.sh`, removing `${@:3}` from the Docker invocation, and adding a negative fake-Docker test proving unsafe `BUILD_ARGS` fail before Docker is called.
+- 2026-06-11 evidence closure: Bake contract fixtures pass locally, and GitHub Actions `Build Release Candidates` run `27315292356` generated the image matrix and built/smoked all publishable candidate targets.
 
 ### Completion Notes
 
@@ -148,6 +149,8 @@ Every implementation story must finish with a working repository state and must 
 - Additional requirements: checkout/path context enforced, default Git context rejected, skipped rows prevented from leaking into publishable targets, and local build command prevents registry push/GHCR publish behavior in Epic 3.
 
 ### Validation Commands
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/bake/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Build Release Candidates` run `27315292356` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292356`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 
 - `bash cloudnative-pg-timescaledb/tests/bake/run.sh` PASS
 - `bash cloudnative-pg-timescaledb/tests/generators/run.sh` PASS

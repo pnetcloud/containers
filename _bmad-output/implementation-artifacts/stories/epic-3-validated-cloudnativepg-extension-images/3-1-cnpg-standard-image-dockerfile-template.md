@@ -3,7 +3,7 @@ storyId: 3.1
 storyKey: 3-1-cnpg-standard-image-dockerfile-template
 epic: 3
 title: 'CNPG Standard Image Dockerfile Template'
-status: review
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: 71298949cd723c58de79bbbd2a7d90abf7f64f46
@@ -153,6 +153,7 @@ Every implementation story must finish with a working repository state and must 
 - Added `tests/dockerfile/run.sh` with positive publishable fixture coverage and negative coverage for missing digest, malformed digest, platform-incomplete digest, deprecated `system-*`, reference-tree rendered output, and skipped non-publish metadata.
 - Subagent review round 1 found a blocker where `generate-dockerfiles.sh --json` bypassed publishable digest/platform validation. Fixed by validating and rendering publishable rows before JSON summary and adding negative `--json` coverage.
 - Subagent review round 2 reported no blockers.
+- 2026-06-11 evidence closure: Dockerfile template fixtures pass locally, and GitHub Actions `Build Release Candidates` run `27315292356` built and smoked publishable 17/18 bookworm/trixie candidate images from generated Dockerfiles.
 
 ### Validation Commands
 
@@ -165,6 +166,8 @@ Every implementation story must finish with a working repository state and must 
 - `bash cloudnative-pg-timescaledb/scripts/validate-barman-boundary.sh` - passed.
 - `git diff --cached --check` - passed.
 - Clean staged-index snapshot validation using `git checkout-index --all --prefix=<tmp>/ && make validate` - passed.
+- 2026-06-11: `bash cloudnative-pg-timescaledb/tests/dockerfile/run.sh` - passed.
+- 2026-06-11: GitHub Actions `Build Release Candidates` run `27315292356` - passed, URL `https://github.com/pnetcloud/containers/actions/runs/27315292356`, head SHA `ed7eee8b461a567f5e7d3807397b173c6df4ed1c`.
 - Worktree `make validate` - blocked by unrelated unstaged Story 1.1 hardening state that expects resolver-owned fields to be empty; the staged snapshot for this story passes full validation.
 
 ### Completion Notes
