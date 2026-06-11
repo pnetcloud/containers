@@ -157,44 +157,147 @@ def shell_semicolon_segments(line):
     current = []
     quote = None
     escaped = False
+    ansi_single_quote = False
+    previous = ""
     for char in line:
         if escaped:
             current.append(char)
             escaped = False
+            previous = char
             continue
-        if char == "\\":
+        if char == "\\" and (quote != "'" or ansi_single_quote):
             current.append(char)
             escaped = True
+            previous = char
             continue
         if quote:
             current.append(char)
             if char == quote:
                 quote = None
+                ansi_single_quote = False
+            previous = char
             continue
         if char in {"'", '"'}:
             current.append(char)
             quote = char
+            ansi_single_quote = char == "'" and previous == "$"
+            previous = char
             continue
         if char == ";":
             segments.append("".join(current))
             current = []
+            previous = char
             continue
         current.append(char)
+        previous = char
     segments.append("".join(current))
     return segments
 
 
+def shell_word(value, idx):
+    chars = []
+    quote = None
+    escaped = False
+    ansi_single_quote = False
+    previous = ""
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            chars.append(char)
+            escaped = False
+            previous = char
+            idx += 1
+            continue
+        if char == "\\" and (quote != "'" or ansi_single_quote):
+            escaped = True
+            previous = char
+            idx += 1
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+                ansi_single_quote = False
+            else:
+                chars.append(char)
+            previous = char
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            ansi_single_quote = char == "'" and previous == "$"
+            previous = char
+            idx += 1
+            continue
+        if re.match(r"[\s;|&()<>]", char):
+            break
+        chars.append(char)
+        previous = char
+        idx += 1
+    return "".join(chars).lstrip("\\"), idx
+
+
+def heredoc_delimiters(value):
+    delimiters = []
+    quote = None
+    escaped = False
+    ansi_single_quote = False
+    previous = ""
+    idx = 0
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            escaped = False
+            previous = char
+            idx += 1
+            continue
+        if char == "\\" and (quote != "'" or ansi_single_quote):
+            escaped = True
+            previous = char
+            idx += 1
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+                ansi_single_quote = False
+            previous = char
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            ansi_single_quote = char == "'" and previous == "$"
+            previous = char
+            idx += 1
+            continue
+        if value.startswith("<<<", idx):
+            previous = value[idx + 2]
+            idx += 3
+            continue
+        if value.startswith("<<", idx):
+            idx += 2
+            if idx < len(value) and value[idx] == "-":
+                idx += 1
+            while idx < len(value) and value[idx].isspace():
+                idx += 1
+            delimiter, idx = shell_word(value, idx)
+            if delimiter:
+                delimiters.append(delimiter)
+            continue
+        previous = char
+        idx += 1
+    return delimiters
+
+
 def executable_run_text(run):
     executable = []
-    heredoc_end = None
+    heredoc_queue = []
     shell_block_depth = 0
     stop_after_unsafe_control = False
     for line in run.splitlines():
         if stop_after_unsafe_control:
             break
-        if heredoc_end:
-            if line.strip() == heredoc_end:
-                heredoc_end = None
+        if heredoc_queue:
+            if line.strip() == heredoc_queue[0]:
+                heredoc_queue.pop(0)
             continue
         uncommented = line.split("#", 1)[0]
         for segment in shell_semicolon_segments(uncommented):
@@ -219,9 +322,7 @@ def executable_run_text(run):
             if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                 shell_block_depth += 1
                 continue
-            heredoc_match = re.search(r"(?<!<)<<(?!<)-?\s*(['\"]?)([^'\"\s;|&()<>]+)\1", stripped)
-            if heredoc_match:
-                heredoc_end = heredoc_match.group(2).lstrip("\\")
+            heredoc_queue.extend(heredoc_delimiters(stripped))
             executable.append(stripped)
     return "\n".join(executable)
 

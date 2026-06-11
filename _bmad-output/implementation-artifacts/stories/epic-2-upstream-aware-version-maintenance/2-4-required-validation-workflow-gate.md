@@ -191,6 +191,10 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for valid heredoc control suffixes before gates, invalid backgrounded gates, and invalid quoted text containing gate-like command strings.
 - Addressed BMAD code-review pass 7 findings by rejecting Bash `|&` suffixes on required gates while allowing common blocking redirection suffixes such as `2>&1`, `&>file`, `>file`, and `2>file`.
 - Added regression fixtures for valid gate redirections and invalid `|&` required gate pipelines.
+- Addressed BMAD code-review pass 8 preparation findings by treating backslashes literally inside single-quoted shell text, detecting heredoc redirections only outside quoted spans while preserving quoted delimiters, and adding explicit coverage for stderr redirection gates.
+- Added regression fixtures for single-quoted backslash semicolon text, quoted heredoc marker strings, and valid `2>&1` gate redirections.
+- Addressed BMAD code-review pass 8 findings by handling Bash ANSI-C `$'...'` escaped quotes in shell segment and heredoc scanning, tracking multiple heredoc delimiters as a queue, and keeping negative validator fixtures from being preempted by shellcheck diagnostics.
+- Added regression fixtures for ANSI-C quoted gate-like text, ANSI-C quoted heredoc markers, and multiple heredoc payloads containing gate-like commands.
 
 ### Validation Commands
 
@@ -216,6 +220,8 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: required gates now reject `||`, backgrounding, and non-pipeline trailing control operators after a matched gate line; gate-like commands inside quoted text do not satisfy execution requirements.
 - Review follow-up: block-close suffixes such as `fi || exit 0` no longer allow later commands to satisfy the required gate checks.
 - Review follow-up: required gate suffix validation now distinguishes blocking redirection syntax from non-blocking/backgrounding and pipe operators, including Bash `|&`.
+- Review follow-up: heredoc detection now scans shell text instead of masking quoted delimiters, so real `<<'EOF'` payloads are ignored while quoted `<<EOF` strings do not hide later real gates.
+- Review follow-up: ANSI-C quoted strings and multiple heredoc payloads no longer let non-executed gate-like text satisfy required gate checks.
 
 ## File List
 
@@ -242,3 +248,5 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Hardened workflow validation for quoted shell text, heredoc control suffixes, block-close masking, backgrounded gates, and apt package selectors.
 - 2026-06-10: Hardened workflow validation for shell quote-aware segmentation, unsafe block-close suffixes, and background/single-pipe required gate suffixes.
 - 2026-06-10: Hardened required gate suffix validation for Bash `|&` pipelines while preserving valid redirection suffixes.
+- 2026-06-10: Hardened quote/backslash handling, heredoc delimiter scanning, and explicit stderr redirection coverage.
+- 2026-06-10: Hardened ANSI-C quote handling, multiple heredoc queues, and validator-specific fixtures that avoid shellcheck preemption.

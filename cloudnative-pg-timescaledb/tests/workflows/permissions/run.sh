@@ -200,6 +200,10 @@ for fixture in \
   valid-inline-shell-conditional.yml \
   valid-here-string-before-gates.yml \
   valid-heredoc-control-suffix-before-gates.yml \
+  valid-quoted-heredoc-marker-before-gates.yml \
+  valid-single-quote-backslash-semicolon.yml \
+  valid-stderr-redirect-gates.yml \
+  valid-ansi-c-quoted-heredoc-marker.yml \
   valid-shellcheck-version-package.yml \
   valid-shellcheck-apt-selectors.yml \
   valid-gate-redirections.yml \
@@ -249,6 +253,8 @@ for fixture in \
   validate-backgrounded-gates.yml \
   validate-quoted-text-gates.yml \
   validate-pipe-ampersand-gates.yml \
+  validate-ansi-c-quoted-text-gates.yml \
+  validate-multiple-heredoc-gates.yml \
   valid-update-autocommit-contents-write.yml \
   invalid-update-nonautocommit-contents-write.yml; do
   [[ -f "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -f" "${FIXTURE_DIR}/${fixture}" "fixture exists" "missing" "Restore Story 2.4 workflow policy fixtures."; exit 1; }
@@ -274,6 +280,26 @@ heredoc_control_root="${tmp_root}/valid-heredoc-control-suffix-before-gates"
 prepare_root "${heredoc_control_root}"
 cp "${FIXTURE_DIR}/valid-heredoc-control-suffix-before-gates.yml" "${heredoc_control_root}/.github/workflows/validate.yml"
 expect_pass "valid heredoc control suffix before gates" "${heredoc_control_root}"
+
+quoted_heredoc_root="${tmp_root}/valid-quoted-heredoc-marker-before-gates"
+prepare_root "${quoted_heredoc_root}"
+cp "${FIXTURE_DIR}/valid-quoted-heredoc-marker-before-gates.yml" "${quoted_heredoc_root}/.github/workflows/validate.yml"
+expect_pass "valid quoted heredoc marker before gates" "${quoted_heredoc_root}"
+
+single_quote_backslash_root="${tmp_root}/valid-single-quote-backslash-semicolon"
+prepare_root "${single_quote_backslash_root}"
+cp "${FIXTURE_DIR}/valid-single-quote-backslash-semicolon.yml" "${single_quote_backslash_root}/.github/workflows/validate.yml"
+expect_pass "valid single quote backslash semicolon" "${single_quote_backslash_root}"
+
+stderr_redirect_root="${tmp_root}/valid-stderr-redirect-gates"
+prepare_root "${stderr_redirect_root}"
+cp "${FIXTURE_DIR}/valid-stderr-redirect-gates.yml" "${stderr_redirect_root}/.github/workflows/validate.yml"
+expect_pass "valid stderr redirect gates" "${stderr_redirect_root}"
+
+ansi_heredoc_root="${tmp_root}/valid-ansi-c-quoted-heredoc-marker"
+prepare_root "${ansi_heredoc_root}"
+cp "${FIXTURE_DIR}/valid-ansi-c-quoted-heredoc-marker.yml" "${ansi_heredoc_root}/.github/workflows/validate.yml"
+expect_pass "valid ansi c quoted heredoc marker" "${ansi_heredoc_root}"
 
 shellcheck_version_root="${tmp_root}/valid-shellcheck-version-package"
 prepare_root "${shellcheck_version_root}"
@@ -458,6 +484,16 @@ validate_pipe_ampersand_root="${tmp_root}/validate-pipe-ampersand-gates"
 prepare_root "${validate_pipe_ampersand_root}"
 cp "${FIXTURE_DIR}/validate-pipe-ampersand-gates.yml" "${validate_pipe_ampersand_root}/.github/workflows/validate.yml"
 expect_fail "validate pipe ampersand gates" "validate workflow runs make validate" "${validate_pipe_ampersand_root}"
+
+validate_ansi_text_root="${tmp_root}/validate-ansi-c-quoted-text-gates"
+prepare_root "${validate_ansi_text_root}"
+cp "${FIXTURE_DIR}/validate-ansi-c-quoted-text-gates.yml" "${validate_ansi_text_root}/.github/workflows/validate.yml"
+expect_fail "validate ansi c quoted text gates" "validate workflow runs make validate" "${validate_ansi_text_root}"
+
+validate_multiple_heredoc_root="${tmp_root}/validate-multiple-heredoc-gates"
+prepare_root "${validate_multiple_heredoc_root}"
+cp "${FIXTURE_DIR}/validate-multiple-heredoc-gates.yml" "${validate_multiple_heredoc_root}/.github/workflows/validate.yml"
+expect_fail "validate multiple heredoc gates" "validate workflow runs make validate" "${validate_multiple_heredoc_root}"
 
 rm -rf "${tmp_root}"
 printf 'PASS story-2.4 workflow permission fixtures\n'
