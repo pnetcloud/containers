@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,22 +40,32 @@ def request_json(url, token):
 
 
 def delete_url(url, token):
-    request = urllib.request.Request(
-        url,
-        method="DELETE",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": API_VERSION,
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            if response.status not in {202, 204}:
+    for attempt in range(1, 6):
+        request = urllib.request.Request(
+            url,
+            method="DELETE",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+                "X-GitHub-Api-Version": API_VERSION,
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                if response.status in {202, 204}:
+                    return
+                if response.status in {429, 500, 502, 503, 504} and attempt < 5:
+                    time.sleep(attempt * 2)
+                    continue
                 fail(f"DELETE {url} returned HTTP {response.status}")
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        fail(f"DELETE {url} failed: HTTP {exc.code}: {body}")
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            if exc.code == 404:
+                return
+            if exc.code in {429, 500, 502, 503, 504} and attempt < 5:
+                time.sleep(attempt * 2)
+                continue
+            fail(f"DELETE {url} failed: HTTP {exc.code}: {body}")
 
 
 def package_base(owner_kind, owner, package_name):
