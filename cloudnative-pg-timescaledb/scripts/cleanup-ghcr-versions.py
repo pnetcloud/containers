@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 import argparse
+import datetime
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -107,13 +110,69 @@ def select_candidate_versions(versions, prefix):
     return selected, skipped_mixed
 
 
+def candidate_tags_from(records, prefix):
+    tags = []
+    for record in records:
+        for tag in record.get("tags", []):
+            if tag.startswith(prefix) and tag not in tags:
+                tags.append(tag)
+    return tags
+
+
+def delete_versions(owner_kind, owner, package_name, records, token):
+    base = package_base(owner_kind, owner, package_name)
+    deleted = []
+    for record in records:
+        version_id = record.get("id")
+        if not isinstance(version_id, int):
+            fail(f"selected version has invalid id: {record}")
+        delete_url(f"{base}/{version_id}", token)
+        deleted.append(record)
+    return deleted
+
+
+def push_tombstone(image, tag):
+    created = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
+    with tempfile.TemporaryDirectory(prefix="ghcr-candidate-cleanup-") as tmp:
+        dockerfile = Path(tmp) / "Dockerfile"
+        dockerfile.write_text(
+            "\n".join(
+                [
+                    "FROM scratch",
+                    'LABEL org.opencontainers.image.title="temporary GHCR candidate cleanup marker"',
+                    'LABEL org.opencontainers.image.description="This image exists only long enough to detach a candidate tag from a release digest."',
+                    f'LABEL io.pnet.cleanup.candidate-tag="{tag}"',
+                    f'LABEL io.pnet.cleanup.created-at="{created}"',
+                    "",
+                ]
+            )
+        )
+        ref = f"{image}:{tag}"
+        subprocess.run(
+            [
+                "docker",
+                "buildx",
+                "build",
+                "--file",
+                str(dockerfile),
+                "--tag",
+                ref,
+                "--push",
+                tmp,
+            ],
+            check=True,
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Delete temporary GHCR candidate-only package versions.")
     parser.add_argument("--owner", required=True)
     parser.add_argument("--owner-kind", choices=["users", "orgs"], default="users")
     parser.add_argument("--package", required=True)
+    parser.add_argument("--image", help="Container image reference used when detaching mixed candidate tags, for example ghcr.io/owner/name.")
     parser.add_argument("--candidate-prefix", default="candidate-")
     parser.add_argument("--delete-candidates", action="store_true")
+    parser.add_argument("--detach-mixed-candidates", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--versions-file")
     parser.add_argument("--max-pages", type=int, default=20)
@@ -123,6 +182,11 @@ def main():
     if not args.versions_file and not token:
         fail("GITHUB_TOKEN is required when --versions-file is not used")
 
+    if args.detach_mixed_candidates and not args.image:
+        fail("--image is required with --detach-mixed-candidates")
+    if args.detach_mixed_candidates and args.versions_file and not args.dry_run:
+        fail("--versions-file can only be used with --detach-mixed-candidates in --dry-run mode")
+
     versions = load_versions(args, token)
     selected, skipped_mixed = select_candidate_versions(versions, args.candidate_prefix)
 
@@ -130,23 +194,42 @@ def main():
     if args.delete_candidates and not args.dry_run:
         if args.versions_file:
             fail("--versions-file can only be used with --dry-run")
-        base = package_base(args.owner_kind, args.owner, args.package)
-        for record in selected:
-            version_id = record.get("id")
-            if not isinstance(version_id, int):
-                fail(f"selected version has invalid id: {record}")
-            delete_url(f"{base}/{version_id}", token)
-            deleted.append(record)
+        deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, selected, token))
+
+    mixed_candidate_tags = candidate_tags_from(skipped_mixed, args.candidate_prefix)
+    detached_mixed_tags = []
+    if args.detach_mixed_candidates:
+        for tag in mixed_candidate_tags:
+            if not args.dry_run:
+                push_tombstone(args.image, tag)
+            detached_mixed_tags.append(tag)
+
+    post_detach_deleted = []
+    post_detach_selected = []
+    post_detach_skipped_mixed = []
+    if args.detach_mixed_candidates and args.delete_candidates and not args.dry_run:
+        post_detach_versions = load_versions(args, token)
+        post_detach_selected, post_detach_skipped_mixed = select_candidate_versions(post_detach_versions, args.candidate_prefix)
+        post_detach_deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, post_detach_selected, token))
 
     summary = {
         "package": f"{args.owner_kind}/{args.owner}/{args.package}",
         "candidate_prefix": args.candidate_prefix,
         "dry_run": args.dry_run,
         "delete_candidates": args.delete_candidates,
+        "detach_mixed_candidates": args.detach_mixed_candidates,
         "selected_count": len(selected),
         "deleted_count": len(deleted),
+        "post_detach_selected_count": len(post_detach_selected),
+        "post_detach_deleted_count": len(post_detach_deleted),
+        "post_detach_skipped_mixed_tag_count": len(post_detach_skipped_mixed),
         "skipped_mixed_tag_count": len(skipped_mixed),
+        "mixed_candidate_tags": mixed_candidate_tags,
+        "detached_mixed_tags": detached_mixed_tags,
         "selected": selected,
+        "post_detach_selected": post_detach_selected,
+        "post_detach_deleted": post_detach_deleted,
+        "post_detach_skipped_mixed_tags": post_detach_skipped_mixed,
         "skipped_mixed_tags": skipped_mixed,
     }
     print(json.dumps(summary, indent=2, sort_keys=True))

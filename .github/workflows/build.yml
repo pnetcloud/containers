@@ -873,6 +873,10 @@ jobs:
     steps:
       # actions/checkout v6.0.3
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - name: Login to GHCR for cleanup tag detachment
+        run: |
+          set -Eeuo pipefail
+          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
       - name: Delete candidate-only package versions
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -882,5 +886,7 @@ jobs:
             --owner "${GITHUB_REPOSITORY_OWNER}" \
             --owner-kind users \
             --package cloudnative-pg-timescaledb \
+            --image "ghcr.io/${GITHUB_REPOSITORY_OWNER}/cloudnative-pg-timescaledb" \
             --candidate-prefix candidate- \
-            --delete-candidates
+            --delete-candidates \
+            --detach-mixed-candidates

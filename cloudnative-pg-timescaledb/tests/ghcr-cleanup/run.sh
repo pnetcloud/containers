@@ -12,9 +12,11 @@ trap 'rm -f "${summary}"' EXIT
   --owner pnetcloud \
   --owner-kind users \
   --package cloudnative-pg-timescaledb \
+  --image ghcr.io/pnetcloud/cloudnative-pg-timescaledb \
   --versions-file "${FIXTURE}" \
   --candidate-prefix candidate- \
   --delete-candidates \
+  --detach-mixed-candidates \
   --dry-run >"${summary}"
 
 python3 - "${summary}" <<'PY'
@@ -30,10 +32,16 @@ if selected_ids != {101, 105}:
     raise SystemExit(f"unexpected selected ids: {sorted(selected_ids)}")
 if mixed_ids != {103}:
     raise SystemExit(f"unexpected mixed-tag skipped ids: {sorted(mixed_ids)}")
+if payload["mixed_candidate_tags"] != ["candidate-123-1-pg17-bookworm-index"]:
+    raise SystemExit(f"unexpected mixed candidate tags: {payload['mixed_candidate_tags']}")
+if payload["detached_mixed_tags"] != ["candidate-123-1-pg17-bookworm-index"]:
+    raise SystemExit(f"unexpected detached mixed tags: {payload['detached_mixed_tags']}")
 if payload["deleted_count"] != 0 or not payload["dry_run"]:
     raise SystemExit(f"fixture cleanup must be dry-run only: {payload}")
 if payload["selected_count"] != 2 or payload["skipped_mixed_tag_count"] != 1:
     raise SystemExit(f"unexpected cleanup counts: {payload}")
+if payload["post_detach_deleted_count"] != 0 or payload["post_detach_skipped_mixed_tag_count"] != 0:
+    raise SystemExit(f"dry-run must not reload or delete post-detach versions: {payload}")
 PY
 
 printf 'PASS GHCR candidate cleanup fixtures\n'

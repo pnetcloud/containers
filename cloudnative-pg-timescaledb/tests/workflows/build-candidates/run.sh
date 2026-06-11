@@ -112,6 +112,7 @@ if path.name == "build.yml":
     require("needs.publish.result == 'success'" in cleanup_body, "GHCR cleanup runs after successful publish only", cleanup_body[:500], "Do not delete candidates before final tags point at the promoted digest.")
     require("packages: write" in cleanup_body, "GHCR cleanup has package delete permission", cleanup_body[:500], "Grant packages: write only to the cleanup job that deletes temporary package versions.")
     require("cleanup-ghcr-versions.py" in cleanup_body and "--delete-candidates" in cleanup_body, "GHCR cleanup invokes candidate-only deletion script", cleanup_body[:500], "Use the audited cleanup selector instead of ad hoc GitHub API deletes.")
+    require("--detach-mixed-candidates" in cleanup_body and "--image" in cleanup_body, "GHCR cleanup detaches mixed candidate tags before deletion", cleanup_body[:500], "Move candidate tags off release package versions before deleting temporary candidates.")
 PY
 }
 
