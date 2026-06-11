@@ -206,6 +206,7 @@ for fixture in \
   valid-ansi-c-quoted-heredoc-marker.yml \
   valid-ansi-c-heredoc-delimiter.yml \
   valid-escaped-dollar-before-single-quote.yml \
+  valid-conditional-hash-heredoc-before-gates.yml \
   valid-shellcheck-version-package.yml \
   valid-shellcheck-apt-selectors.yml \
   valid-gate-redirections.yml \
@@ -259,7 +260,9 @@ for fixture in \
   validate-multiple-heredoc-gates.yml \
   validate-escaped-dollar-heredoc-gates.yml \
   validate-hash-heredoc-delimiter-gates.yml \
+  validate-unquoted-hash-heredoc-gates.yml \
   validate-conditional-heredoc-gates.yml \
+  validate-block-close-heredoc-gates.yml \
   valid-update-autocommit-contents-write.yml \
   invalid-update-nonautocommit-contents-write.yml; do
   [[ -f "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -f" "${FIXTURE_DIR}/${fixture}" "fixture exists" "missing" "Restore Story 2.4 workflow policy fixtures."; exit 1; }
@@ -315,6 +318,11 @@ escaped_dollar_root="${tmp_root}/valid-escaped-dollar-before-single-quote"
 prepare_root "${escaped_dollar_root}"
 cp "${FIXTURE_DIR}/valid-escaped-dollar-before-single-quote.yml" "${escaped_dollar_root}/.github/workflows/validate.yml"
 expect_pass "valid escaped dollar before single quote" "${escaped_dollar_root}"
+
+conditional_hash_heredoc_root="${tmp_root}/valid-conditional-hash-heredoc-before-gates"
+prepare_root "${conditional_hash_heredoc_root}"
+cp "${FIXTURE_DIR}/valid-conditional-hash-heredoc-before-gates.yml" "${conditional_hash_heredoc_root}/.github/workflows/validate.yml"
+expect_pass "valid conditional hash heredoc before gates" "${conditional_hash_heredoc_root}"
 
 shellcheck_version_root="${tmp_root}/valid-shellcheck-version-package"
 prepare_root "${shellcheck_version_root}"
@@ -520,10 +528,20 @@ prepare_root "${validate_hash_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-hash-heredoc-delimiter-gates.yml" "${validate_hash_heredoc_root}/.github/workflows/validate.yml"
 expect_fail "validate hash heredoc delimiter gates" "validate workflow runs make validate" "${validate_hash_heredoc_root}"
 
+validate_unquoted_hash_heredoc_root="${tmp_root}/validate-unquoted-hash-heredoc-gates"
+prepare_root "${validate_unquoted_hash_heredoc_root}"
+cp "${FIXTURE_DIR}/validate-unquoted-hash-heredoc-gates.yml" "${validate_unquoted_hash_heredoc_root}/.github/workflows/validate.yml"
+expect_fail "validate unquoted hash heredoc gates" "validate workflow runs make validate" "${validate_unquoted_hash_heredoc_root}"
+
 validate_conditional_heredoc_root="${tmp_root}/validate-conditional-heredoc-gates"
 prepare_root "${validate_conditional_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-conditional-heredoc-gates.yml" "${validate_conditional_heredoc_root}/.github/workflows/validate.yml"
 expect_fail "validate conditional heredoc gates" "validate workflow runs make validate" "${validate_conditional_heredoc_root}"
+
+validate_block_close_heredoc_root="${tmp_root}/validate-block-close-heredoc-gates"
+prepare_root "${validate_block_close_heredoc_root}"
+cp "${FIXTURE_DIR}/validate-block-close-heredoc-gates.yml" "${validate_block_close_heredoc_root}/.github/workflows/validate.yml"
+expect_fail "validate block close heredoc gates" "validate workflow runs make validate" "${validate_block_close_heredoc_root}"
 
 rm -rf "${tmp_root}"
 printf 'PASS story-2.4 workflow permission fixtures\n'

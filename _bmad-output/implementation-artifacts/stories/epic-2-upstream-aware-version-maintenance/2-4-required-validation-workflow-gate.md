@@ -199,6 +199,10 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for real ANSI-C heredoc delimiters and escaped dollar before single-quote text.
 - Addressed BMAD code-review pass 10 findings by making shell comment stripping quote-aware, tracking escaped dollars in heredoc delimiter scanning, and queueing heredocs discovered inside ignored shell conditional blocks before skipping their bodies.
 - Added regression fixtures for escaped-dollar heredoc payload gates, quoted heredoc delimiters containing `#`, and heredoc payloads inside shell conditional blocks.
+- Addressed BMAD code-review pass 11 findings by preserving non-comment `#` characters inside heredoc delimiters and queueing heredocs attached to block-close suffixes before ignoring non-executable payloads.
+- Added regression fixtures for valid conditional hash heredocs, invalid unquoted hash heredoc payload gates, and invalid block-close heredoc payload gates.
+- Addressed BMAD code-review pass 11 findings by preserving unquoted `#` inside shell words while still treating word-leading `#` as comments, and by queueing heredocs attached to shell block-close suffixes.
+- Added regression fixtures for unquoted hash heredoc delimiters, conditional hash heredocs before real gates, and block-close heredoc payload gates.
 
 ### Validation Commands
 
@@ -228,6 +232,8 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: ANSI-C quoted strings and multiple heredoc payloads no longer let non-executed gate-like text satisfy required gate checks.
 - Review follow-up: ANSI-C heredoc delimiters now terminate correctly, and escaped dollar-plus-single-quote text does not poison shell quote tracking.
 - Review follow-up: heredoc markers containing `#` and heredocs inside ignored conditional blocks no longer allow non-executed payload text to satisfy required gates.
+- Review follow-up: non-comment `#` heredoc delimiters and heredocs attached to `fi`/`done`/`esac` suffixes no longer allow payload-only gates to satisfy required validation checks.
+- Review follow-up: unquoted hash heredoc delimiters now remain intact during comment stripping, including ignored-block cases where later real gates must still be visible.
 
 ## File List
 
@@ -258,3 +264,5 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Hardened ANSI-C quote handling, multiple heredoc queues, and validator-specific fixtures that avoid shellcheck preemption.
 - 2026-06-10: Hardened ANSI-C heredoc delimiter quote removal and escaped-dollar quote tracking.
 - 2026-06-10: Hardened quote-aware comment stripping and heredoc queueing inside ignored shell blocks.
+- 2026-06-11: Hardened non-comment hash heredoc delimiters and block-close heredoc suffix queueing.
+- 2026-06-10: Hardened unquoted hash heredoc delimiters and block-close heredoc suffix handling.

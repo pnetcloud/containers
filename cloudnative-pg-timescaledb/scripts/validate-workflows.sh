@@ -237,6 +237,12 @@ def strip_shell_comment(value):
             previous_escaped = False
             continue
         if char == "#":
+            previous_char = result[-1] if result else ""
+            if previous_char and not previous_char.isspace() and previous_char not in {";", "&", "|", "(", ")", "<", ">"}:
+                result.append(char)
+                previous = char
+                previous_escaped = False
+                continue
             break
         result.append(char)
         previous = char
@@ -377,6 +383,7 @@ def executable_run_text(run):
                 shell_block_depth = max(shell_block_depth - 1, 0)
                 trailing = re.sub(r"^(fi|done|esac)\b", "", stripped, count=1).strip()
                 if trailing:
+                    heredoc_queue.extend(heredoc_delimiters(trailing))
                     executable.append(trailing)
                     if trailing.startswith(("||", "&&")):
                         stop_after_unsafe_control = True
