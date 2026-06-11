@@ -146,6 +146,23 @@ def select_signature_versions(versions):
     return selected, skipped_mixed
 
 
+def select_untagged_versions(versions):
+    selected = []
+    for version in versions:
+        version_id = version.get("id")
+        tags = tags_for(version)
+        if tags:
+            continue
+        selected.append(
+            {
+                "id": version_id,
+                "created_at": version.get("created_at", ""),
+                "tags": tags,
+            }
+        )
+    return selected
+
+
 def candidate_tags_from(records, prefix):
     tags = []
     for record in records:
@@ -209,6 +226,7 @@ def main():
     parser.add_argument("--candidate-prefix", default="candidate-")
     parser.add_argument("--delete-candidates", action="store_true")
     parser.add_argument("--delete-signature-tags", action="store_true", help="Delete main-package cosign signature tags named sha256-<64hex>.")
+    parser.add_argument("--delete-untagged", action="store_true", help="Delete package versions that have no container tags.")
     parser.add_argument("--detach-mixed-candidates", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--versions-file")
@@ -227,6 +245,7 @@ def main():
     versions = load_versions(args, token)
     selected, skipped_mixed = select_candidate_versions(versions, args.candidate_prefix)
     signature_selected, signature_skipped_mixed = select_signature_versions(versions)
+    untagged_selected = select_untagged_versions(versions)
 
     deleted = []
     if args.delete_candidates and not args.dry_run:
@@ -239,6 +258,12 @@ def main():
         if args.versions_file:
             fail("--versions-file can only be used with --dry-run")
         signature_deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, signature_selected, token))
+
+    untagged_deleted = []
+    if args.delete_untagged and not args.dry_run:
+        if args.versions_file:
+            fail("--versions-file can only be used with --dry-run")
+        untagged_deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, untagged_selected, token))
 
     mixed_candidate_tags = candidate_tags_from(skipped_mixed, args.candidate_prefix)
     detached_mixed_tags = []
@@ -270,12 +295,16 @@ def main():
         "signature_selected_count": len(signature_selected),
         "signature_deleted_count": len(signature_deleted),
         "signature_skipped_mixed_tag_count": len(signature_skipped_mixed),
+        "untagged_selected_count": len(untagged_selected),
+        "untagged_deleted_count": len(untagged_deleted),
         "skipped_mixed_tag_count": len(skipped_mixed),
         "mixed_candidate_tags": mixed_candidate_tags,
         "detached_mixed_tags": detached_mixed_tags,
         "signature_selected": signature_selected,
         "signature_deleted": signature_deleted,
         "signature_skipped_mixed_tags": signature_skipped_mixed,
+        "untagged_selected": untagged_selected,
+        "untagged_deleted": untagged_deleted,
         "selected": selected,
         "post_detach_selected": post_detach_selected,
         "post_detach_deleted": post_detach_deleted,
