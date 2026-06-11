@@ -34,7 +34,9 @@ fi
 
 python3 - "${ROOT_DIR}" "${POLICY_FILE}" <<'PY'
 from pathlib import Path
+import fnmatch
 import re
+import shlex
 import sys
 import yaml
 
@@ -444,29 +446,230 @@ def always_entered_block(value):
         or re.match(r"^while\s+true(?:\s*;?\s*do\b)?$", value)
         or re.match(r"^while\s+:(?:\s*;?\s*do\b)?$", value)
         or re.match(r"^until\s+false(?:\s*;?\s*do\b)?$", value)
-        or re.match(r"^for\s+[A-Za-z_][A-Za-z0-9_]*\s+in\s+[A-Za-z0-9_.-]+(?:\s*;?\s*do\b)?$", value)
+        or re.match(r"^for\s+[A-Za-z_][A-Za-z0-9_]*\s+in\s+[A-Za-z0-9_.-]+(?:\s+[A-Za-z0-9_.-]+)*(?:\s*;?\s*do\b)?$", value)
     )
 
 
 def static_case_literal(value):
-    match = re.match(r"^case\s+([A-Za-z0-9_.-]+)\s+in$", value)
+    match = re.match(r"^case\s+(.+?)\s+in$", value)
     if match:
-        return match.group(1)
+        return simple_shell_word(match.group(1))
     return None
 
 
-def case_exit_matches(value, literal):
+def simple_shell_word(value):
+    if any(token in value for token in ("$", "`", "\n")):
+        return None
+    try:
+        words = shlex.split(value, posix=True)
+    except ValueError:
+        return None
+    if len(words) != 1:
+        return None
+    return words[0]
+
+
+def split_case_patterns(value):
+    patterns = []
+    current = []
+    quote = None
+    escaped = False
+    for char in value:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            current.append(char)
+            escaped = True
+            continue
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+            continue
+        if char in {"'", '"'}:
+            current.append(char)
+            quote = char
+            continue
+        if char == "|":
+            patterns.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    patterns.append("".join(current).strip())
+    return patterns
+
+
+def case_patterns_match(pattern_text, literal):
     if not literal:
         return False
-    escaped = re.escape(literal)
-    return bool(
-        re.match(rf"^({escaped}|\*)\)\s*(exit|return)\b", value)
-        or re.match(rf"^case\s+{escaped}\s+in\s+({escaped}|\*)\)\s*(exit|return)\b", value)
-    )
+    for raw_pattern in split_case_patterns(pattern_text):
+        pattern = simple_shell_word(raw_pattern)
+        if pattern is not None and fnmatch.fnmatchcase(literal, pattern):
+            return True
+    return False
+
+
+def case_arm(value):
+    match = re.match(r"^(.+?)\)\s*(.*)$", value)
+    if not match:
+        return None
+    return match.group(1), match.group(2)
+
+
+def case_exit_matches(value, literal):
+    arm = case_arm(value)
+    return bool(arm and case_patterns_match(arm[0], literal) and unconditional_exit_segment(arm[1]))
+
+
+def one_line_case_exit(value):
+    match = re.match(r"^case\s+(.+?)\s+in\s+(.+?)\)\s*(.*)$", value)
+    if not match:
+        return False
+    literal = simple_shell_word(match.group(1))
+    return case_patterns_match(match.group(2), literal) and unconditional_exit_segment(match.group(3))
+
+
+def one_line_case_start(value):
+    match = re.match(r"^case\s+(.+?)\s+in\s+(.+?)\)\s*(.*)$", value)
+    if not match:
+        return None
+    literal = simple_shell_word(match.group(1))
+    if case_patterns_match(match.group(2), literal):
+        return literal, match.group(3)
+    return None
+
+
+def case_arm_matches(value, literal):
+    arm = case_arm(value)
+    return bool(arm and case_patterns_match(arm[0], literal))
+
+
+def split_top_level_and(value):
+    parts = []
+    current = []
+    quote = None
+    escaped = False
+    command_substitution_depth = 0
+    idx = 0
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            current.append(char)
+            escaped = False
+            idx += 1
+            continue
+        if char == "\\" and (quote != "'" or command_substitution_depth):
+            current.append(char)
+            escaped = True
+            idx += 1
+            continue
+        if quote != "'" and value.startswith("$(", idx):
+            command_substitution_depth += 1
+            current.append("$(")
+            idx += 2
+            continue
+        if command_substitution_depth and char == ")":
+            command_substitution_depth -= 1
+            current.append(char)
+            idx += 1
+            continue
+        if quote:
+            current.append(char)
+            if char == quote and not command_substitution_depth:
+                quote = None
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            current.append(char)
+            idx += 1
+            continue
+        if command_substitution_depth == 0 and value.startswith("&&", idx):
+            parts.append("".join(current).strip())
+            current = []
+            idx += 2
+            continue
+        current.append(char)
+        idx += 1
+    parts.append("".join(current).strip())
+    return parts
+
+
+def static_success_segment(value):
+    return bool(re.match(r"^(true|:|echo|printf)(?:\s|$)", value))
+
+
+def exit_segment(value):
+    return bool(re.match(r"^(exit|return)\b", value) or re.match(r"^\{\s*(exit|return)\b", value))
+
+
+def static_and_chain_exit(value):
+    parts = split_top_level_and(value)
+    return len(parts) > 1 and exit_segment(parts[-1]) and all(static_success_segment(part) for part in parts[:-1])
 
 
 def has_pipeline(value):
-    return bool(re.search(r"(?<![|])\|(?![|&])", value))
+    quote = None
+    escaped = False
+    ansi_single_quote = False
+    command_substitution_depth = 0
+    previous = ""
+    previous_escaped = False
+    idx = 0
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            escaped = False
+            previous = char
+            previous_escaped = True
+            idx += 1
+            continue
+        if char == "\\" and (quote != "'" or ansi_single_quote):
+            escaped = True
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if quote != "'" and value.startswith("$(", idx):
+            command_substitution_depth += 1
+            previous = "("
+            previous_escaped = False
+            idx += 2
+            continue
+        if command_substitution_depth and char == ")":
+            command_substitution_depth -= 1
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+                ansi_single_quote = False
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if (
+            command_substitution_depth == 0
+            and char == "|"
+            and (idx == 0 or value[idx - 1] != "|")
+            and (idx + 1 >= len(value) or value[idx + 1] != "|")
+        ):
+            return True
+        previous = char
+        previous_escaped = False
+        idx += 1
+    return False
 
 
 def unconditional_exit_segment(value):
@@ -475,7 +678,9 @@ def unconditional_exit_segment(value):
     return bool(
         re.match(r"^(exit|return)\b", value)
         or re.match(r"^(then|do)\s*(exit|return)\b", value)
+        or re.match(r"^(then|do)\s*\{\s*(exit|return)\b", value)
         or re.search(r"(^|\s)true\s+&&\s*(exit|return)\b", value)
+        or static_and_chain_exit(value)
         or re.search(r"(^|\s)true\s+&&\s*\{\s*(exit|return)\b", value)
         or re.search(r"(^|\s)false\s+\|\|\s*(exit|return)\b", value)
         or re.search(r"(^|\s)false\s+\|\|\s*\{\s*(exit|return)\b", value)
@@ -484,9 +689,9 @@ def unconditional_exit_segment(value):
 
 
 def structural_closes_same_segment(value, close_token):
-    if close_token == "}":
-        return bool(re.search(r"\}(?:\s|[;&|]|$)", value))
     if close_token == ")":
+        if "$(" in value:
+            return False
         return bool(re.search(r"\)(?:\s|[;&|]|$)", value))
     return False
 
@@ -497,6 +702,7 @@ def executable_run_text(run):
     shell_block_depth = 0
     always_true_depths = set()
     case_literals = {}
+    active_case_depths = set()
     shell_function_stack = []
     pending_function_header = False
     stop_after_unsafe_control = False
@@ -531,7 +737,7 @@ def executable_run_text(run):
                 close_token = structural_close(stripped)
                 if close_token and shell_function_stack and shell_function_stack[-1] == close_token:
                     shell_function_stack.pop()
-                elif shell_function_stack and structural_closes_same_segment(stripped, shell_function_stack[-1]):
+                elif shell_function_stack[-1] == ")" and structural_closes_same_segment(stripped, ")"):
                     shell_function_stack.pop()
                 else:
                     open_token = structural_open(stripped)
@@ -571,6 +777,7 @@ def executable_run_text(run):
             if re.match(r"^(fi|done|esac)\b", stripped):
                 always_true_depths.discard(shell_block_depth)
                 case_literals.pop(shell_block_depth, None)
+                active_case_depths.discard(shell_block_depth)
                 shell_block_depth = max(shell_block_depth - 1, 0)
                 trailing = re.sub(r"^(fi|done|esac)\b", "", stripped, count=1).strip()
                 if trailing:
@@ -582,9 +789,17 @@ def executable_run_text(run):
                 continue
             if shell_block_depth:
                 heredoc_queue.extend(segment_heredocs)
-                if (shell_block_depth in always_true_depths and unconditional_exit_segment(stripped)) or case_exit_matches(stripped, case_literals.get(shell_block_depth)):
+                if case_arm_matches(stripped, case_literals.get(shell_block_depth)):
+                    active_case_depths.add(shell_block_depth)
+                if (
+                    (shell_block_depth in always_true_depths and unconditional_exit_segment(stripped))
+                    or case_exit_matches(stripped, case_literals.get(shell_block_depth))
+                    or (shell_block_depth in active_case_depths and unconditional_exit_segment(stripped))
+                ):
                     stop_after_unsafe_control = True
                     break
+                if ";;" in stripped:
+                    active_case_depths.discard(shell_block_depth)
                 if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                     shell_block_depth += 1
                     if always_entered_block(stripped):
@@ -596,12 +811,19 @@ def executable_run_text(run):
             if re.match(r"^(echo|printf)\b", stripped):
                 continue
             if re.match(r"^(if|while|until|case|for|select)\b", stripped):
+                one_line_case = one_line_case_start(stripped)
+                if one_line_case and unconditional_exit_segment(one_line_case[1]):
+                    stop_after_unsafe_control = True
+                    break
                 shell_block_depth += 1
                 if always_entered_block(stripped):
                     always_true_depths.add(shell_block_depth)
                 case_literal = static_case_literal(stripped)
                 if case_literal:
                     case_literals[shell_block_depth] = case_literal
+                if one_line_case:
+                    case_literals[shell_block_depth] = one_line_case[0]
+                    active_case_depths.add(shell_block_depth)
                 continue
             heredoc_queue.extend(segment_heredocs)
             if unconditional_exit_segment(stripped):

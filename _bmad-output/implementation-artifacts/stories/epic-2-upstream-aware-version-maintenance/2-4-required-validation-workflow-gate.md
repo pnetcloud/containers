@@ -219,6 +219,14 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for constant OR exit bypasses, constant false AND non-exit paths, case/for/while exit before gates, and one-line subshell groups inside functions before real gates.
 - Addressed BMAD review findings for `if :` and one-line `then/do exit` reachability, non-matching case-arm false failures, pipeline-exit false failures, and semicolon-separated one-line subshell function helpers.
 - Added regression fixtures for `if :` exit, one-line `if true; then exit`, non-matching case exits before real gates, pipeline exit before real gates, and semicolon-separated subshell helper functions before real gates.
+- Addressed BMAD review findings for one-line matching `case` exits, multi-line matching case arms with later exits, literal `}` inside function bodies, `|&` pipeline exits, brace-wrapped short-circuit exits, and static multi-word `for` lists.
+- Added regression coverage for one-line matching `case` exit before gates while preserving non-matching case and pipeline-exit positive cases.
+- Addressed BMAD review findings for case pattern alternation, quoted pipe characters in non-pipeline exit segments, command substitutions inside subshell function bodies, and one-line case exits.
+- Added regression fixtures for case alternation exits, quoted pipe exit chains, and command substitution inside subshell helpers before real gates.
+- Added positive regression coverage for one-line brace helper functions before real validation gates.
+- Addressed BMAD review findings for overly broad `true && ... && exit` detection, top-level pipeline detection with `$(... | ...)`, and shell pattern matching in static `case` arms.
+- Added regression fixtures for `true && false && exit` positive flow, command-substitution pipeline exits, glob-matching case exits, and quoted case literals.
+- Addressed BMAD review finding for one-line matching `case` arms that run a command before an exit across semicolon-split segments.
 
 ### Validation Commands
 
@@ -258,6 +266,11 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: reachability handling catches direct and short-circuit exits before gates without rejecting non-constant conditional exits followed by direct gates; one-line subshell helper functions no longer hide later gates.
 - Review follow-up: reachability handling distinguishes static `true && exit` and `false || exit` from `false && exit`, catches simple always-entered loop/case exits, and does not treat one-line subshell groups inside functions as unclosed function bodies.
 - Review follow-up: static reachability now covers `if :` and one-line `then/do exit`, avoids non-matching case and pipeline false failures, and closes semicolon-separated one-line subshell helpers.
+- Review follow-up: case-arm tracking now follows matching arms across lines and detects one-line matching case exits; function stack closing no longer treats literal `}` arguments as function closers.
+- Review follow-up: case-arm matching accepts `|` alternatives, pipeline detection is quote-aware, and subshell function closing ignores command substitutions.
+- Review follow-up: one-line brace helper functions are now covered as a positive workflow fixture so later parser changes cannot hide required gates.
+- Review follow-up: static `&&` exit detection now requires known-success prior commands, pipeline detection ignores `|` inside command substitutions, and static `case` matching now uses shell-style patterns for known literals.
+- Review follow-up: one-line matching `case` arms now keep active-arm state across semicolon-split segments until the exit is detected.
 
 ## File List
 
@@ -298,3 +311,8 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-11: Hardened short-circuit exit reachability and one-line subshell helper parsing.
 - 2026-06-11: Hardened constant short-circuit reachability, simple always-entered loop/case exits, and one-line subshell groups inside function bodies.
 - 2026-06-11: Hardened one-line control-flow exits, case-arm matching, pipeline-exit handling, and semicolon-separated subshell helper parsing.
+- 2026-06-11: Hardened one-line case exits, matching case-arm state, literal function close tokens, and pipeline/brace short-circuit edge cases.
+- 2026-06-11: Hardened case alternation, quote-aware pipeline detection, and command substitution handling in subshell functions.
+- 2026-06-11: Added positive regression coverage for one-line brace helper functions before validation gates.
+- 2026-06-11: Hardened static `&&` chains, command-substitution pipeline handling, and glob/quoted static case matching.
+- 2026-06-11: Hardened semicolon-split one-line matching case arms with commands before exits.
