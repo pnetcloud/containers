@@ -16,6 +16,7 @@ from pathlib import Path
 
 API_VERSION = "2022-11-28"
 SIGNATURE_TAG_RE = re.compile(r"^sha256-[0-9a-f]{64}$")
+DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def fail(message):
@@ -146,21 +147,58 @@ def select_signature_versions(versions):
     return selected, skipped_mixed
 
 
-def select_untagged_versions(versions):
+def digest_for(version):
+    candidates = [version.get("name")]
+    metadata = version.get("metadata") if isinstance(version, dict) else {}
+    container = metadata.get("container") if isinstance(metadata, dict) else {}
+    if isinstance(container, dict):
+        candidates.extend(
+            [
+                container.get("digest"),
+                container.get("manifest_digest"),
+            ]
+        )
+    for candidate in candidates:
+        if isinstance(candidate, str) and DIGEST_RE.fullmatch(candidate):
+            return candidate
+    return ""
+
+
+def select_untagged_versions(versions, protected_digests):
     selected = []
+    skipped_protected = []
+    skipped_unknown_digest = []
     for version in versions:
         version_id = version.get("id")
         tags = tags_for(version)
         if tags:
             continue
-        selected.append(
-            {
-                "id": version_id,
-                "created_at": version.get("created_at", ""),
-                "tags": tags,
-            }
-        )
-    return selected
+        record = {
+            "id": version_id,
+            "created_at": version.get("created_at", ""),
+            "digest": digest_for(version),
+            "tags": tags,
+        }
+        if not record["digest"]:
+            skipped_unknown_digest.append(record)
+        elif record["digest"] in protected_digests:
+            skipped_protected.append(record)
+        else:
+            selected.append(record)
+    return selected, skipped_protected, skipped_unknown_digest
+
+
+def load_protected_digests(args):
+    protected = set(args.protected_digest or [])
+    if args.protected_digests_file:
+        for line in Path(args.protected_digests_file).read_text().splitlines():
+            digest = line.strip()
+            if digest and not digest.startswith("#"):
+                protected.add(digest)
+    invalid = sorted(digest for digest in protected if not DIGEST_RE.fullmatch(digest))
+    if invalid:
+        fail(f"protected digest values must match sha256:<64 lowercase hex>: {invalid}")
+    return protected
 
 
 def candidate_tags_from(records, prefix):
@@ -179,6 +217,18 @@ def delete_versions(owner_kind, owner, package_name, records, token):
         version_id = record.get("id")
         if not isinstance(version_id, int):
             fail(f"selected version has invalid id: {record}")
+        print(
+            json.dumps(
+                {
+                    "action": "delete_package_version",
+                    "id": version_id,
+                    "tags": record.get("tags", []),
+                    "digest": record.get("digest", ""),
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
         delete_url(f"{base}/{version_id}", token)
         deleted.append(record)
     return deleted
@@ -229,8 +279,10 @@ def main():
     parser.add_argument(
         "--delete-untagged",
         action="store_true",
-        help="Disabled safety switch. Untagged GHCR package versions can be platform manifests or attestations referenced by release tags.",
+        help="Delete untagged package versions whose digest is not in the protected release digest set.",
     )
+    parser.add_argument("--protected-digest", action="append", default=[], help="Release digest that must never be deleted when deleting untagged versions.")
+    parser.add_argument("--protected-digests-file", help="Newline-delimited protected release digests.")
     parser.add_argument("--detach-mixed-candidates", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--versions-file")
@@ -246,10 +298,11 @@ def main():
     if args.detach_mixed_candidates and args.versions_file and not args.dry_run:
         fail("--versions-file can only be used with --detach-mixed-candidates in --dry-run mode")
 
+    protected_digests = load_protected_digests(args)
     versions = load_versions(args, token)
     selected, skipped_mixed = select_candidate_versions(versions, args.candidate_prefix)
     signature_selected, signature_skipped_mixed = select_signature_versions(versions)
-    untagged_selected = select_untagged_versions(versions)
+    untagged_selected, untagged_skipped_protected, untagged_skipped_unknown_digest = select_untagged_versions(versions, protected_digests)
 
     deleted = []
     if args.delete_candidates and not args.dry_run:
@@ -265,10 +318,11 @@ def main():
 
     untagged_deleted = []
     if args.delete_untagged and not args.dry_run:
-        fail(
-            "--delete-untagged is disabled: untagged GHCR versions can be release platform manifests "
-            "or BuildKit attestations, and deleting them can break tagged multi-platform images"
-        )
+        if args.versions_file:
+            fail("--versions-file can only be used with --dry-run")
+        if not protected_digests:
+            fail("--delete-untagged requires --protected-digest or --protected-digests-file")
+        untagged_deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, untagged_selected, token))
 
     mixed_candidate_tags = candidate_tags_from(skipped_mixed, args.candidate_prefix)
     detached_mixed_tags = []
@@ -300,8 +354,12 @@ def main():
         "signature_selected_count": len(signature_selected),
         "signature_deleted_count": len(signature_deleted),
         "signature_skipped_mixed_tag_count": len(signature_skipped_mixed),
+        "protected_digest_count": len(protected_digests),
+        "protected_digests": sorted(protected_digests),
         "untagged_selected_count": len(untagged_selected),
         "untagged_deleted_count": len(untagged_deleted),
+        "untagged_skipped_protected_count": len(untagged_skipped_protected),
+        "untagged_skipped_unknown_digest_count": len(untagged_skipped_unknown_digest),
         "skipped_mixed_tag_count": len(skipped_mixed),
         "mixed_candidate_tags": mixed_candidate_tags,
         "detached_mixed_tags": detached_mixed_tags,
@@ -310,6 +368,8 @@ def main():
         "signature_skipped_mixed_tags": signature_skipped_mixed,
         "untagged_selected": untagged_selected,
         "untagged_deleted": untagged_deleted,
+        "untagged_skipped_protected": untagged_skipped_protected,
+        "untagged_skipped_unknown_digest": untagged_skipped_unknown_digest,
         "selected": selected,
         "post_detach_selected": post_detach_selected,
         "post_detach_deleted": post_detach_deleted,

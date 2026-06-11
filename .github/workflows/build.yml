@@ -883,6 +883,42 @@ jobs:
         run: |
           set -Eeuo pipefail
           printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - name: Collect protected release digests
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ghcr-cleanup/output
+          python3 - ghcr-cleanup/input/release-metadata <<'PY' > ghcr-cleanup/output/final-release-refs.txt
+          import json
+          import sys
+          from pathlib import Path
+
+          refs = []
+          for path in sorted(Path(sys.argv[1]).rglob("ghcr-release-metadata.json")):
+              payload = json.loads(path.read_text())
+              image = payload.get("image")
+              for tag in payload.get("final_tags", []):
+                  ref = f"{image}:{tag}"
+                  if image and isinstance(tag, str) and ref not in refs:
+                      refs.append(ref)
+          if not refs:
+              raise SystemExit("no final tags found in release metadata artifacts")
+          print("\n".join(refs))
+          PY
+          : > ghcr-cleanup/output/protected-digests.txt
+          while IFS= read -r ref; do
+            printf 'Collecting protected release digests from %s\n' "${ref}"
+            inspect_raw="ghcr-cleanup/output/$(printf '%s' "${ref}" | tr '/:@' '____').raw.json"
+            docker buildx imagetools inspect "${ref}" --raw > "${inspect_raw}"
+            docker buildx imagetools inspect "${ref}" | awk '/Digest:/ {print $2; exit}' >> ghcr-cleanup/output/protected-digests.txt
+            jq -r '.manifests[]?.digest // empty' "${inspect_raw}" >> ghcr-cleanup/output/protected-digests.txt
+          done < ghcr-cleanup/output/final-release-refs.txt
+          sort -u ghcr-cleanup/output/protected-digests.txt -o ghcr-cleanup/output/protected-digests.txt
+          if [[ ! -s ghcr-cleanup/output/protected-digests.txt ]]; then
+            printf 'No protected release digests were collected.\n' >&2
+            exit 1
+          fi
+          printf 'Protected release digest count: '
+          wc -l < ghcr-cleanup/output/protected-digests.txt
       - name: Delete auxiliary package versions
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -896,6 +932,8 @@ jobs:
             --candidate-prefix candidate- \
             --delete-candidates \
             --delete-signature-tags \
+            --delete-untagged \
+            --protected-digests-file ghcr-cleanup/output/protected-digests.txt \
             --detach-mixed-candidates
       - name: Verify public pulls after cleanup
         run: |
