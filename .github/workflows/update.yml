@@ -46,6 +46,7 @@ jobs:
           export NEW_VERSION_DIGEST="unchanged"
           if [[ -f /tmp/cloudnative-pg-timescaledb-update.json ]]; then
             eval "$(python3 - /tmp/cloudnative-pg-timescaledb-update.json <<'PY'
+          import hashlib
           import json
           import shlex
           import sys
@@ -65,8 +66,13 @@ jobs:
                       item = value[key]
                       if isinstance(item, (str, int, float, bool)):
                           parts.append(f"{key}={item}")
-                  return ",".join(parts) or "n/a"
-              return str(value) if value else "n/a"
+                  return ",".join(parts) or "unchanged"
+              if isinstance(value, str):
+                  stripped = value.strip()
+                  if not stripped:
+                      return "unchanged"
+                  return "sha256:" + hashlib.sha256(stripped.encode("utf-8")).hexdigest()
+              return str(value) if value else "unchanged"
           print("OLD_VERSION_DIGEST=" + shlex.quote(compact(old)))
           print("NEW_VERSION_DIGEST=" + shlex.quote(compact(new)))
           PY
