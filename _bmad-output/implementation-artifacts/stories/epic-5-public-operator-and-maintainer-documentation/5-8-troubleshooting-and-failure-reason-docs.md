@@ -3,7 +3,7 @@ storyId: 5.8
 storyKey: 5-8-troubleshooting-and-failure-reason-docs
 epic: 5
 title: 'Troubleshooting and Failure Reason Docs'
-status: completed
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 ---

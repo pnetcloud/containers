@@ -3,7 +3,7 @@ storyId: 4.5
 storyKey: 4-5-ghcr-publish-and-tag-promotion
 epic: 4
 title: 'GHCR Publish and Tag Promotion'
-status: complete
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 ---

@@ -3,7 +3,7 @@ storyId: 5.7
 storyKey: 5-7-workflow-script-and-documentation-validation-gates
 epic: 5
 title: 'Workflow, Script, and Documentation Validation Gates'
-status: completed
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 ---

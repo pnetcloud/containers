@@ -3,7 +3,7 @@ storyId: 4.4
 storyKey: 4-4-release-evidence-and-signing-gate
 epic: 4
 title: 'Release Evidence and Signing Gate'
-status: complete
+status: done
 baseline_commit: 6f494505057a44581f1c3e15741d13dec69a0819
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09

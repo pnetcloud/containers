@@ -3,7 +3,7 @@ storyId: 1.1
 storyKey: 1-1-scaffold-and-versions-metadata-contract
 epic: 1
 title: 'Scaffold and Versions Metadata Contract'
-status: complete
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 baseline_commit: 2425d6d099de46c2889ecb91aa5e6046be1f6d63

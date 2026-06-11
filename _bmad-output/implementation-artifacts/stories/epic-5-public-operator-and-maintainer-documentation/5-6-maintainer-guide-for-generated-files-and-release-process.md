@@ -3,7 +3,7 @@ storyId: 5.6
 storyKey: 5-6-maintainer-guide-for-generated-files-and-release-process
 epic: 5
 title: 'Maintainer Guide for Generated Files and Release Process'
-status: completed
+status: done
 source: _bmad-output/planning-artifacts/epics.md
 generatedOn: 2026-06-09
 ---
