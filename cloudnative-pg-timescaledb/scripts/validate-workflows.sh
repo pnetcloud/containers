@@ -238,7 +238,7 @@ def strip_shell_comment(value):
             continue
         if char == "#":
             previous_char = result[-1] if result else ""
-            if previous_char and not previous_char.isspace() and previous_char not in {";", "&", "|", "(", ")", "<", ">"}:
+            if previous_char and (previous_escaped or (not previous_char.isspace() and previous_char not in {";", "&", "|", "(", ")", "<", ">"})):
                 result.append(char)
                 previous = char
                 previous_escaped = False
@@ -247,6 +247,59 @@ def strip_shell_comment(value):
         result.append(char)
         previous = char
         previous_escaped = False
+    return "".join(result)
+
+
+def collapse_shell_line_continuations(value):
+    result = []
+    quote = None
+    escaped = False
+    ansi_single_quote = False
+    previous = ""
+    previous_escaped = False
+    idx = 0
+    while idx < len(value):
+        char = value[idx]
+        if escaped:
+            result.append(char)
+            escaped = False
+            previous = char
+            previous_escaped = True
+            idx += 1
+            continue
+        if char == "\\" and idx + 1 < len(value) and value[idx + 1] == "\n" and (quote != "'" or ansi_single_quote):
+            idx += 2
+            previous = ""
+            previous_escaped = False
+            continue
+        if char == "\\" and (quote != "'" or ansi_single_quote):
+            result.append(char)
+            escaped = True
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if quote:
+            result.append(char)
+            if char == quote:
+                quote = None
+                ansi_single_quote = False
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        if char in {"'", '"'}:
+            result.append(char)
+            quote = char
+            ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
+            previous = char
+            previous_escaped = False
+            idx += 1
+            continue
+        result.append(char)
+        previous = char
+        previous_escaped = False
+        idx += 1
     return "".join(result)
 
 
@@ -366,7 +419,7 @@ def executable_run_text(run):
     heredoc_queue = []
     shell_block_depth = 0
     stop_after_unsafe_control = False
-    for line in run.splitlines():
+    for line in collapse_shell_line_continuations(run).splitlines():
         if stop_after_unsafe_control:
             break
         if heredoc_queue:
@@ -558,6 +611,8 @@ def command_present(run_text, pattern):
         if not match:
             continue
         suffix = line[match.end():]
+        if suffix and not re.match(r"^\s*(?:$|[;|&<>]|\d?>|&>)", suffix):
+            continue
         if "||" in suffix or "|&" in suffix:
             continue
         without_redirects = re.sub(r"\d?>&\d|\d?>[^\s;|&]+|&>[^\s;|&]+", "", suffix)

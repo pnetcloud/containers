@@ -207,6 +207,7 @@ for fixture in \
   valid-ansi-c-heredoc-delimiter.yml \
   valid-escaped-dollar-before-single-quote.yml \
   valid-conditional-hash-heredoc-before-gates.yml \
+  valid-escaped-space-hash-heredoc-before-gates.yml \
   valid-shellcheck-version-package.yml \
   valid-shellcheck-apt-selectors.yml \
   valid-gate-redirections.yml \
@@ -260,6 +261,8 @@ for fixture in \
   validate-multiple-heredoc-gates.yml \
   validate-escaped-dollar-heredoc-gates.yml \
   validate-hash-heredoc-delimiter-gates.yml \
+  validate-hash-suffixed-gates.yml \
+  validate-line-continuation-hash-heredoc-gates.yml \
   validate-unquoted-hash-heredoc-gates.yml \
   validate-conditional-heredoc-gates.yml \
   validate-block-close-heredoc-gates.yml \
@@ -323,6 +326,11 @@ conditional_hash_heredoc_root="${tmp_root}/valid-conditional-hash-heredoc-before
 prepare_root "${conditional_hash_heredoc_root}"
 cp "${FIXTURE_DIR}/valid-conditional-hash-heredoc-before-gates.yml" "${conditional_hash_heredoc_root}/.github/workflows/validate.yml"
 expect_pass "valid conditional hash heredoc before gates" "${conditional_hash_heredoc_root}"
+
+escaped_space_hash_heredoc_root="${tmp_root}/valid-escaped-space-hash-heredoc-before-gates"
+prepare_root "${escaped_space_hash_heredoc_root}"
+cp "${FIXTURE_DIR}/valid-escaped-space-hash-heredoc-before-gates.yml" "${escaped_space_hash_heredoc_root}/.github/workflows/validate.yml"
+expect_pass "valid escaped space hash heredoc before gates" "${escaped_space_hash_heredoc_root}"
 
 shellcheck_version_root="${tmp_root}/valid-shellcheck-version-package"
 prepare_root "${shellcheck_version_root}"
@@ -527,6 +535,16 @@ validate_hash_heredoc_root="${tmp_root}/validate-hash-heredoc-delimiter-gates"
 prepare_root "${validate_hash_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-hash-heredoc-delimiter-gates.yml" "${validate_hash_heredoc_root}/.github/workflows/validate.yml"
 expect_fail "validate hash heredoc delimiter gates" "validate workflow runs make validate" "${validate_hash_heredoc_root}"
+
+validate_hash_suffixed_root="${tmp_root}/validate-hash-suffixed-gates"
+prepare_root "${validate_hash_suffixed_root}"
+cp "${FIXTURE_DIR}/validate-hash-suffixed-gates.yml" "${validate_hash_suffixed_root}/.github/workflows/validate.yml"
+expect_fail "validate hash suffixed gates" "validate workflow runs make validate" "${validate_hash_suffixed_root}"
+
+validate_line_continuation_hash_heredoc_root="${tmp_root}/validate-line-continuation-hash-heredoc-gates"
+prepare_root "${validate_line_continuation_hash_heredoc_root}"
+cp "${FIXTURE_DIR}/validate-line-continuation-hash-heredoc-gates.yml" "${validate_line_continuation_hash_heredoc_root}/.github/workflows/validate.yml"
+expect_fail "validate line continuation hash heredoc gates" "validate workflow runs make validate|shellcheck reported issue" "${validate_line_continuation_hash_heredoc_root}"
 
 validate_unquoted_hash_heredoc_root="${tmp_root}/validate-unquoted-hash-heredoc-gates"
 prepare_root "${validate_unquoted_hash_heredoc_root}"

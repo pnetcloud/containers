@@ -203,6 +203,8 @@ Every implementation story must finish with a working repository state and must 
 - Added regression fixtures for valid conditional hash heredocs, invalid unquoted hash heredoc payload gates, and invalid block-close heredoc payload gates.
 - Addressed BMAD code-review pass 11 findings by preserving unquoted `#` inside shell words while still treating word-leading `#` as comments, and by queueing heredocs attached to shell block-close suffixes.
 - Added regression fixtures for unquoted hash heredoc delimiters, conditional hash heredocs before real gates, and block-close heredoc payload gates.
+- Addressed final BMAD code-review findings by requiring required gate matches to end on shell token boundaries, preserving escaped whitespace before `#` inside shell words, and collapsing shell backslash-newline continuations before heredoc scanning.
+- Added regression fixtures for hash-suffixed fake gates, line-continuation hash heredoc payload gates, and valid escaped-space hash heredocs before real gates.
 
 ### Validation Commands
 
@@ -234,6 +236,7 @@ Every implementation story must finish with a working repository state and must 
 - Review follow-up: heredoc markers containing `#` and heredocs inside ignored conditional blocks no longer allow non-executed payload text to satisfy required gates.
 - Review follow-up: non-comment `#` heredoc delimiters and heredocs attached to `fi`/`done`/`esac` suffixes no longer allow payload-only gates to satisfy required validation checks.
 - Review follow-up: unquoted hash heredoc delimiters now remain intact during comment stripping, including ignored-block cases where later real gates must still be visible.
+- Review follow-up: required validation command matching now rejects hash-suffixed shell words, and heredoc/comment scanning handles shell line continuations plus escaped whitespace before `#`.
 
 ## File List
 
@@ -266,3 +269,4 @@ Every implementation story must finish with a working repository state and must 
 - 2026-06-10: Hardened quote-aware comment stripping and heredoc queueing inside ignored shell blocks.
 - 2026-06-11: Hardened non-comment hash heredoc delimiters and block-close heredoc suffix queueing.
 - 2026-06-10: Hardened unquoted hash heredoc delimiters and block-close heredoc suffix handling.
+- 2026-06-11: Hardened required gate token boundaries, shell line continuations, and escaped-space hash heredoc parsing after final BMAD review findings.
