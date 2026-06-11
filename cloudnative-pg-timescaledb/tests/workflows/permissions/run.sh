@@ -257,6 +257,9 @@ for fixture in \
   validate-pipe-ampersand-gates.yml \
   validate-ansi-c-quoted-text-gates.yml \
   validate-multiple-heredoc-gates.yml \
+  validate-escaped-dollar-heredoc-gates.yml \
+  validate-hash-heredoc-delimiter-gates.yml \
+  validate-conditional-heredoc-gates.yml \
   valid-update-autocommit-contents-write.yml \
   invalid-update-nonautocommit-contents-write.yml; do
   [[ -f "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -f" "${FIXTURE_DIR}/${fixture}" "fixture exists" "missing" "Restore Story 2.4 workflow policy fixtures."; exit 1; }
@@ -506,6 +509,21 @@ validate_multiple_heredoc_root="${tmp_root}/validate-multiple-heredoc-gates"
 prepare_root "${validate_multiple_heredoc_root}"
 cp "${FIXTURE_DIR}/validate-multiple-heredoc-gates.yml" "${validate_multiple_heredoc_root}/.github/workflows/validate.yml"
 expect_fail "validate multiple heredoc gates" "validate workflow runs make validate" "${validate_multiple_heredoc_root}"
+
+validate_escaped_dollar_heredoc_root="${tmp_root}/validate-escaped-dollar-heredoc-gates"
+prepare_root "${validate_escaped_dollar_heredoc_root}"
+cp "${FIXTURE_DIR}/validate-escaped-dollar-heredoc-gates.yml" "${validate_escaped_dollar_heredoc_root}/.github/workflows/validate.yml"
+expect_fail "validate escaped dollar heredoc gates" "validate workflow runs make validate" "${validate_escaped_dollar_heredoc_root}"
+
+validate_hash_heredoc_root="${tmp_root}/validate-hash-heredoc-delimiter-gates"
+prepare_root "${validate_hash_heredoc_root}"
+cp "${FIXTURE_DIR}/validate-hash-heredoc-delimiter-gates.yml" "${validate_hash_heredoc_root}/.github/workflows/validate.yml"
+expect_fail "validate hash heredoc delimiter gates" "validate workflow runs make validate" "${validate_hash_heredoc_root}"
+
+validate_conditional_heredoc_root="${tmp_root}/validate-conditional-heredoc-gates"
+prepare_root "${validate_conditional_heredoc_root}"
+cp "${FIXTURE_DIR}/validate-conditional-heredoc-gates.yml" "${validate_conditional_heredoc_root}/.github/workflows/validate.yml"
+expect_fail "validate conditional heredoc gates" "validate workflow runs make validate" "${validate_conditional_heredoc_root}"
 
 rm -rf "${tmp_root}"
 printf 'PASS story-2.4 workflow permission fixtures\n'

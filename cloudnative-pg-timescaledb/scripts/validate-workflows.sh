@@ -201,6 +201,49 @@ def shell_semicolon_segments(line):
     return segments
 
 
+def strip_shell_comment(value):
+    result = []
+    quote = None
+    escaped = False
+    ansi_single_quote = False
+    previous = ""
+    previous_escaped = False
+    for char in value:
+        if escaped:
+            result.append(char)
+            escaped = False
+            previous = char
+            previous_escaped = True
+            continue
+        if char == "\\" and (quote != "'" or ansi_single_quote):
+            result.append(char)
+            escaped = True
+            previous = char
+            previous_escaped = False
+            continue
+        if quote:
+            result.append(char)
+            if char == quote:
+                quote = None
+                ansi_single_quote = False
+            previous = char
+            previous_escaped = False
+            continue
+        if char in {"'", '"'}:
+            result.append(char)
+            quote = char
+            ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
+            previous = char
+            previous_escaped = False
+            continue
+        if char == "#":
+            break
+        result.append(char)
+        previous = char
+        previous_escaped = False
+    return "".join(result)
+
+
 def shell_word(value, idx):
     chars = []
     quote = None
@@ -260,17 +303,20 @@ def heredoc_delimiters(value):
     escaped = False
     ansi_single_quote = False
     previous = ""
+    previous_escaped = False
     idx = 0
     while idx < len(value):
         char = value[idx]
         if escaped:
             escaped = False
             previous = char
+            previous_escaped = True
             idx += 1
             continue
         if char == "\\" and (quote != "'" or ansi_single_quote):
             escaped = True
             previous = char
+            previous_escaped = False
             idx += 1
             continue
         if quote:
@@ -278,16 +324,19 @@ def heredoc_delimiters(value):
                 quote = None
                 ansi_single_quote = False
             previous = char
+            previous_escaped = False
             idx += 1
             continue
         if char in {"'", '"'}:
             quote = char
-            ansi_single_quote = char == "'" and previous == "$"
+            ansi_single_quote = char == "'" and previous == "$" and not previous_escaped
             previous = char
+            previous_escaped = False
             idx += 1
             continue
         if value.startswith("<<<", idx):
             previous = value[idx + 2]
+            previous_escaped = False
             idx += 3
             continue
         if value.startswith("<<", idx):
@@ -301,6 +350,7 @@ def heredoc_delimiters(value):
                 delimiters.append(delimiter)
             continue
         previous = char
+        previous_escaped = False
         idx += 1
     return delimiters
 
@@ -317,11 +367,12 @@ def executable_run_text(run):
             if line.strip() == heredoc_queue[0]:
                 heredoc_queue.pop(0)
             continue
-        uncommented = line.split("#", 1)[0]
+        uncommented = strip_shell_comment(line)
         for segment in shell_semicolon_segments(uncommented):
             stripped = segment.strip()
             if not stripped:
                 continue
+            segment_heredocs = heredoc_delimiters(stripped)
             if re.match(r"^(fi|done|esac)\b", stripped):
                 shell_block_depth = max(shell_block_depth - 1, 0)
                 trailing = re.sub(r"^(fi|done|esac)\b", "", stripped, count=1).strip()
@@ -332,6 +383,7 @@ def executable_run_text(run):
                         break
                 continue
             if shell_block_depth:
+                heredoc_queue.extend(segment_heredocs)
                 if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                     shell_block_depth += 1
                 continue
@@ -340,7 +392,7 @@ def executable_run_text(run):
             if re.match(r"^(if|while|until|case|for|select)\b", stripped):
                 shell_block_depth += 1
                 continue
-            heredoc_queue.extend(heredoc_delimiters(stripped))
+            heredoc_queue.extend(segment_heredocs)
             executable.append(stripped)
     return "\n".join(executable)
 
