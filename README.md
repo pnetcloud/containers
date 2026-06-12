@@ -1,6 +1,6 @@
-# pnetcloud containers
+# pNet Containers
 
-This repository contains public container image sources, release automation, and operating notes used by pnetcloud projects.
+This repository contains public container image sources, release automation, and operating notes used by pNet projects.
 
 The repository is intentionally small and practical: each image family keeps its detailed build and usage documentation next to its source, while this root README stays as a map of what is available.
 

@@ -178,7 +178,7 @@ if not readme.exists():
     fail(readme, "root README artifact exists", "missing", "Keep a repository-level README for public navigation.")
 
 text = readme.read_text()
-require(r"#\s+pnetcloud containers", "root README names the repository, not one image family", "Use the root README as the repository entrypoint.")
+require(r"#\s+pNet Containers", "root README names the repository, not one image family", "Use the root README as the repository entrypoint.")
 require(r"container image sources", "root README explains repository purpose", "Describe the repository at a short overview level.")
 require(r"Available Images", "root README has an available images section", "List supported image families without duplicating their full docs.")
 require(r"CloudNativePG TimescaleDB", "root README lists the current image family", "Include the current image family in the catalog table.")
