@@ -146,6 +146,53 @@ if actual != expected:
 PY
 }
 
+validate_root_readme() {
+  local readme="$1"
+  python3 - "${readme}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+readme = Path(sys.argv[1])
+command = f"validate-root-readme {readme}"
+
+def fail(artifact, expected, actual, remediation):
+    raise SystemExit(
+        f"command: {command}\n"
+        f"artifact: {artifact}\n"
+        f"expected: {expected}\n"
+        f"actual: {actual}\n"
+        f"remediation: {remediation}"
+    )
+
+def require(pattern, expected, remediation, flags=re.I | re.S):
+    if not re.search(pattern, text, flags):
+        fail(readme, expected, "missing", remediation)
+
+def reject(pattern, expected, remediation, flags=re.I | re.S):
+    match = re.search(pattern, text, flags)
+    if match:
+        fail(readme, expected, match.group(0), remediation)
+
+if not readme.exists():
+    fail(readme, "root README artifact exists", "missing", "Keep a repository-level README for public navigation.")
+
+text = readme.read_text()
+require(r"#\s+pnetcloud containers", "root README names the repository, not one image family", "Use the root README as the repository entrypoint.")
+require(r"container image sources", "root README explains repository purpose", "Describe the repository at a short overview level.")
+require(r"Available Images", "root README has an available images section", "List supported image families without duplicating their full docs.")
+require(r"CloudNativePG TimescaleDB", "root README lists the current image family", "Include the current image family in the catalog table.")
+require(r"ghcr\.io/pnetcloud/cloudnative-pg-timescaledb", "root README documents the GHCR image namespace", "Show the registry users should pull from.")
+require(r"cloudnative-pg-timescaledb/README\.md", "root README links to image-specific docs", "Send detailed image guidance to the image README.")
+require(r"docs/README\.md", "root README links to the docs index", "Provide a docs navigation entry.")
+require(r"CONTRIBUTING\.md", "root README links to contribution guidance", "Make contribution guidance discoverable.")
+require(r"SECURITY\.md", "root README links to security reporting guidance", "Make security reporting guidance discoverable.")
+require(r"make help", "root README exposes local command discovery", "Tell contributors how to find supported commands.")
+reject(r"Manifest URL:\s+`https://github\.com/cloudnative-pg/plugin-barman-cloud", "root README does not duplicate generated Barman reference fields", "Keep generated Barman reference values in detailed docs.")
+reject(r"Release:\s+`v\d+\.\d+\.\d+`", "root README does not duplicate generated release reference values", "Keep generated reference values out of the repository entrypoint.")
+PY
+}
+
 expect_fail() {
   local fixture="$1"
   local pattern="$2"
@@ -169,7 +216,7 @@ expect_fail() {
   rm -f "${tmp}"
 }
 
-validate_readme "${ROOT_DIR}/README.md"
+validate_root_readme "${ROOT_DIR}/README.md"
 validate_readme "${ROOT_DIR}/cloudnative-pg-timescaledb/README.md"
 validate_readme "${FIXTURE_DIR}/valid-readme.md"
 

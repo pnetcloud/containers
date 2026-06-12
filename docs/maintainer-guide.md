@@ -8,8 +8,6 @@ Edit `cloudnative-pg-timescaledb/versions.yaml` for supported PostgreSQL lines, 
 
 Generated outputs are committed so a clean checkout is reviewable and CI can detect drift. They must not be hand-edited as final fixes. If a generated output is wrong, edit `versions.yaml`, the owning template, or the owning generator, then run the generator again and validate the diff.
 
-The `vendor/` tree is reference-only. Vendor projects and examples can inform implementation, but repository builds, workflow contexts, runtime image contents, and generated outputs must come from this repository's metadata, templates, scripts, and committed generated artifacts.
-
 ## Command Surface
 
 Use the root `Makefile` as the stable maintainer interface:
@@ -48,7 +46,7 @@ The scheduled update workflow runs `make update`, validates with `make validate`
 
 Release catalog autocommit is separate. It first checks whether release metadata exists. If no release metadata is available, catalog autocommit is a no-op and must not generate empty catalogs. When release metadata is available, it runs `make catalog`, stages only paths from `cloudnative-pg-timescaledb/config/catalog-autocommit-allowlist.txt`, validates the staged paths, and commits only changed catalog manifests.
 
-Autocommit path allowlists are security boundaries, not convenience lists. `cloudnative-pg-timescaledb/scripts/autocommit-stage.sh` must be the only staging path in update automation, and `cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh` must reject vendor changes, runtime artifacts, `.env` files, credentials, tokens, passwords, signing secrets, registry passwords, and other secret-like paths.
+Autocommit path allowlists are security boundaries, not convenience lists. `cloudnative-pg-timescaledb/scripts/autocommit-stage.sh` must be the only staging path in update automation, and `cloudnative-pg-timescaledb/scripts/validate-autocommit-staging.sh` must reject runtime artifacts, `.env` files, credentials, tokens, passwords, signing secrets, registry passwords, and other secret-like paths.
 
 Loop prevention is required for generated commits. Update and catalog workflows must avoid recursively creating new generated commits from bot/generated commits, and catalog autocommit must refresh the branch tip after resolver autocommit to avoid racing on stale branch state.
 

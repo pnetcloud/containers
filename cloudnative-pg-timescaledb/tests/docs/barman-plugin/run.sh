@@ -204,7 +204,11 @@ for fixture in \
 done
 
 validate_barman_docs "${ROOT_DIR}/docs/barman-plugin.md"
-validate_barman_docs "${ROOT_DIR}/README.md"
+"${VALIDATOR}" "${ROOT_DIR}/README.md" >/tmp/story-3-6-root-readme-boundary.out
+grep -Fq 'PASS validate-barman-boundary plugin path gates' /tmp/story-3-6-root-readme-boundary.out || {
+  diag "validate-barman-boundary root README" "${ROOT_DIR}/README.md" "PASS marker" "$(cat /tmp/story-3-6-root-readme-boundary.out)" "Keep root README backup mentions within the plugin boundary without duplicating full Barman reference docs."
+  exit 1
+}
 validate_barman_docs "${ROOT_DIR}/cloudnative-pg-timescaledb/README.md"
 validate_barman_docs "${FIXTURE_DIR}/valid-plugin-docs.md"
 

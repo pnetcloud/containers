@@ -127,6 +127,37 @@ require(r"release\s+date|org\.opencontainers\.image\.created", "release date lab
 PY
 }
 
+validate_root_verification_links() {
+  local doc="$1"
+  python3 - "${doc}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+doc = Path(sys.argv[1])
+command = f"validate-root-verification-links {doc}"
+
+def fail(expected, actual, remediation):
+    raise SystemExit(
+        f"command: {command}\n"
+        f"artifact: {doc}\n"
+        f"expected: {expected}\n"
+        f"actual: {actual}\n"
+        f"remediation: {remediation}"
+    )
+
+def require(pattern, expected, remediation, flags=re.I | re.S):
+    if not re.search(pattern, text, flags):
+        fail(expected, "missing", remediation)
+
+if not doc.exists():
+    fail("root README exists", "missing", "Keep root README available as the repository entrypoint.")
+text = doc.read_text()
+require(r"docs/user-guide/verifying-images\.md", "root README links to image verification guidance", "Keep detailed verification guidance in docs/user-guide/verifying-images.md and link to it from the root README.")
+require(r"SECURITY\.md", "root README links to security reporting guidance", "Make sensitive reporting guidance discoverable from the root README.")
+PY
+}
+
 expect_fail() {
   local fixture="$1"
   local pattern="$2"
@@ -172,7 +203,7 @@ for fixture in \
 done
 
 validate_verification_doc "${ROOT_DIR}/docs/user-guide/verifying-images.md"
-validate_verification_doc "${ROOT_DIR}/README.md"
+validate_root_verification_links "${ROOT_DIR}/README.md"
 validate_verification_doc "${ROOT_DIR}/cloudnative-pg-timescaledb/README.md"
 validate_verification_doc "${FIXTURE_DIR}/valid-verification-docs.md"
 

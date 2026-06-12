@@ -89,6 +89,37 @@ reject_unless_explicit_experimental_catalog(r"(?:stable|standard)\s+catalog.{0,2
 PY
 }
 
+validate_root_catalog_links() {
+  local doc="$1"
+  python3 - "${doc}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+doc = Path(sys.argv[1])
+command = f"validate-root-catalog-links {doc}"
+
+def fail(expected, actual, remediation):
+    raise SystemExit(
+        f"command: {command}\n"
+        f"artifact: {doc}\n"
+        f"expected: {expected}\n"
+        f"actual: {actual}\n"
+        f"remediation: {remediation}"
+    )
+
+def require(pattern, expected, remediation, flags=re.I | re.S):
+    if not re.search(pattern, text, flags):
+        fail(expected, "missing", remediation)
+
+if not doc.exists():
+    fail("root README exists", "missing", "Keep root README available as the repository entrypoint.")
+text = doc.read_text()
+require(r"docs/catalog\.md", "root README links to ClusterImageCatalog documentation", "Keep detailed catalog policy in docs/catalog.md and link to it from the root README.")
+require(r"ClusterImageCatalog", "root README names catalog usage", "Make catalog documentation discoverable without duplicating the full catalog contract.")
+PY
+}
+
 expect_fail() {
   local fixture="$1"
   local pattern="$2"
@@ -133,7 +164,7 @@ for fixture in \
 done
 
 validate_catalog_doc "${ROOT_DIR}/docs/catalog.md"
-validate_catalog_doc "${ROOT_DIR}/README.md"
+validate_root_catalog_links "${ROOT_DIR}/README.md"
 validate_catalog_doc "${ROOT_DIR}/cloudnative-pg-timescaledb/README.md"
 validate_catalog_doc "${FIXTURE_DIR}/valid-catalog-docs.md"
 

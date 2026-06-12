@@ -123,8 +123,6 @@ The compatibility overview is generated from `cloudnative-pg-timescaledb/version
 
 The current metadata enables publishable stable PostgreSQL `17` and `18` image lines for Debian `trixie` and `bookworm`. PostgreSQL `19beta1` remains experimental with `publish: false` and a non-empty `skip_reason`; generated Dockerfiles and Bake targets are emitted only for publishable entries.
 
-The `vendor/` tree is reference-only. Production image definitions and workflows must use generated project files and upstream package sources instead of copying from the vendored examples.
-
 ## Command Surface
 
 Use the root `Makefile` for local development and CI entry points. The stable targets are `help`, `update`, `generate`, `validate`, `matrix`, `bake-print`, `catalog`, `build`, and `smoke`.

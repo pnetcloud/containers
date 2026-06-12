@@ -68,6 +68,37 @@ reject_unless_negated(r"imageName:\s*" + re.escape(repo) + r":19beta1\b|(?:Postg
 PY
 }
 
+validate_root_tag_links() {
+  local doc="$1"
+  python3 - "${doc}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+doc = Path(sys.argv[1])
+command = f"validate-root-tag-links {doc}"
+
+def fail(expected, actual, remediation):
+    raise SystemExit(
+        f"command: {command}\n"
+        f"artifact: {doc}\n"
+        f"expected: {expected}\n"
+        f"actual: {actual}\n"
+        f"remediation: {remediation}"
+    )
+
+def require(pattern, expected, remediation, flags=re.I | re.S):
+    if not re.search(pattern, text, flags):
+        fail(expected, "missing", remediation)
+
+if not doc.exists():
+    fail("root README exists", "missing", "Keep root README available as the repository entrypoint.")
+text = doc.read_text()
+require(r"docs/image-tags\.md", "root README links to image tag policy", "Keep detailed tag policy in docs/image-tags.md and link to it from the root README.")
+require(r"docker pull\s+ghcr\.io/pnetcloud/cloudnative-pg-timescaledb:18", "root README has a short pull example", "Keep a concise pull example in the root README.")
+PY
+}
+
 expect_fail() {
   local fixture="$1"
   local pattern="$2"
@@ -91,7 +122,7 @@ expect_fail() {
 }
 
 validate_tags_doc "${ROOT_DIR}/docs/image-tags.md"
-validate_tags_doc "${ROOT_DIR}/README.md"
+validate_root_tag_links "${ROOT_DIR}/README.md"
 validate_tags_doc "${ROOT_DIR}/cloudnative-pg-timescaledb/README.md"
 validate_tags_doc "${FIXTURE_DIR}/valid-tags.md"
 
