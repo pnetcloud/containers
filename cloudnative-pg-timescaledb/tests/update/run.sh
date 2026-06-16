@@ -71,6 +71,38 @@ prepare_upstream() {
   cp "${BARMAN_PLUGIN_FIXTURE}" "${target}/barman-plugin.json"
 }
 
+write_manifest_fixture() {
+  local metadata="$1"
+  local target="$2"
+  python3 - "${ROOT_DIR}" "${metadata}" "${target}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+root = Path(sys.argv[1])
+metadata = Path(sys.argv[2])
+target = Path(sys.argv[3])
+sys.path.insert(0, str(root / "cloudnative-pg-timescaledb" / "scripts" / "lib"))
+import generator_contract  # noqa: E402
+
+data = generator_contract.parse_metadata(metadata, "update fixture manifest")
+manifests = []
+seen = set()
+for entry in data.get("entries", []):
+    tag = str(entry.get("cnpg_tag", "")).strip()
+    digest = str(entry.get("cnpg_digest", "")).strip()
+    if not tag or not digest:
+        continue
+    key = (tag, digest)
+    if key in seen:
+        continue
+    seen.add(key)
+    manifests.append({"tag": tag, "digest": digest, "platforms": entry.get("platforms", [])})
+target.write_text(json.dumps({"manifests": manifests}, indent=2, sort_keys=True) + "\n")
+PY
+}
+
 run_update() {
   local project="$1"
   local upstream="$2"
@@ -144,8 +176,13 @@ assert_allowlisted_status() {
 
 normalize_fixture_diff() {
   sed -E \
-    -e 's/index [0-9a-f]+\.\.[0-9a-f]+ ([0-9]{6})/index <old>..<new> \1/g' \
-    -e 's/@sha256:[0-9a-f]{64}/@sha256:<digest>/g' \
+    -e 's/index [0-9a-f]+\.\.[0-9a-f]+/index <old>..<new>/g' \
+    -e 's/sha256:[0-9a-f]{64}/sha256:<digest>/g' \
+    -e 's/ts[0-9]+\.[0-9]+\.[0-9]+-/ts<timescaledb>-/g' \
+    -e 's/[0-9]+\.[0-9]+\.[0-9]+~debian/<timescaledb>~debian/g' \
+    -e 's/org\.pnet\.timescaledb\.version="[0-9]+\.[0-9]+\.[0-9]+"/org.pnet.timescaledb.version="<timescaledb>"/g' \
+    -e 's/"timescaledb_version": "[0-9]+\.[0-9]+\.[0-9]+"/"timescaledb_version": "<timescaledb>"/g' \
+    -e 's/timescaledb_version: "[0-9]+\.[0-9]+\.[0-9]+"/timescaledb_version: "<timescaledb>"/g' \
     "$1"
 }
 
@@ -244,6 +281,12 @@ run_committed_fixture() {
     cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" "${project}/cloudnative-pg-timescaledb/release-metadata"
   fi
   cp "${fixture_root}/input/versions.yaml" "${project}/cloudnative-pg-timescaledb/versions.yaml"
+  if [[ "${fixture}" == "no-op" ]]; then
+    local baseline_manifest="${project}/cloudnative-pg-timescaledb/update-fixture-cnpg-manifest.json"
+    write_manifest_fixture "${project}/cloudnative-pg-timescaledb/versions.yaml" "${baseline_manifest}"
+    (cd "${project}" && CNPG_MANIFEST_FIXTURE="${baseline_manifest}" make --no-print-directory generate >/tmp/story-2-3-${fixture}-baseline-generate.out)
+    rm -f "${baseline_manifest}"
+  fi
   (cd "${project}" && git add . && if ! git diff --cached --quiet; then git commit -qm "fixture-${fixture}-input"; fi)
   if [[ -f "${fixture_root}/expected-diff.patch" ]]; then
     if ! run_update "${project}" "${fixture_root}/upstream" "${stdout_file}" "${stderr_file}"; then

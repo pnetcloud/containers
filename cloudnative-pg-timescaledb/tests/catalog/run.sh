@@ -386,6 +386,23 @@ generated_dir="${tmpdir}/generated-catalog"
 diff -u "${FIXTURE_DIR}/valid-trixie-catalog.yaml" "${generated_dir}/catalog-standard-trixie.yaml"
 diff -u "${FIXTURE_DIR}/valid-bookworm-catalog.yaml" "${generated_dir}/catalog-standard-bookworm.yaml"
 
+stale_metadata="${tmpdir}/versions-with-newer-timescaledb.yaml"
+python3 - "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${stale_metadata}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1]).read_text()
+source = re.sub(r'pg_version: "17\.10"', 'pg_version: "17.11"', source)
+source = re.sub(r'pg_version: "18\.4"', 'pg_version: "18.5"', source)
+source = re.sub(r'timescaledb_version: "2\.27\.2"', 'timescaledb_version: "2.28.0"', source)
+Path(sys.argv[2]).write_text(source)
+PY
+stale_generated_dir="${tmpdir}/stale-release-metadata-generated-catalog"
+"${GENERATOR}" --metadata "${stale_metadata}" --release-metadata "${release_dir}" --output "${stale_generated_dir}"
+diff -u "${FIXTURE_DIR}/valid-trixie-catalog.yaml" "${stale_generated_dir}/catalog-standard-trixie.yaml"
+diff -u "${FIXTURE_DIR}/valid-bookworm-catalog.yaml" "${stale_generated_dir}/catalog-standard-bookworm.yaml"
+
 partial_dir="${tmpdir}/partial-release"
 materialize_release_metadata "${partial_dir}" valid
 rm -f "${partial_dir}/18-bookworm.json"

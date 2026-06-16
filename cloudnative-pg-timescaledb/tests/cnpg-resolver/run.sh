@@ -201,7 +201,7 @@ for entry in entries:
     if entry["pg_version"] != expected_version or entry["cnpg_tag"] != expected_tag:
         raise SystemExit(f"wrong resolved CNPG version/tag: {entry}")
 PY
-rm -f "${json_output}" "${fixture_metadata}"
+rm -f "${json_output}"
 
 expect_fail \
   "deprecated system flavor" \
@@ -212,8 +212,40 @@ expect_fail \
   "18.4-system-trixie" \
   "remediation: Reject system-*" \
   -- \
-  "${RESOLVER}" --check-cnpg --fixture-file "${FIXTURE_DIR}/system-flavor-deprecated.json"
+  "${RESOLVER}" --check-cnpg --metadata "${fixture_metadata}" --fixture-file "${FIXTURE_DIR}/system-flavor-deprecated.json"
 
+publishable_fixture_metadata="$(mktemp)"
+python3 - "${publishable_fixture_metadata}" <<'PY'
+from pathlib import Path
+import sys
+
+Path(sys.argv[1]).write_text('''schema_version: "1"
+image:
+  registry: ghcr.io
+  repository: pnetcloud/cloudnative-pg-timescaledb
+  current_major: "18"
+  primary_debian_variant: trixie
+allowed:
+  postgres_majors: ["17", "18", "19beta1"]
+  debian_variants: ["trixie", "bookworm"]
+  platforms: ["linux/amd64", "linux/arm64"]
+entries:
+  - pg_major: "18"
+    pg_version: "18.4"
+    debian_variant: trixie
+    cnpg_tag: "18.4-standard-trixie"
+    cnpg_digest: ""
+    timescaledb_version: ""
+    timescaledb_package_version: ""
+    toolkit_version: ""
+    toolkit_package_version: ""
+    platforms: ["linux/amd64", "linux/arm64"]
+    publish: true
+    experimental: false
+    latest_eligible: true
+    skip_reason: ""
+''')
+PY
 expect_fail \
   "missing arm64 platform" \
   "command: resolve-versions --check-cnpg" \
@@ -222,7 +254,9 @@ expect_fail \
   "actual: missing platform linux/arm64" \
   "remediation: Publishable rows require all metadata platforms" \
   -- \
-  "${RESOLVER}" --check-cnpg --fixture-file "${FIXTURE_DIR}/missing-platform-arm64.json"
+  "${RESOLVER}" --check-cnpg --metadata "${publishable_fixture_metadata}" --fixture-file "${FIXTURE_DIR}/missing-platform-arm64.json"
+
+rm -f "${fixture_metadata}" "${publishable_fixture_metadata}"
 
 partial_nonpublish_metadata="$(mktemp)"
 python3 - "${partial_nonpublish_metadata}" <<'PY'

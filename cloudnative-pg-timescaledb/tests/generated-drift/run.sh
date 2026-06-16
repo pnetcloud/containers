@@ -31,42 +31,32 @@ prepare_fixture() {
 
 manifest_fixture() {
   local target="$1"
-  cat >"${target}" <<'JSON'
-{
-  "manifests": [
-    {
-      "tag": "17.10-standard-trixie",
-      "digest": "sha256:fdc339fb142d56b852e2c9ca2474f1d52bf798ff9b8381800b520597f0ff7cc2",
-      "platforms": ["linux/amd64", "linux/arm64"]
-    },
-    {
-      "tag": "18.4-standard-trixie",
-      "digest": "sha256:184219ecec559d15fa03932b0d3005e0372f7027746bb682aca478bc4918f776",
-      "platforms": ["linux/amd64", "linux/arm64"]
-    },
-    {
-      "tag": "19beta1-standard-trixie",
-      "digest": "sha256:ce40f7266c82a453bb38f4a253819a8226606460e6fc12bbd4abfe337f955e60",
-      "platforms": ["linux/amd64", "linux/arm64"]
-    },
-    {
-      "tag": "17.10-standard-bookworm",
-      "digest": "sha256:1273ed2ff3c3777541a010f98b805f139810f89ea240b8caeaee3efaca7bb2b8",
-      "platforms": ["linux/amd64", "linux/arm64"]
-    },
-    {
-      "tag": "18.4-standard-bookworm",
-      "digest": "sha256:6d1090d7ae1ea1cf2ba35959ba0fea38a78df91cf99e02e94a28b8e1f6df3de5",
-      "platforms": ["linux/amd64", "linux/arm64"]
-    },
-    {
-      "tag": "19beta1-standard-bookworm",
-      "digest": "sha256:5622736e77f38a017b0ed8ea64a8d690808235492344f831a9863f38779f2a71",
-      "platforms": ["linux/amd64", "linux/arm64"]
-    }
-  ]
-}
-JSON
+  python3 - "${ROOT_DIR}" "${target}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+root = Path(sys.argv[1])
+target = Path(sys.argv[2])
+sys.path.insert(0, str(root / "cloudnative-pg-timescaledb" / "scripts" / "lib"))
+import generator_contract  # noqa: E402
+
+data = generator_contract.parse_metadata(root / "cloudnative-pg-timescaledb" / "versions.yaml", "generated-drift manifest fixture")
+manifests = []
+seen = set()
+for entry in data.get("entries", []):
+    tag = str(entry.get("cnpg_tag", "")).strip()
+    digest = str(entry.get("cnpg_digest", "")).strip()
+    if not tag or not digest:
+        continue
+    key = (tag, digest)
+    if key in seen:
+        continue
+    seen.add(key)
+    manifests.append({"tag": tag, "digest": digest, "platforms": entry.get("platforms", [])})
+target.write_text(json.dumps({"manifests": manifests}, indent=2, sort_keys=True) + "\n")
+PY
 }
 
 run_validator() {

@@ -632,19 +632,27 @@ def numeric_pg_major(pg_major):
     return match.group(1) if match else str(pg_major)
 
 
-def immutable_release_tag(entry, tags, command, artifact):
+def immutable_release_tag(entry, tags, command, artifact, strict_timescaledb=True):
     tags = tags if isinstance(tags, list) else []
     suffix = "" if entry["debian_variant"] == "trixie" else f"-{entry['debian_variant']}"
-    prefix = f"{entry['pg_major']}-pg{entry['pg_version']}-ts{entry['timescaledb_version'] or 'unresolved'}-"
+    if strict_timescaledb:
+        pg_version_pattern = re.escape(entry["pg_version"])
+        ts_pattern = re.escape(entry["timescaledb_version"] or "unresolved")
+        expected = f" with PostgreSQL {entry['pg_version']} and TimescaleDB {entry['timescaledb_version'] or 'unresolved'}"
+    else:
+        pg_version_pattern = r"[^-]+"
+        ts_pattern = r"[^-]+"
+        expected = ""
+    pattern = re.compile(
+        rf"^{re.escape(entry['pg_major'])}-pg{pg_version_pattern}-ts{ts_pattern}-[0-9]{{8}}{re.escape(suffix)}$"
+    )
     candidates = []
     for tag in tags:
-        if not isinstance(tag, str) or not tag.startswith(prefix) or not tag.endswith(suffix):
-            continue
-        if entry["debian_variant"] == "trixie" and any(tag.endswith(f"-{variant}") for variant in ["bookworm"]):
+        if not isinstance(tag, str) or not pattern.fullmatch(tag):
             continue
         candidates.append(tag)
     if len(candidates) != 1:
-        diag(command, artifact, f"one immutable final tag for {row_id(entry)} with prefix {prefix!r} and suffix {suffix!r}", tags, "Publish metadata must include the exact immutable release tag before catalog generation.")
+        diag(command, artifact, f"one immutable final tag for {row_id(entry)}{expected}", tags, "Publish metadata must include one immutable release tag for the PostgreSQL/Debian catalog row.")
     return candidates[0]
 
 
@@ -664,7 +672,7 @@ def release_entry_match(entry, payload, command, artifact):
     if not isinstance(tags, list):
         diag(command, artifact, "release metadata final_tags is a list", repr(tags), "Use Story 4.5 ghcr-release-metadata.json artifacts.")
     try:
-        immutable_release_tag(entry, tags, command, artifact)
+        immutable_release_tag(entry, tags, command, artifact, strict_timescaledb=False)
     except SystemExit:
         return False
     return True
@@ -803,7 +811,7 @@ def normalize_release_record(data, entries, payload, command, artifact):
     for platform, digest in platform_digests.items():
         if not isinstance(digest, str) or not DIGEST_RE.fullmatch(digest):
             diag(command, artifact, f"platform digest for {platform} is sha256:<64 lowercase hex>", repr(digest), "Use immutable platform digests from candidate metadata.")
-    tag = immutable_release_tag(entry, payload["final_tags"], command, artifact)
+    tag = immutable_release_tag(entry, payload["final_tags"], command, artifact, strict_timescaledb=False)
     record = {
         "entry": entry,
         "image": image,

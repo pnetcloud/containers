@@ -31,10 +31,60 @@ json_compare() {
   fi
   python3 - "$fixture" "${stdout}" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
-expected = json.loads(Path(sys.argv[1]).read_text())
-actual = json.loads(Path(sys.argv[2]).read_text())
+
+
+normalize_dockerfiles = Path(sys.argv[1]).name == "generate-dockerfiles-valid.json"
+normalize_matrix = Path(sys.argv[1]).name == "generate-matrix-valid.json"
+normalize_catalog = Path(sys.argv[1]).name == "generate-catalog-valid.json"
+
+
+def normalize(path):
+    payload = json.loads(Path(path).read_text())
+
+    def immutable_tag_placeholder(row):
+        suffix = "" if row.get("debian_variant") == "trixie" else f"-{row.get('debian_variant')}"
+        return f"{row.get('pg_major')}-pg<pg_version>-ts<timescaledb_version>-<date>{suffix}"
+
+    def normalize_tag(tag, row):
+        if not isinstance(tag, str):
+            return tag
+        suffix = "" if row.get("debian_variant") == "trixie" else f"-{re.escape(str(row.get('debian_variant')))}"
+        pattern = rf"^{re.escape(str(row.get('pg_major')))}-pg[^-]+-ts[^-]+-[0-9]{{8}}{suffix}$"
+        if re.fullmatch(pattern, tag):
+            return immutable_tag_placeholder(row)
+        return tag
+
+    def normalize_ref(value, row):
+        if not isinstance(value, str) or ":" not in value:
+            return value
+        ref, digest = (value.split("@", 1) + [""])[:2] if "@" in value else (value, "")
+        image, tag = ref.rsplit(":", 1)
+        normalized = f"{image}:{normalize_tag(tag, row)}"
+        return f"{normalized}@{digest}" if digest else normalized
+
+    if normalize_dockerfiles:
+        for row in payload.get("dockerfiles", []):
+            base_image = row.get("base_image")
+            if isinstance(base_image, str):
+                row["base_image"] = re.sub(r":[^:@]+@sha256:[0-9a-f]{64}$", ":<cnpg-tag>@sha256:<digest>", base_image)
+    if normalize_matrix:
+        for row in payload.get("include", []):
+            row["pg_version"] = "<pg_version>"
+            row["timescaledb_version"] = "<timescaledb_version>"
+            row["candidate_ref"] = normalize_ref(row.get("candidate_ref"), row)
+            row["intended_tags"] = [normalize_tag(tag, row) for tag in row.get("intended_tags", [])]
+    if normalize_catalog:
+        for catalog in payload.get("catalogs", []):
+            for row in catalog.get("entries", []):
+                row["image"] = normalize_ref(row.get("image"), row)
+    return payload
+
+
+expected = normalize(sys.argv[1])
+actual = normalize(sys.argv[2])
 if actual != expected:
     raise SystemExit(f"expected {sys.argv[1]} but got {actual!r}")
 PY

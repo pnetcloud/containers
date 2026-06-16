@@ -91,26 +91,82 @@ validate_schema_fixture() {
   local script="$1"
   local fixture_rel="$2"
   local fixture_path="${contract_root}/${fixture_rel}"
-  local actual_tmp stderr_tmp diff_tmp
+  local actual_tmp expected_compare_tmp actual_compare_tmp stderr_tmp diff_tmp
   actual_tmp="$(mktemp)"
+  expected_compare_tmp="$(mktemp)"
+  actual_compare_tmp="$(mktemp)"
   stderr_tmp="$(mktemp)"
   diff_tmp="$(mktemp)"
   if ! "${SCRIPT_DIR}/${script}" --metadata "${metadata}" --json >"${actual_tmp}" 2>"${stderr_tmp}"; then
     diag "validate-generated" "${fixture_rel}" "${script} --json exits 0 for schema fixture generation" "$(cat "${stderr_tmp}")" "Fix the owning generator before validating schema fixture drift."
-    rm -f "${actual_tmp}" "${stderr_tmp}" "${diff_tmp}"
+    rm -f "${actual_tmp}" "${expected_compare_tmp}" "${actual_compare_tmp}" "${stderr_tmp}" "${diff_tmp}"
     exit 1
   fi
   if [[ -s "${stderr_tmp}" ]]; then
     diag "validate-generated" "${fixture_rel}" "${script} --json emits machine JSON without stderr" "$(tr '\n' ' ' <"${stderr_tmp}")" "Keep --json success output machine-readable and diagnostics off stderr."
-    rm -f "${actual_tmp}" "${stderr_tmp}" "${diff_tmp}"
+    rm -f "${actual_tmp}" "${expected_compare_tmp}" "${actual_compare_tmp}" "${stderr_tmp}" "${diff_tmp}"
     exit 1
   fi
-  if ! diff -u "${fixture_path}" "${actual_tmp}" >"${diff_tmp}"; then
+  python3 - "${script}" "${fixture_path}" "${actual_tmp}" "${expected_compare_tmp}" "${actual_compare_tmp}" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+script, fixture_path, actual_path, expected_out, actual_out = sys.argv[1:]
+
+
+def normalize(path):
+    payload = json.loads(Path(path).read_text())
+
+    def immutable_tag_placeholder(row):
+        suffix = "" if row.get("debian_variant") == "trixie" else f"-{row.get('debian_variant')}"
+        return f"{row.get('pg_major')}-pg<pg_version>-ts<timescaledb_version>-<date>{suffix}"
+
+    def normalize_tag(tag, row):
+        if not isinstance(tag, str):
+            return tag
+        suffix = "" if row.get("debian_variant") == "trixie" else f"-{re.escape(str(row.get('debian_variant')))}"
+        pattern = rf"^{re.escape(str(row.get('pg_major')))}-pg[^-]+-ts[^-]+-[0-9]{{8}}{suffix}$"
+        if re.fullmatch(pattern, tag):
+            return immutable_tag_placeholder(row)
+        return tag
+
+    def normalize_ref(value, row):
+        if not isinstance(value, str) or ":" not in value:
+            return value
+        ref, digest = (value.split("@", 1) + [""])[:2] if "@" in value else (value, "")
+        image, tag = ref.rsplit(":", 1)
+        normalized = f"{image}:{normalize_tag(tag, row)}"
+        return f"{normalized}@{digest}" if digest else normalized
+
+    if script == "generate-dockerfiles.sh":
+        for row in payload.get("dockerfiles", []):
+            base_image = row.get("base_image")
+            if isinstance(base_image, str):
+                row["base_image"] = re.sub(r":[^:@]+@sha256:[0-9a-f]{64}$", ":<cnpg-tag>@sha256:<digest>", base_image)
+    if script == "generate-matrix.sh":
+        for row in payload.get("include", []):
+            row["pg_version"] = "<pg_version>"
+            row["timescaledb_version"] = "<timescaledb_version>"
+            row["candidate_ref"] = normalize_ref(row.get("candidate_ref"), row)
+            row["intended_tags"] = [normalize_tag(tag, row) for tag in row.get("intended_tags", [])]
+    if script == "generate-catalog.sh":
+        for catalog in payload.get("catalogs", []):
+            for row in catalog.get("entries", []):
+                row["image"] = normalize_ref(row.get("image"), row)
+    return payload
+
+
+Path(expected_out).write_text(json.dumps(normalize(fixture_path), sort_keys=True, separators=(",", ":")) + "\n")
+Path(actual_out).write_text(json.dumps(normalize(actual_path), sort_keys=True, separators=(",", ":")) + "\n")
+PY
+  if ! diff -u "${expected_compare_tmp}" "${actual_compare_tmp}" >"${diff_tmp}"; then
     diag "validate-generated" "${fixture_rel}" "generator schema fixture matches ${script} --json output" "$(cat "${diff_tmp}")" "Run cloudnative-pg-timescaledb/scripts/${script} --json > ${fixture_rel}."
-    rm -f "${actual_tmp}" "${stderr_tmp}" "${diff_tmp}"
+    rm -f "${actual_tmp}" "${expected_compare_tmp}" "${actual_compare_tmp}" "${stderr_tmp}" "${diff_tmp}"
     exit 1
   fi
-  rm -f "${actual_tmp}" "${stderr_tmp}" "${diff_tmp}"
+  rm -f "${actual_tmp}" "${expected_compare_tmp}" "${actual_compare_tmp}" "${stderr_tmp}" "${diff_tmp}"
 }
 
 validate_schema_fixture "generate-dockerfiles.sh" "cloudnative-pg-timescaledb/tests/generators/fixtures/generate-dockerfiles-valid.json"
