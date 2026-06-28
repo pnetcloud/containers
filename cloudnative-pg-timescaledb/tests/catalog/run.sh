@@ -145,6 +145,16 @@ def fail(artifact, expected, actual, remediation):
 jobs = payload.get("jobs") if isinstance(payload, dict) else None
 if not isinstance(jobs, dict):
     fail(workflow, "workflow has jobs mapping", type(jobs).__name__, "Keep update.yml parseable for structured workflow validation.")
+autocommit_job = jobs.get("autocommit")
+if not isinstance(autocommit_job, dict):
+    fail(workflow, "autocommit job exists", "missing", "Keep scheduled resolver updates wired to generated metadata commits.")
+autocommit_permissions = autocommit_job.get("permissions", {})
+if autocommit_permissions.get("contents") != "write" or autocommit_permissions.get("actions") != "write":
+    fail(workflow, "autocommit can write resolver commits and dispatch release builds", autocommit_permissions, "Grant contents: write and actions: write only to the resolver autocommit job.")
+autocommit_steps_text = json.dumps(autocommit_job.get("steps", []), sort_keys=True)
+for marker in ["git push", "GH_TOKEN", "gh workflow run build.yml", "--ref", "GITHUB_REF_NAME"]:
+    if marker not in autocommit_steps_text:
+        fail(workflow, f"autocommit dispatches Build Release Candidates after metadata push using {marker}", "missing", "Use workflow_dispatch so GITHUB_TOKEN-generated metadata commits trigger the build/publish chain.")
 job = jobs.get("catalog-autocommit")
 if not isinstance(job, dict):
     fail(workflow, "catalog-autocommit job exists", "missing", "Add a named release catalog autocommit job.")
@@ -193,7 +203,7 @@ actual = {line.split("#", 1)[0].strip() for line in allowlist.read_text().splitl
 if actual != expected:
     fail(allowlist, "catalog allowlist contains exactly the two stable catalog manifests", sorted(actual), "Do not allow catalog autocommit to stage docs, metadata, workflows, vendor trees, or runtime artifacts.")
 policy_text = policy.read_text()
-for marker in ["job: catalog-autocommit", "permission: \"contents: write\"", "owner_story: 4.6"]:
+for marker in ["job: autocommit", "permission: \"actions: write\"", "job: catalog-autocommit", "permission: \"contents: write\"", "owner_story: 4.6"]:
     if marker not in policy_text:
         fail(policy, f"workflow policy contains {marker}", "missing", "Record the Story 4.6 permission exception.")
 print("PASS catalog autocommit workflow")

@@ -50,7 +50,7 @@ REQUIRED_POLICY_KEYS = {
     "strict_mode_exceptions": {"path", "reason", "owner_story"},
     "permission_allowlist": {"workflow", "job", "permission", "reason", "owner_story"},
 }
-RELEASE_WRITE_PERMISSIONS = {"contents", "packages", "id-token", "security-events"}
+RELEASE_WRITE_PERMISSIONS = {"actions", "contents", "packages", "id-token", "security-events"}
 POSIX_CLASS_RANGES = {
     "alnum": "0-9A-Za-z",
     "alpha": "A-Za-z",
@@ -68,6 +68,10 @@ POSIX_CLASS_RANGES = {
 ALLOWED_WRITE_GRANTS = {
     (".github/workflows/update.yml", "autocommit", "contents: write"): (
         "Commit resolver-owned metadata and generated artifacts after make validate",
+        "2.5",
+    ),
+    (".github/workflows/update.yml", "autocommit", "actions: write"): (
+        "Dispatch release candidate build after resolver metadata autocommit",
         "2.5",
     ),
     (".github/workflows/update.yml", "catalog-autocommit", "contents: write"): (

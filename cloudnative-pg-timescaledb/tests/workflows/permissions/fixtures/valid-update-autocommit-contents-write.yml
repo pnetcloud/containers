@@ -9,6 +9,7 @@ jobs:
   autocommit:
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
     steps:
       # actions/checkout v4.2.2

@@ -48,6 +48,11 @@ permission_allowlist:
     permission: "contents: write"
     reason: Commit resolver-owned metadata and generated artifacts after make validate
     owner_story: 2.5
+  - workflow: .github/workflows/update.yml
+    job: autocommit
+    permission: "actions: write"
+    reason: Dispatch release candidate build after resolver metadata autocommit
+    owner_story: 2.5
 EOF
 }
 
@@ -118,6 +123,11 @@ permission_allowlist:
     job: autocommit
     permission: "contents: write"
     reason: Commit resolver-owned metadata and generated artifacts after make validate
+    owner_story: 2.5
+  - workflow: .github/workflows/update.yml
+    job: autocommit
+    permission: "actions: write"
+    reason: Dispatch release candidate build after resolver metadata autocommit
     owner_story: 2.5
   - workflow: .github/workflows/update.yml
     job: catalog-autocommit

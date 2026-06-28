@@ -7,6 +7,11 @@ permission_allowlist:
     reason: Commit resolver-owned metadata and generated artifacts after make validate
     owner_story: 2.5
   - workflow: .github/workflows/update.yml
+    job: autocommit
+    permission: "actions: write"
+    reason: Dispatch release candidate build after resolver metadata autocommit
+    owner_story: 2.5
+  - workflow: .github/workflows/update.yml
     job: catalog-autocommit
     permission: "contents: write"
     reason: Commit release catalog manifests after digest-aware catalog validation

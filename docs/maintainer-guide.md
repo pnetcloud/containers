@@ -42,7 +42,7 @@ Before committing generated diffs, run `make generate` and `make validate`. When
 
 ## Scheduled Updates And Autocommit
 
-The scheduled update workflow runs `make update`, validates with `make validate`, stages only paths from `cloudnative-pg-timescaledb/config/autocommit-allowlist.txt`, and commits only when the staged diff is non-empty. A scheduled update no-op must create no commit and leave the resolver-owned generated paths unchanged.
+The scheduled update workflow runs `make update`, validates with `make validate`, stages only paths from `cloudnative-pg-timescaledb/config/autocommit-allowlist.txt`, and commits only when the staged diff is non-empty. When a resolver metadata commit is pushed, the workflow dispatches `build.yml` so the changed metadata is built, smoke-tested, scanned, signed, published, and cleaned up automatically. A scheduled update no-op must create no commit, dispatch no release build, and leave the resolver-owned generated paths unchanged.
 
 Release catalog autocommit is separate. It first checks whether release metadata exists. If no release metadata is available, catalog autocommit is a no-op and must not generate empty catalogs. When release metadata is available, it runs `make catalog`, stages only paths from `cloudnative-pg-timescaledb/config/catalog-autocommit-allowlist.txt`, validates the staged paths, and commits only changed catalog manifests.
 
@@ -52,7 +52,7 @@ Loop prevention is required for generated commits. Update and catalog workflows 
 
 ## Token Policy
 
-Use `GITHUB_TOKEN` through `actions/checkout` persisted credentials as the default autocommit mechanism. The workflow grants `contents: write` only to the known autocommit jobs that need to push allowlisted generated changes.
+Use `GITHUB_TOKEN` through `actions/checkout` persisted credentials as the default autocommit mechanism. The workflow grants `contents: write` only to the known autocommit jobs that need to push allowlisted generated changes. The resolver autocommit job also has `actions: write` so it can dispatch the release build explicitly; this is required because commits pushed with `GITHUB_TOKEN` do not trigger downstream `push` workflows.
 
 A personal access token fallback is allowed only as a branch-protection exception when repository policy prevents `GITHUB_TOKEN` from pushing the required generated update branch. That fallback has a security tradeoff: a broader token increases blast radius if misconfigured, exposed, or granted more scopes than the workflow needs. Prefer adjusting branch protection for the automation path before adding a PAT.
 
