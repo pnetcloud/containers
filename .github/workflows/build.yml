@@ -707,15 +707,15 @@ jobs:
           print(" ".join(shlex.quote(arg) for arg in args))
           PY
           bash "${OUTPUT_DIR}/promote-tags.sh"
-          first_ref="$(python3 - "${metadata_path}" <<'PY'
+          python3 - "${metadata_path}" <<'PY' > "${OUTPUT_DIR}/final-refs.txt"
           import json
           import sys
           from pathlib import Path
 
           metadata = json.loads(Path(sys.argv[1]).read_text())
-          print(f"{metadata['image']}:{metadata['final_tags'][0]}")
+          for tag in metadata["final_tags"]:
+              print(f"{metadata['image']}:{tag}")
           PY
-          )"
           inspect_release_ref() {
             local ref="$1"
             local raw_path="$2"
@@ -732,16 +732,57 @@ jobs:
             printf 'Published ref did not become inspectable ref=%s\n' "${ref}" >&2
             return 1
           }
-          inspect_release_ref "${first_ref}" "${OUTPUT_DIR}/published.raw.json" "${OUTPUT_DIR}/published.txt"
-          published_digest="$(awk '/Digest:/ {print $2; exit}' "${OUTPUT_DIR}/published.txt")"
-          if [[ ! "${published_digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            printf 'Invalid published digest: %s\n' "${published_digest}" >&2
+          : > "${OUTPUT_DIR}/published-digests.txt"
+          while IFS= read -r ref; do
+            safe_ref="$(printf '%s' "${ref}" | tr '/:@' '____')"
+            raw_path="${OUTPUT_DIR}/${safe_ref}.raw.json"
+            text_path="${OUTPUT_DIR}/${safe_ref}.txt"
+            inspect_release_ref "${ref}" "${raw_path}" "${text_path}"
+            digest="$(awk '/Digest:/ {print $2; exit}' "${text_path}")"
+            if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              printf 'Invalid published digest for %s: %s\n' "${ref}" "${digest}" >&2
+              exit 1
+            fi
+            printf '%s %s\n' "${ref}" "${digest}" >> "${OUTPUT_DIR}/published-digests.txt"
+            python3 - "${metadata_path}" "${raw_path}" "${ref}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          metadata = json.loads(Path(sys.argv[1]).read_text())
+          payload = json.loads(Path(sys.argv[2]).read_text())
+          ref = sys.argv[3]
+          expected = metadata["platform_digests"]
+          found = {}
+          attestations = []
+          for manifest in payload.get("manifests", []):
+              annotations = manifest.get("annotations") or {}
+              if annotations.get("vnd.docker.reference.type") == "attestation-manifest":
+                  attestations.append(manifest.get("digest", ""))
+                  continue
+              platform = manifest.get("platform") or {}
+              if platform.get("os") and platform.get("architecture"):
+                  key = f"{platform['os']}/{platform['architecture']}"
+                  if platform.get("variant"):
+                      key = f"{key}/{platform['variant']}"
+                  found[key] = manifest.get("digest", "")
+          if attestations:
+              raise SystemExit(f"published runtime index unexpectedly contains attestation manifests ref={ref} attestations={attestations}")
+          if found != expected:
+              raise SystemExit(f"published platform digest mismatch ref={ref} expected={expected} actual={found}")
+          PY
+          done < "${OUTPUT_DIR}/final-refs.txt"
+          published_digest="$(awk 'NR == 1 {print $2}' "${OUTPUT_DIR}/published-digests.txt")"
+          if awk -v expected="${published_digest}" '$2 != expected {exit 1}' "${OUTPUT_DIR}/published-digests.txt"; then
+            :
+          else
+            printf 'Published final tags do not all point to the same digest:\n' >&2
+            cat "${OUTPUT_DIR}/published-digests.txt" >&2
             exit 1
           fi
-          jq -e '
-            [.manifests[]? | select((.annotations["vnd.docker.reference.type"] // "") == "attestation-manifest")]
-            | length == 0
-          ' "${OUTPUT_DIR}/published.raw.json" >/dev/null
+          first_safe_ref="$(awk 'NR == 1 {print $1}' "${OUTPUT_DIR}/published-digests.txt" | tr '/:@' '____')"
+          cp "${OUTPUT_DIR}/${first_safe_ref}.raw.json" "${OUTPUT_DIR}/published.raw.json"
+          cp "${OUTPUT_DIR}/${first_safe_ref}.txt" "${OUTPUT_DIR}/published.txt"
           subject="$(python3 - "${metadata_path}" "${published_digest}" <<'PY'
           import json
           import sys
@@ -797,12 +838,13 @@ jobs:
           from pathlib import Path
 
           metadata = json.loads(Path(sys.argv[1]).read_text())
-          for tag in metadata["final_tags"]:
-              print(f"{metadata['image']}:{tag}")
+          for platform in metadata["platform_digests"]:
+              for tag in metadata["final_tags"]:
+                  print(f"{platform} {metadata['image']}:{tag}")
           PY
-          while IFS= read -r ref; do
-            printf 'Verifying public anonymous pull: %s\n' "${ref}"
-            docker pull "${ref}"
+          while read -r platform ref; do
+            printf 'Verifying public anonymous pull: platform=%s ref=%s\n' "${platform}" "${ref}"
+            docker pull --platform "${platform}" "${ref}"
           done < /tmp/public-pulls.txt
       - name: Write publish summary
         if: always()
