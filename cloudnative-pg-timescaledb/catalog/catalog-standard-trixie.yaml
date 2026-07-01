@@ -6,6 +6,6 @@ metadata:
 spec:
   images:
     - major: 17
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.28.1-20260609@sha256:313aaded4e587e154b86e3b470a5b63f849abc08afb65f120181a7771f806568
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.28.2-20260609@sha256:ab199ef5ed5eca75494dca799afac5a9ce176e86bd4241746689fa378856adad
     - major: 18
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.28.1-20260609@sha256:92fe747d1a6f30f4ba647f4c102d1b8b483ff9dc48634b2806b1c5e12626c85f
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.28.2-20260609@sha256:8172c6ee87e437ef2f1e74dc46a1e215a80f560d3225b0c74d095cbee094a237
