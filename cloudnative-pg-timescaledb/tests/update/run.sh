@@ -109,7 +109,11 @@ run_update() {
   local stdout_file="$3"
   local stderr_file="$4"
   set +e
-  (cd "${project}" && make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
+  if [[ -n "${UPDATE_DATE:-}" ]]; then
+    (cd "${project}" && DATE="${UPDATE_DATE}" make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
+  else
+    (cd "${project}" && make --no-print-directory update UPDATE_ARGS="--fixtures ${upstream} --json") >"${stdout_file}" 2>"${stderr_file}"
+  fi
   local status="$?"
   set -e
   return "${status}"
@@ -354,6 +358,21 @@ grep -Fq '18.4-standard-trixie' "${changed_project}/cloudnative-pg-timescaledb/v
 mark_fixture_executed changed-cnpg
 mark_fixture_executed changed-packages
 
+dated_change_project="${base_tmp}/changed-explicit-date"
+prepare_project "${dated_change_project}"
+cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${dated_change_project}/cloudnative-pg-timescaledb/versions.yaml"
+(cd "${dated_change_project}" && git add . && if ! git diff --cached --quiet; then git commit -qm changed-explicit-date-input; fi)
+if ! UPDATE_DATE=20260701 run_update "${dated_change_project}" "${FIXTURE_DIR}/changed-packages/upstream" "${base_tmp}/changed-date.out" "${base_tmp}/changed-date.err"; then
+  diag "make update" "changed-explicit-date" "exit 0" "$(cat "${base_tmp}/changed-date.err")" "Changed resolver fixtures should use the explicit UTC release date."
+  exit 1
+fi
+assert_json_success "${base_tmp}/changed-date.out" true
+grep -Fq '18-pg18.4-ts2.27.2-20260701' "${dated_change_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep explicit release date" "changed-explicit-date" "materialized tags use DATE=20260701" "missing" "Use the workflow UTC date when resolver-owned image inputs change."; exit 1; }
+if grep -Fq '18-pg18.4-ts2.27.2-20260609' "${dated_change_project}/cloudnative-pg-timescaledb/versions.yaml"; then
+  diag "grep stale release date" "changed-explicit-date" "stale 20260609 immutable tag absent" "present" "Do not reuse the old production date when resolver-owned image inputs change."
+  exit 1
+fi
+
 newer_cnpg_upstream="${base_tmp}/newer-cnpg-upstream"
 mkdir -p "${newer_cnpg_upstream}/cnpg"
 cp "${CNPG_FIXTURES}/standard-trixie-valid.json" "${newer_cnpg_upstream}/cnpg/standard-trixie-valid.json"
@@ -390,11 +409,14 @@ fi
 noop_project="${base_tmp}/no-op"
 cp -R "${changed_project}" "${noop_project}"
 (cd "${noop_project}" && git add . && git commit -qm updated-baseline)
-if ! run_update "${noop_project}" "${upstream}" "${base_tmp}/noop.out" "${base_tmp}/noop.err"; then
+noop_matrix_before="$(sha256sum "${noop_project}/cloudnative-pg-timescaledb/matrix.json" | cut -d' ' -f1)"
+if ! UPDATE_DATE=20260702 run_update "${noop_project}" "${upstream}" "${base_tmp}/noop.out" "${base_tmp}/noop.err"; then
   diag "make update" "no-op" "exit 0" "$(cat "${base_tmp}/noop.err")" "No-op update should succeed."
   exit 1
 fi
 assert_json_success "${base_tmp}/noop.out" false
+noop_matrix_after="$(sha256sum "${noop_project}/cloudnative-pg-timescaledb/matrix.json" | cut -d' ' -f1)"
+[[ "${noop_matrix_after}" == "${noop_matrix_before}" ]] || { diag "sha256sum matrix.json" "no-op" "matrix.json remains byte-identical when DATE changes but tags do not refresh" "${noop_matrix_before} -> ${noop_matrix_after}" "Do not let scheduled no-op updates churn matrix release_date from inherited DATE."; exit 1; }
 status="$(cd "${noop_project}" && git status --porcelain --untracked-files=all)"
 [[ -z "${status}" ]] || { diag "git status" "no-op" "clean" "${status}" "No-op update must not leave file changes."; exit 1; }
 mark_fixture_executed no-op

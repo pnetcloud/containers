@@ -8,7 +8,7 @@ import sys
 
 REQUIRED_INCLUDE = {
     "pg_major", "pg_version", "timescaledb_version", "debian_variant", "image", "candidate_ref", "digest",
-    "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental",
+    "release_date", "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental",
     "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref",
 }
 REQUIRED_SKIPPED = {
@@ -99,6 +99,9 @@ def validate(payload, artifact):
         immutable_tags = [tag for tag in intended_tags if isinstance(tag, str) and immutable_re.fullmatch(tag)]
         if len(immutable_tags) != 1:
             fail(artifact, f"include[{idx}].intended_tags include exactly one policy immutable tag", repr(intended_tags), "Emit one immutable candidate tag matching the row PostgreSQL, Debian variant, TimescaleDB version, and release date.")
+        tag_date = re.search(r"-([0-9]{8})(?:-[A-Za-z0-9_.-]+)?$", immutable_tags[0]).group(1)
+        if row["release_date"] != tag_date:
+            fail(artifact, f"include[{idx}].release_date matches immutable tag date", repr(row["release_date"]), "Carry the metadata-derived release date through the matrix instead of hard-coding it in workflow steps.")
         expected_candidate_ref = f"{row['image']}:{immutable_tags[0]}"
         if not isinstance(candidate_ref, str) or "@" in candidate_ref or candidate_ref != expected_candidate_ref:
             fail(artifact, f"include[{idx}].candidate_ref equals image:immutable-tag", repr(candidate_ref), f"Use {expected_candidate_ref!r}; digest refs and recomputed tags are not valid candidate refs.")

@@ -68,6 +68,39 @@ assert_staged() {
   fi
 }
 
+python3 - "${ROOT_DIR}/.github/workflows/update.yml" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+def step_block(name):
+    marker = f"      - name: {name}\n"
+    start = text.find(marker)
+    if start == -1:
+        raise SystemExit(f"missing workflow step: {name}")
+    next_step = text.find("\n      - name:", start + len(marker))
+    if next_step == -1:
+        next_step = len(text)
+    return text[start:next_step]
+
+if 'date -u +%Y%m%d' not in text:
+    raise SystemExit("Update Metadata workflow must compute a UTC release date")
+update_step = step_block("Run deterministic update")
+validate_step = step_block("Validate repository gates")
+if 'DATE: ${{ steps.release_date.outputs.date }}' not in update_step:
+    raise SystemExit("Update Metadata workflow must pass the UTC date to make update")
+if 'make update UPDATE_ARGS=--json' not in update_step:
+    raise SystemExit("Run deterministic update step must run make update")
+if re.search(r'make update UPDATE_ARGS=--json', text) and 'Set UTC release date' not in text:
+    raise SystemExit("make update must not run without an explicit UTC release date step")
+if 'DATE: ${{ steps.release_date.outputs.date }}' in validate_step or re.search(r'\n\s+env:\s*\n', validate_step):
+    raise SystemExit("make validate must infer the materialized release date from metadata after update")
+if 'make validate' not in validate_step:
+    raise SystemExit("Validate repository gates step must run make validate")
+PY
+
 for fixture in no-op metadata-change generated-change barman-doc-change secret-file-staged untracked-vendor-staged runtime-artifact-staged outside-allowlist-staged; do
   [[ -d "${FIXTURE_DIR}/${fixture}" ]] || { diag "test -d" "${FIXTURE_DIR}/${fixture}" "fixture directory exists" "missing" "Restore Story 2.5 update-autocommit fixture directory."; exit 1; }
 done

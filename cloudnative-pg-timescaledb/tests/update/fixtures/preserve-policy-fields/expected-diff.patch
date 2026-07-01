@@ -398,12 +398,13 @@ index 9ec8b5d..9a37b34 100644
        "latest_eligible": false,
        "pg_major": "17",
        "pg_version": "17.10",
-@@ -19,26 +12,14 @@
+@@ -19,27 +12,14 @@
          "linux/amd64",
          "linux/arm64"
        ],
 -      "provenance_ref": "",
 -      "publish": true,
+-      "release_date": "20260609",
 -      "sbom_ref": "",
 -      "scan_result": "pending",
 -      "signature_ref": "",
@@ -428,12 +429,13 @@ index 9ec8b5d..9a37b34 100644
        "latest_eligible": true,
        "pg_major": "18",
        "pg_version": "18.4",
-@@ -46,25 +27,29 @@
+@@ -47,26 +27,29 @@
          "linux/amd64",
          "linux/arm64"
        ],
 -      "provenance_ref": "",
 -      "publish": true,
+-      "release_date": "20260609",
 -      "sbom_ref": "",
 -      "scan_result": "pending",
 -      "signature_ref": "",
@@ -472,12 +474,13 @@ index 9ec8b5d..9a37b34 100644
        "latest_eligible": false,
        "pg_major": "17",
        "pg_version": "17.10",
-@@ -72,25 +57,14 @@
+@@ -74,26 +57,14 @@
          "linux/amd64",
          "linux/arm64"
        ],
 -      "provenance_ref": "",
 -      "publish": true,
+-      "release_date": "20260609",
 -      "sbom_ref": "",
 -      "scan_result": "pending",
 -      "signature_ref": "",
@@ -501,12 +504,13 @@ index 9ec8b5d..9a37b34 100644
        "latest_eligible": false,
        "pg_major": "18",
        "pg_version": "18.4",
-@@ -98,29 +72,9 @@
+@@ -101,30 +72,9 @@
          "linux/amd64",
          "linux/arm64"
        ],
 -      "provenance_ref": "",
 -      "publish": true,
+-      "release_date": "20260609",
 -      "sbom_ref": "",
 -      "scan_result": "pending",
 -      "signature_ref": "",

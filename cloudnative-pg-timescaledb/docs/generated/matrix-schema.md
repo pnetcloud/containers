@@ -14,11 +14,12 @@ Required `include[]` keys:
 | `debian_variant` | Debian variant, with `trixie` primary and `bookworm` secondary. |
 | `image` | Registry/repository from metadata. |
 | `candidate_ref` | Candidate image reference using the immutable intended tag. |
+| `release_date` | UTC release date carried from materialized immutable tags for workflow validation. |
 | `digest` | Produced image digest; empty until release jobs populate it. |
 | `platforms` | Required build platforms. |
 | `bake_target` | Generated Docker Bake target. |
 | `dockerfile` | Generated Dockerfile path. |
-| `intended_tags` | Tag-policy output generated from metadata and `TAG_VALIDATION_DATE`. |
+| `intended_tags` | Tag-policy output generated from metadata and the explicit or inferred release date. |
 | `publish` | Always `true` for `include[]`. |
 | `experimental` | Experimental release marker; `19beta1` rows stay `true`. |
 | `latest_eligible` | `true` only for PostgreSQL `18` on `trixie`. |

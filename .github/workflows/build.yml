@@ -598,7 +598,7 @@ jobs:
           CANDIDATE_METADATA: tag-validation/input/candidate/release-candidate.json
           SCAN_SUMMARY: tag-validation/input/scan-summary/vulnerability-scan-summary.json
           RELEASE_EVIDENCE: tag-validation/input/release-evidence/release-evidence.json
-          RELEASE_DATE: 20260609
+          RELEASE_DATE: ${{ matrix.release_date }}
           OUTPUT_DIR: tag-validation/output/${{ matrix.bake_target }}
         run: |
           set -Eeuo pipefail

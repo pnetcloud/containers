@@ -204,9 +204,74 @@ if ! grep -Fq 'validate-tags.sh' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts
   diag "scan validate.sh" "cloudnative-pg-timescaledb/scripts/validate.sh" "make validate calls validate-tags.sh" "missing" "Wire tag validation into make validate."
   exit 1
 fi
-if ! grep -Fq "TAG_VALIDATION_DATE=\"\${TAG_VALIDATION_DATE:-\${DATE:-20260609}}\"" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate.sh"; then
-  diag "scan validate.sh" "cloudnative-pg-timescaledb/scripts/validate.sh" "make validate falls back from TAG_VALIDATION_DATE to DATE" "missing" "Keep update/generate/validate release date inputs aligned for automated immutable tags."
+if grep -Fq '20260609' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate.sh"; then
+  diag "scan validate.sh" "cloudnative-pg-timescaledb/scripts/validate.sh" "no hard-coded production release date fallback" "20260609 present" "Derive validation date from metadata tags unless DATE/TAG_VALIDATION_DATE is explicitly set."
   exit 1
 fi
+
+validate_sandbox="$(mktemp -d)"
+mkdir -p "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/lib" \
+  "${validate_sandbox}/cloudnative-pg-timescaledb/tests"
+cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate.sh" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/validate.sh"
+cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/generator_contract.py" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/lib/generator_contract.py"
+cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/tag_policy.py" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/lib/tag_policy.py"
+cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/tags.sh" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/lib/tags.sh"
+cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${validate_sandbox}/cloudnative-pg-timescaledb/versions.yaml"
+for path in \
+  cloudnative-pg-timescaledb/tests/story-1-1-source-of-truth.sh \
+  cloudnative-pg-timescaledb/tests/story-1-2-make-help.sh \
+  cloudnative-pg-timescaledb/tests/story-1-2-make-delegation.sh \
+  cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh; do
+  mkdir -p "${validate_sandbox}/$(dirname "${path}")"
+  cat >"${validate_sandbox}/${path}" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exit 0
+SH
+  chmod +x "${validate_sandbox}/${path}"
+done
+for script in validate-metadata validate-generated validate-docs validate-barman-boundary validate-workflows; do
+  cat >"${validate_sandbox}/cloudnative-pg-timescaledb/scripts/${script}.sh" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+exit 0
+SH
+  chmod +x "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/${script}.sh"
+done
+cat >"${validate_sandbox}/cloudnative-pg-timescaledb/scripts/validate-tags.sh" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+date_arg=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --date)
+      date_arg="${2:-}"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+if [[ "${date_arg}" != "20260609" ]]; then
+  printf 'expected metadata-derived date 20260609, got %s\n' "${date_arg}" >&2
+  exit 42
+fi
+printf 'STUB validate-tags date=%s\n' "${date_arg}"
+SH
+chmod +x "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/validate-tags.sh"
+tmp="$(mktemp)"
+if DATE= TAG_VALIDATION_DATE= "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/validate.sh" >"${tmp}" 2>&1; then
+  if ! grep -Fq 'STUB validate-tags date=20260609' "${tmp}"; then
+    diag "validate.sh sandbox" "metadata-derived tag validation date" "validate-tags receives 20260609" "$(cat "${tmp}")" "Derive make validate tag date from materialized metadata when DATE/TAG_VALIDATION_DATE are unset."
+    rm -rf "${validate_sandbox}" "${tmp}"
+    exit 1
+  fi
+else
+  diag "validate.sh sandbox" "metadata-derived tag validation date" "validate.sh succeeds without DATE" "$(cat "${tmp}")" "Do not require scheduled no-op validation to pass a fresh DATE."
+  rm -rf "${validate_sandbox}" "${tmp}"
+  exit 1
+fi
+rm -rf "${validate_sandbox}" "${tmp}"
 
 printf 'PASS story-1.4 tag validation fixtures\n'

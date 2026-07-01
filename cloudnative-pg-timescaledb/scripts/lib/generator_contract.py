@@ -371,12 +371,45 @@ def image_ref(data, entry):
     return f"{registry}/{repo}:{tag}"
 
 
-def release_date(command="generate-matrix"):
-    value = os.environ.get("TAG_VALIDATION_DATE") or os.environ.get("DATE") or "20260609"
+def release_date(command="generate-matrix", entries=None, artifact=DEFAULT_METADATA):
+    value = os.environ.get("TAG_VALIDATION_DATE") or os.environ.get("DATE")
+    if not value and entries is not None:
+        return infer_release_date_from_tags(entries, command, artifact)
+    if not value:
+        value = "20260609"
     try:
         return resolve_release_date(os.environ)
     except ValueError as exc:
         diag(command, "TAG_VALIDATION_DATE/DATE", "valid UTC YYYYMMDD", value, f"{exc}. Set TAG_VALIDATION_DATE or DATE to a deterministic UTC release date.")
+
+
+def infer_release_date_from_tags(entries, command, artifact):
+    dates = set()
+    publishable = 0
+    for idx, entry in enumerate(entries):
+        if not entry["publish"]:
+            continue
+        publishable += 1
+        tags = entry.get("tags")
+        if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+            diag(command, artifact, f"entries[{idx}].tags materialized string list", repr(tags), "Run make update with DATE=<YYYYMMDD> or fix versions.yaml before generating release artifacts.")
+        suffix = "" if entry["debian_variant"] == "trixie" else f"-{entry['debian_variant']}"
+        pattern = re.compile(
+            rf"^{re.escape(entry['pg_major'])}-pg{re.escape(entry['pg_version'])}-ts{re.escape(entry['timescaledb_version'])}-(?P<date>[0-9]{{8}}){re.escape(suffix)}$"
+        )
+        matches = [match.group("date") for tag in tags for match in [pattern.fullmatch(tag)] if match]
+        if len(matches) != 1:
+            diag(command, artifact, f"entries[{idx}] has exactly one immutable tag carrying release date", repr(tags), "Keep materialized tags in versions.yaml before generating matrix or validating releases.")
+        dates.update(matches)
+    if publishable == 0:
+        return resolve_release_date({})
+    if len(dates) != 1:
+        diag(command, artifact, "one shared release date across publishable immutable tags", sorted(dates), "Regenerate tags with one UTC DATE so all publishable rows belong to the same release batch.")
+    date = next(iter(dates))
+    try:
+        return resolve_release_date({"TAG_VALIDATION_DATE": date})
+    except ValueError as exc:
+        diag(command, artifact, "valid UTC YYYYMMDD in materialized immutable tags", date, f"{exc}. Regenerate tags with a valid UTC calendar date.")
 
 
 def validate_latest(entries, command, artifact):
@@ -450,11 +483,12 @@ Required `include[]` keys:
 | `debian_variant` | Debian variant, with `trixie` primary and `bookworm` secondary. |
 | `image` | Registry/repository from metadata. |
 | `candidate_ref` | Candidate image reference using the immutable intended tag. |
+| `release_date` | UTC release date carried from materialized immutable tags for workflow validation. |
 | `digest` | Produced image digest; empty until release jobs populate it. |
 | `platforms` | Required build platforms. |
 | `bake_target` | Generated Docker Bake target. |
 | `dockerfile` | Generated Dockerfile path. |
-| `intended_tags` | Tag-policy output generated from metadata and `TAG_VALIDATION_DATE`. |
+| `intended_tags` | Tag-policy output generated from metadata and the explicit or inferred release date. |
 | `publish` | Always `true` for `include[]`. |
 | `experimental` | Experimental release marker; `19beta1` rows stay `true`. |
 | `latest_eligible` | `true` only for PostgreSQL `18` on `trixie`. |
@@ -567,7 +601,7 @@ def matrix_schema_path(matrix_output):
 
 
 def matrix_summary(data, entries):
-    date = release_date()
+    date = release_date(entries=entries)
     registry = data["image"]["registry"]
     repo = data["image"]["repository"]
     image = f"{registry}/{repo}"
@@ -588,6 +622,7 @@ def matrix_summary(data, entries):
                     "debian_variant": entry["debian_variant"],
                     "image": image,
                     "candidate_ref": f"{image}:{immutable_tag}",
+                    "release_date": date,
                     "digest": "",
                     "platforms": entry["platforms"],
                     "bake_target": bake_target(entry),

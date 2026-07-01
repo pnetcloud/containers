@@ -33,6 +33,7 @@ RESOLVER_FIELDS = [
     "toolkit_package_name",
     "toolkit_package_version",
 ]
+TAG_REFRESH_FIELDS = set(RESOLVER_FIELDS)
 POLICY_FIELDS = ["publish", "experimental", "latest_eligible"]
 BARMAN_FIELDS = ["release", "manifest_url", "plugin_image", "sidecar_image", "source_url", "updated_at_utc"]
 EXPECTED_ROWS = {("17", "trixie"), ("18", "trixie"), ("19beta1", "trixie"), ("17", "bookworm"), ("18", "bookworm"), ("19beta1", "bookworm")}
@@ -184,6 +185,22 @@ def materialize_tags(data, release_date):
             entry["tags"] = generated_tags(entry, release_date)
         else:
             entry.pop("tags", None)
+
+
+def should_materialize_tags(data, updated_entries):
+    changed_fields_by_row = {
+        (item["pg_major"], item["debian_variant"]): set(item["fields"])
+        for item in updated_entries
+    }
+    for entry in data["entries"]:
+        if not entry["publish"]:
+            continue
+        if "tags" not in entry:
+            return True
+        row = (entry["pg_major"], entry["debian_variant"])
+        if changed_fields_by_row.get(row, set()) & TAG_REFRESH_FIELDS:
+            return True
+    return False
 
 
 def validate_invariants(data, command, artifact):
@@ -506,7 +523,9 @@ def main(argv):
     barman_reference = run_json([str(BARMAN_PLUGIN_SCRIPT), "--json"], command, metadata, env=barman_env)
     updated = update_entries(data, cnpg, packages, command, metadata)
     barman_plugin = update_barman_plugin(data, barman_reference)
-    materialize_tags(data, args.tag_date)
+    refresh_tags = should_materialize_tags(data, updated)
+    if refresh_tags:
+        materialize_tags(data, args.tag_date)
     validate_invariants(data, command, metadata)
     after_text = render_metadata(data)
     metadata_changed = before_text != after_text
@@ -517,8 +536,13 @@ def main(argv):
         if metadata_changed:
             metadata.write_text(after_text)
         if args.generate:
+            generate_env = None
+            if not refresh_tags:
+                generate_env = os.environ.copy()
+                generate_env.pop("DATE", None)
+                generate_env.pop("TAG_VALIDATION_DATE", None)
             try:
-                proc = subprocess.run([str(GENERATE_SCRIPT)], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                proc = subprocess.run([str(GENERATE_SCRIPT)], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=generate_env)
             except OSError as exc:
                 diag(command, "make generate", "generators succeed", str(exc), "Fix generator entrypoint availability before update can complete.")
             if proc.returncode != 0:

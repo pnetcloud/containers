@@ -24,7 +24,7 @@ path = Path(sys.argv[1])
 command = f"validate matrix fixture {path}"
 required_include = {
     "pg_major", "pg_version", "timescaledb_version", "debian_variant", "image", "candidate_ref", "digest",
-    "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental",
+    "release_date", "platforms", "bake_target", "dockerfile", "intended_tags", "publish", "experimental",
     "latest_eligible", "scan_result", "sbom_ref", "provenance_ref", "signature_ref",
 }
 required_skipped = {"pg_major", "pg_version", "debian_variant", "platforms", "bake_target", "skipped_marker", "publish", "experimental", "latest_eligible", "skip_reason"}
@@ -72,6 +72,9 @@ for idx, row in enumerate(include):
     immutable = [tag for tag in row["intended_tags"] if "-pg" in tag and "-ts" in tag]
     if not immutable or row["candidate_ref"] != f"{row['image']}:{immutable[0]}":
         fail(f"include[{idx}].candidate_ref uses immutable intended tag", row, "Use immutable tag-policy output for candidate_ref.")
+    tag_date = re.search(r"-([0-9]{8})(?:-[A-Za-z0-9_.-]+)?$", immutable[0]).group(1)
+    if row["release_date"] != tag_date:
+        fail(f"include[{idx}].release_date matches immutable tag date", row, "Carry the release date explicitly through the workflow matrix.")
 
 for idx, row in enumerate(skipped):
     missing = sorted(required_skipped - set(row))
@@ -212,10 +215,13 @@ from pathlib import Path
 payload = json.loads(Path(sys.argv[1]).read_text())
 tags = [tag for row in payload["include"] for tag in row["intended_tags"]]
 candidate_refs = [row["candidate_ref"] for row in payload["include"]]
+release_dates = [row["release_date"] for row in payload["include"]]
 if not tags or not all("20260610" in tag for tag in tags if "-pg" in tag and "-ts" in tag):
     raise SystemExit(f"DATE fallback did not reach intended immutable tags: {tags}")
 if not candidate_refs or not all("20260610" in ref for ref in candidate_refs):
     raise SystemExit(f"DATE fallback did not reach candidate refs: {candidate_refs}")
+if not release_dates or set(release_dates) != {"20260610"}:
+    raise SystemExit(f"DATE fallback did not reach release_date fields: {release_dates}")
 PY
 rm -f "${generated}"
 
@@ -230,7 +236,7 @@ text = Path(source).read_text()
 text = text.replace('timescaledb_version: "2.27.2"', 'timescaledb_version: "2.27.2/bad"', 1)
 Path(output).write_text(text)
 PY
-expect_command_fail "generator rejects invalid Docker tag grammar" "generated tags use valid Docker tag grammar|invalid Docker tag" "${SCRIPT}" --metadata "${invalid_tag_metadata}" --json
+expect_command_fail "generator rejects invalid Docker tag grammar" "generated tags use valid Docker tag grammar|invalid Docker tag" env TAG_VALIDATION_DATE=20260609 "${SCRIPT}" --metadata "${invalid_tag_metadata}" --json
 rm -f "${invalid_tag_metadata}"
 
 validate_matrix "${FIXTURE_DIR}/valid-publishable-matrix.json"
@@ -258,6 +264,19 @@ PY
 validate_matrix "${ROOT_DIR}/cloudnative-pg-timescaledb/matrix.json"
 "${VALIDATE_MATRIX_JSON}" --file "${FIXTURE_DIR}/valid-publishable-matrix.json"
 expect_command_fail "shared workflow validator rejects missing required key" "missing .*digest" "${VALIDATE_MATRIX_JSON}" --file "${FIXTURE_DIR}/missing-required-key.json"
+wrong_release_date_matrix="$(mktemp)"
+python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${wrong_release_date_matrix}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+source, output = sys.argv[1:]
+payload = json.loads(Path(source).read_text())
+payload["include"][0]["release_date"] = "20260701"
+Path(output).write_text(json.dumps(payload, separators=(",", ":")))
+PY
+expect_command_fail "shared workflow validator rejects release date mismatch" "release_date matches immutable tag date" "${VALIDATE_MATRIX_JSON}" --file "${wrong_release_date_matrix}"
+rm -f "${wrong_release_date_matrix}"
 extra_include_key_matrix="$(mktemp)"
 python3 - "${FIXTURE_DIR}/valid-publishable-matrix.json" "${extra_include_key_matrix}" <<'PY'
 from pathlib import Path
@@ -546,7 +565,7 @@ stable["skip_reason"] = "Publish disabled until release gate enables image build
 stable["skipped_marker"] = f"cloudnative-pg-timescaledb/generated/{stable['pg_major']}/{stable['debian_variant']}/Dockerfile.skipped.json"
 stable["latest_eligible"] = False
 stable["pg_version"] = f"{stable['pg_major']}.bad"
-for key in ["timescaledb_version", "image", "candidate_ref", "digest", "dockerfile", "intended_tags", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"]:
+for key in ["timescaledb_version", "image", "candidate_ref", "release_date", "digest", "dockerfile", "intended_tags", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"]:
     stable.pop(key, None)
 payload["skipped"].append(stable)
 Path(output).write_text(json.dumps(payload, separators=(",", ":")))
@@ -591,7 +610,7 @@ latest = payload["include"].pop(0)
 latest["publish"] = False
 latest["skip_reason"] = "Publish disabled until release gate enables image builds"
 latest["skipped_marker"] = f"cloudnative-pg-timescaledb/generated/{latest['pg_major']}/{latest['debian_variant']}/Dockerfile.skipped.json"
-for key in ["timescaledb_version", "image", "candidate_ref", "digest", "dockerfile", "intended_tags", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"]:
+for key in ["timescaledb_version", "image", "candidate_ref", "release_date", "digest", "dockerfile", "intended_tags", "scan_result", "sbom_ref", "provenance_ref", "signature_ref"]:
     latest.pop(key, None)
 payload["skipped"].append(latest)
 Path(output).write_text(json.dumps(payload, separators=(",", ":")))

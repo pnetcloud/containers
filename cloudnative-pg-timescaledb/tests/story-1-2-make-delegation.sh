@@ -425,7 +425,7 @@ SH
 done
 
 tmp="$(mktemp)"
-if ! make -C "${sandbox}" validate >"${tmp}" 2>&1; then
+if ! TAG_VALIDATION_DATE=20260609 make -C "${sandbox}" validate >"${tmp}" 2>&1; then
     output="$(cat "${tmp}")"
     rm -f "${tmp}"
     diag "make validate sandbox" "validate target" "make validate executes Story 1.2 gates through scripts/validate.sh" "${output}" "Keep make validate delegated while avoiding heavy later-story gates in this test sandbox."
@@ -491,7 +491,7 @@ exit 42
 SH
 chmod +x "${sandbox}/cloudnative-pg-timescaledb/tests/story-1-2-make-params.sh"
 tmp="$(mktemp)"
-if make -C "${sandbox}" validate >"${tmp}" 2>&1; then
+if TAG_VALIDATION_DATE=20260609 make -C "${sandbox}" validate >"${tmp}" 2>&1; then
     output="$(cat "${tmp}")"
     rm -f "${tmp}"
     diag "make validate fail-fast sandbox" "validate target" "Story 1.2 gate failure stops make validate with non-zero status" "${output}" "Do not mask Story 1.2 validation failures before later validators."
