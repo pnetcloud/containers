@@ -323,11 +323,14 @@ def parse_standard_tag(tag):
 
 def select_standard_manifest(inventory, entry):
     candidates = []
+    exact_pg_version = entry["pg_version"] if entry["pg_major"] not in {"17", "18"} or entry["pg_version"] != entry["pg_major"] else ""
     for tag, manifest in inventory.items():
         parsed = parse_standard_tag(tag)
         if not parsed:
             continue
         if parsed["pg_major"] != entry["pg_major"] or parsed["debian_variant"] != entry["debian_variant"]:
+            continue
+        if exact_pg_version and parsed["pg_version"] != exact_pg_version:
             continue
         candidates.append((parsed, manifest))
     if not candidates:

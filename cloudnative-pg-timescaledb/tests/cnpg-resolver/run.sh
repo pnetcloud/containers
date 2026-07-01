@@ -203,6 +203,29 @@ for entry in entries:
 PY
 rm -f "${json_output}"
 
+newer_minor_fixture="$(mktemp)"
+python3 - "${newer_minor_fixture}" <<'PY'
+from pathlib import Path
+import sys
+Path(sys.argv[1]).write_text('''{"manifests":[{"tag":"18.5-standard-trixie","digest":"sha256:5555555555555555555555555555555555555555555555555555555555555555","platforms":["linux/amd64","linux/arm64"]}]}
+''')
+PY
+exact_json="$(mktemp)"
+"${RESOLVER}" --check-cnpg --metadata "${fixture_metadata}" --fixtures "${FIXTURE_DIR}" --fixture-file "${newer_minor_fixture}" --json >"${exact_json}"
+python3 - "${exact_json}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+entries = json.loads(Path(sys.argv[1]).read_text())["entries"]
+entry = next(item for item in entries if item["pg_major"] == "18" and item["debian_variant"] == "trixie")
+if entry["cnpg_tag"] != "18.4-standard-trixie":
+    raise SystemExit(f"exact pg_version must keep exact CNPG tag, got {entry}")
+if entry["cnpg_digest"] == "sha256:5555555555555555555555555555555555555555555555555555555555555555":
+    raise SystemExit(f"exact pg_version used digest from newer minor: {entry}")
+PY
+rm -f "${newer_minor_fixture}" "${exact_json}"
+
 expect_fail \
   "deprecated system flavor" \
   "command: resolve-versions --check-cnpg" \

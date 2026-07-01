@@ -354,6 +354,39 @@ grep -Fq '18.4-standard-trixie' "${changed_project}/cloudnative-pg-timescaledb/v
 mark_fixture_executed changed-cnpg
 mark_fixture_executed changed-packages
 
+newer_cnpg_upstream="${base_tmp}/newer-cnpg-upstream"
+mkdir -p "${newer_cnpg_upstream}/cnpg"
+cp "${CNPG_FIXTURES}/standard-trixie-valid.json" "${newer_cnpg_upstream}/cnpg/standard-trixie-valid.json"
+cp "${CNPG_FIXTURES}/standard-bookworm-valid.json" "${newer_cnpg_upstream}/cnpg/standard-bookworm-valid.json"
+ln -s "${PKG_FIXTURES}" "${newer_cnpg_upstream}/packages"
+cp "${BARMAN_PLUGIN_FIXTURE}" "${newer_cnpg_upstream}/barman-plugin.json"
+python3 - "${newer_cnpg_upstream}/cnpg/standard-trixie-valid.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+payload = json.loads(path.read_text())
+payload["manifests"].append({
+    "tag": "18.5-standard-trixie",
+    "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "platforms": ["linux/amd64", "linux/arm64"],
+})
+path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+newer_cnpg_project="${base_tmp}/newer-cnpg-package-constrained"
+prepare_project "${newer_cnpg_project}"
+if ! run_update "${newer_cnpg_project}" "${newer_cnpg_upstream}" "${base_tmp}/newer-cnpg.out" "${base_tmp}/newer-cnpg.err"; then
+  diag "make update" "newer-cnpg-package-constrained" "exit 0" "$(cat "${base_tmp}/newer-cnpg.err")" "CNPG update should use the PostgreSQL minor required by TimescaleDB packages."
+  exit 1
+fi
+grep -Fq 'cnpg_tag: "18.4-standard-trixie"' "${newer_cnpg_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep constrained cnpg tag" "newer-cnpg-package-constrained" "18.4-standard-trixie" "missing" "Keep CNPG tag constrained to the TimescaleDB package PostgreSQL suffix."; exit 1; }
+grep -Fq 'cnpg_digest: "sha256:184219ecec559d15fa03932b0d3005e0372f7027746bb682aca478bc4918f776"' "${newer_cnpg_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep constrained cnpg digest" "newer-cnpg-package-constrained" "18.4 digest" "missing" "Use the digest for the final CNPG tag, not a newer minor tag."; exit 1; }
+if grep -Fq 'sha256:5555555555555555555555555555555555555555555555555555555555555555' "${newer_cnpg_project}/cloudnative-pg-timescaledb/versions.yaml"; then
+  diag "grep newer cnpg digest" "newer-cnpg-package-constrained" "newer minor digest absent" "present" "Do not pair a package-constrained CNPG tag with a digest from a newer PostgreSQL minor."
+  exit 1
+fi
+
 noop_project="${base_tmp}/no-op"
 cp -R "${changed_project}" "${noop_project}"
 (cd "${noop_project}" && git add . && git commit -qm updated-baseline)
@@ -459,8 +492,8 @@ PY
 ln -s "${PKG_FIXTURES}" "${missing_cnpg_upstream}/packages"
 cp "${BARMAN_PLUGIN_FIXTURE}" "${missing_cnpg_upstream}/barman-plugin.json"
 run_update "${cnpg_skip_project}" "${missing_cnpg_upstream}" "${base_tmp}/cnpg-skip.out" "${base_tmp}/cnpg-skip.err" || { diag "make update" "update-cnpg-resolver-skip-reason" "exit 0" "$(cat "${base_tmp}/cnpg-skip.err")" "Resolver-prefixed CNPG skip reasons should be updateable."; exit 1; }
-grep -Fq 'skip_reason: "resolver:cnpg-unavailable: ghcr.io/cloudnative-pg/postgresql:18-standard-bookworm PostgreSQL 18 bookworm missing tag"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg resolver skip" "update-cnpg-resolver-skip-reason" "CNPG missing-tag skip reason updated" "missing" "Update resolver-prefixed CNPG skip reasons to upstream evidence."; exit 1; }
-grep -Fq 'cnpg_tag: "18-standard-bookworm"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg unresolved tag" "update-cnpg-resolver-skip-reason" "unresolved CNPG tag remains aligned with missing-tag evidence" "missing" "Do not derive CNPG tag from package versions when CNPG resolution failed."; exit 1; }
+grep -Fq 'skip_reason: "resolver:cnpg-unavailable: ghcr.io/cloudnative-pg/postgresql:18.4-standard-bookworm PostgreSQL 18 bookworm missing tag"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg resolver skip" "update-cnpg-resolver-skip-reason" "CNPG missing-tag skip reason updated" "missing" "Update resolver-prefixed CNPG skip reasons to upstream evidence."; exit 1; }
+grep -Fq 'cnpg_tag: "18.4-standard-bookworm"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg unresolved tag" "update-cnpg-resolver-skip-reason" "unresolved CNPG tag remains aligned with package-constrained missing-tag evidence" "missing" "Derive CNPG tag from package versions before CNPG resolution so missing-tag diagnostics name the final required base."; exit 1; }
 
 manual_cnpg_project="${base_tmp}/manual-cnpg-skip"
 prepare_project "${manual_cnpg_project}"

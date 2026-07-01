@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import copy
 import json
 import os
 from pathlib import Path
@@ -7,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 sys.dont_write_bytecode = True
 
@@ -238,7 +240,32 @@ def result_map(payload):
     return {(entry["pg_major"], entry["debian_variant"]): entry for entry in payload["entries"]}
 
 
-def update_entries(data, cnpg, packages):
+def package_constrained_pg(entry, pkg_row):
+    if entry["pg_major"] not in {"17", "18"}:
+        return None
+    package_version = str(pkg_row.get("timescaledb_package_version", ""))
+    match = re.search(rf"-{entry['pg_major']}(?P<minor>[0-9]{{2}})(?:$|[^0-9])", package_version)
+    if not match:
+        return None
+    pg_version = f"{entry['pg_major']}.{int(match.group('minor'))}"
+    return {
+        "pg_version": pg_version,
+        "cnpg_tag": f"{pg_version}-standard-{entry['debian_variant']}",
+    }
+
+
+def metadata_for_package_constrained_cnpg(data, packages):
+    cnpg_data = copy.deepcopy(data)
+    pkg_by_row = result_map(packages)
+    for entry in cnpg_data["entries"]:
+        target = package_constrained_pg(entry, pkg_by_row[(entry["pg_major"], entry["debian_variant"])])
+        if target:
+            entry["pg_version"] = target["pg_version"]
+            entry["cnpg_tag"] = target["cnpg_tag"]
+    return cnpg_data
+
+
+def update_entries(data, cnpg, packages, command, artifact):
     updated = []
     cnpg_by_row = result_map(cnpg)
     pkg_by_row = result_map(packages)
@@ -247,13 +274,17 @@ def update_entries(data, cnpg, packages):
         old = {field: entry[field] for field in RESOLVER_FIELDS + ["skip_reason"]}
         cnpg_row = cnpg_by_row[row]
         pkg_row = pkg_by_row[row]
+        target = package_constrained_pg(entry, pkg_row)
+        if target and cnpg_row["cnpg_digest"] and cnpg_row["cnpg_tag"] != target["cnpg_tag"]:
+            diag(
+                command,
+                artifact,
+                "CNPG resolver digest belongs to the package-constrained PostgreSQL minor tag",
+                f"row={row} package tag={target['cnpg_tag']} resolved tag={cnpg_row['cnpg_tag']} digest={cnpg_row['cnpg_digest']}",
+                "Resolve CNPG after deriving PostgreSQL minor from the TimescaleDB package suffix.",
+            )
         pg_version = cnpg_row["pg_version"]
         cnpg_tag = cnpg_row["cnpg_tag"]
-        if cnpg_row["cnpg_digest"] and pg_version == entry["pg_major"] and entry["pg_major"] in {"17", "18"}:
-            match = re.search(rf"-{entry['pg_major']}(?P<minor>[0-9]{{2}})(?:$|[^0-9])", pkg_row["timescaledb_package_version"])
-            if match:
-                pg_version = f"{entry['pg_major']}.{int(match.group('minor'))}"
-                cnpg_tag = f"{pg_version}-standard-{entry['debian_variant']}"
         entry["pg_version"] = pg_version
         entry["cnpg_tag"] = cnpg_tag
         entry["cnpg_digest"] = cnpg_row["cnpg_digest"]
@@ -456,10 +487,24 @@ def main(argv):
         pkg_args.extend(["--fixtures", str(resolve_fixture_path(fixture_root, "packages", command, metadata))])
         barman_env = os.environ.copy()
         barman_env["BARMAN_PLUGIN_FIXTURE"] = str(resolve_fixture_path(fixture_root, "barman-plugin.json", command, metadata))
-    cnpg = run_json(cnpg_args, command, metadata)
     packages = run_json(pkg_args, command, metadata)
+    cnpg_metadata = metadata
+    cnpg_temp_metadata = None
+    constrained_data = metadata_for_package_constrained_cnpg(data, packages)
+    constrained_text = render_metadata(constrained_data)
+    if constrained_text != render_metadata(data):
+        with tempfile.NamedTemporaryFile("w", suffix="-cnpg-metadata.yaml", delete=False) as handle:
+            handle.write(constrained_text)
+            cnpg_temp_metadata = Path(handle.name)
+            cnpg_metadata = cnpg_temp_metadata
+        cnpg_args[cnpg_args.index(str(metadata))] = str(cnpg_metadata)
+    try:
+        cnpg = run_json(cnpg_args, command, metadata)
+    finally:
+        if cnpg_temp_metadata:
+            cnpg_temp_metadata.unlink(missing_ok=True)
     barman_reference = run_json([str(BARMAN_PLUGIN_SCRIPT), "--json"], command, metadata, env=barman_env)
-    updated = update_entries(data, cnpg, packages)
+    updated = update_entries(data, cnpg, packages, command, metadata)
     barman_plugin = update_barman_plugin(data, barman_reference)
     materialize_tags(data, args.tag_date)
     validate_invariants(data, command, metadata)

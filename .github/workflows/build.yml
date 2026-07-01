@@ -1031,7 +1031,7 @@ jobs:
             --owner-kind users \
             --package cloudnative-pg-timescaledb \
             --image "ghcr.io/${GITHUB_REPOSITORY_OWNER}/cloudnative-pg-timescaledb" \
-            --candidate-prefix candidate- \
+            --candidate-prefix "candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-" \
             --delete-candidates \
             --delete-signature-tags \
             --delete-untagged \
