@@ -152,7 +152,7 @@ autocommit_permissions = autocommit_job.get("permissions", {})
 if autocommit_permissions.get("contents") != "write" or autocommit_permissions.get("actions") != "write":
     fail(workflow, "autocommit can write resolver commits and dispatch release builds", autocommit_permissions, "Grant contents: write and actions: write only to the resolver autocommit job.")
 autocommit_steps_text = json.dumps(autocommit_job.get("steps", []), sort_keys=True)
-for marker in ["git push", "GH_TOKEN", "gh workflow run build.yml", "--ref", "GITHUB_REF_NAME"]:
+for marker in ["git push", "GH_TOKEN", "gh workflow run build.yml", "--ref", "GITHUB_REF_NAME", "GITHUB_TOKEN", "github.token"]:
     if marker not in autocommit_steps_text:
         fail(workflow, f"autocommit dispatches Build Release Candidates after metadata push using {marker}", "missing", "Use workflow_dispatch so GITHUB_TOKEN-generated metadata commits trigger the build/publish chain.")
 job = jobs.get("catalog-autocommit")

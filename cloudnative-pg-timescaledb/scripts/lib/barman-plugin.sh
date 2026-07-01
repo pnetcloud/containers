@@ -13,7 +13,7 @@ import sys
 import urllib.request
 
 SOURCE_URL = "https://github.com/cloudnative-pg/plugin-barman-cloud/releases"
-API_URL = "https://api.github.com/repos/cloudnative-pg/plugin-barman-cloud/releases?per_page=30"
+API_URL = os.environ.get("BARMAN_PLUGIN_API_URL", "https://api.github.com/repos/cloudnative-pg/plugin-barman-cloud/releases?per_page=30")
 TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
 
 
@@ -54,8 +54,17 @@ def load_fixture(path):
 
 
 def fetch_latest(checked_at):
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "pnetcloud-containers-update",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(API_URL, headers=headers)
     try:
-        with urllib.request.urlopen(API_URL, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=30) as response:
             releases = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
         diag("barman-plugin", API_URL, "GitHub releases are reachable", repr(exc), "Use BARMAN_PLUGIN_FIXTURE for offline deterministic update tests.")
