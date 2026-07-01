@@ -913,6 +913,19 @@ def docs_summary(entries, doc_path="cloudnative-pg-timescaledb/docs/generated/co
 
 def render_dockerfile(entry):
     template = DOCKERFILE_TEMPLATE.read_text()
+    timescaledb_loader_package_name = re.sub(
+        r"^timescaledb-2-postgresql-",
+        "timescaledb-2-loader-postgresql-",
+        entry["timescaledb_package_name"],
+    )
+    if timescaledb_loader_package_name == entry["timescaledb_package_name"]:
+        diag(
+            "generate-dockerfiles",
+            row_id(entry),
+            "TimescaleDB package name derives matching loader package name",
+            entry["timescaledb_package_name"],
+            "Use timescaledb-2-postgresql-<pg-major> package names so loader pinning remains deterministic.",
+        )
     values = {
         "source_entry": row_id(entry),
         "source_repository": SOURCE_REPOSITORY,
@@ -925,6 +938,8 @@ def render_dockerfile(entry):
         "timescaledb_version": entry["timescaledb_version"],
         "timescaledb_package_name": entry["timescaledb_package_name"],
         "timescaledb_package_version": entry["timescaledb_package_version"],
+        "timescaledb_loader_package_name": timescaledb_loader_package_name,
+        "timescaledb_loader_package_version": entry["timescaledb_package_version"],
         "toolkit_version": entry["toolkit_version"],
         "toolkit_package_name": entry["toolkit_package_name"],
         "toolkit_package_version": entry["toolkit_package_version"],

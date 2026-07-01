@@ -77,10 +77,13 @@ printf '%s\n' "$*" >>"${DPKG_QUERY_LOG}"
 package="${@: -1}"
 case "${DPKG_QUERY_MODE}:${package}" in
   pass:timescaledb-2-postgresql-18) printf '2.27.2~debian13-1804' ;;
+  pass:timescaledb-2-loader-postgresql-18) printf '2.27.2~debian13-1804' ;;
   pass:timescaledb-toolkit-postgresql-18) printf '1:1.23.0~debian13' ;;
   mismatch:timescaledb-2-postgresql-18) printf '0.0.0' ;;
+  mismatch:timescaledb-2-loader-postgresql-18) printf '2.27.2~debian13-1804' ;;
   mismatch:timescaledb-toolkit-postgresql-18) printf '1:1.23.0~debian13' ;;
   missing:timescaledb-2-postgresql-18) printf 'package not found' >&2; exit 1 ;;
+  missing:timescaledb-2-loader-postgresql-18) printf '2.27.2~debian13-1804' ;;
   missing:timescaledb-toolkit-postgresql-18) printf '1:1.23.0~debian13' ;;
   *) printf 'unexpected package %s' "${package}" >&2; exit 2 ;;
 esac
@@ -90,6 +93,7 @@ SH
   PATH="${fakebin}:${PATH}" DPKG_QUERY_MODE="${mode}" DPKG_QUERY_LOG="${tmp_root}/dpkg-query.log" \
     "${VERIFY}" \
     timescaledb-2-postgresql-18 2.27.2~debian13-1804 \
+    timescaledb-2-loader-postgresql-18 2.27.2~debian13-1804 \
     timescaledb-toolkit-postgresql-18 1:1.23.0~debian13 >"${log}" 2>&1
   status="$?"
   set -e
@@ -110,6 +114,9 @@ SH
       ;;
   esac
   grep -Fq -- "-W -f=\${Version} timescaledb-2-postgresql-18" "${tmp_root}/dpkg-query.log" || { diag "grep dpkg-query log" "${tmp_root}/dpkg-query.log" "dpkg-query exact Version format for TimescaleDB" "missing" "verify-package-install must query exact Debian package versions."; exit 1; }
+  if [[ "${mode}" == "pass" ]]; then
+    grep -Fq -- "-W -f=\${Version} timescaledb-2-loader-postgresql-18" "${tmp_root}/dpkg-query.log" || { diag "grep dpkg-query log" "${tmp_root}/dpkg-query.log" "dpkg-query exact Version format for TimescaleDB loader" "missing" "verify-package-install must query exact Debian package versions."; exit 1; }
+  fi
   if [[ "${mode}" == "pass" ]]; then
     grep -Fq -- "-W -f=\${Version} timescaledb-toolkit-postgresql-18" "${tmp_root}/dpkg-query.log" || { diag "grep dpkg-query log" "${tmp_root}/dpkg-query.log" "dpkg-query exact Version format for Toolkit" "missing" "verify-package-install must query exact Debian package versions."; exit 1; }
   fi
@@ -172,6 +179,7 @@ for expected in \
   '. /etc/os-release' \
   'dpkg --print-architecture' \
   'timescaledb-2-postgresql-18=2.27.2~debian13-1804' \
+  'timescaledb-2-loader-postgresql-18=2.27.2~debian13-1804' \
   'timescaledb-toolkit-postgresql-18=1:1.23.0~debian13' \
   '/usr/local/bin/verify-package-install' \
   '/usr/share/postgresql/18/extension/vector.control' \

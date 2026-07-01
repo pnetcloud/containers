@@ -2,7 +2,7 @@
   "include": [
     {
       "bake_target": "pg17-trixie",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.28.1-20260609",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.28.2-20260609",
       "debian_variant": "trixie",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile",
@@ -10,7 +10,7 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "17",
-        "17-pg17.10-ts2.28.1-20260609"
+        "17-pg17.10-ts2.28.2-20260609"
       ],
       "latest_eligible": false,
       "pg_major": "17",
@@ -24,11 +24,11 @@
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
-      "timescaledb_version": "2.28.1"
+      "timescaledb_version": "2.28.2"
     },
     {
       "bake_target": "pg18-trixie",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.28.1-20260609",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.28.2-20260609",
       "debian_variant": "trixie",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
@@ -36,7 +36,7 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "18",
-        "18-pg18.4-ts2.28.1-20260609",
+        "18-pg18.4-ts2.28.2-20260609",
         "latest"
       ],
       "latest_eligible": true,
@@ -51,11 +51,11 @@
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
-      "timescaledb_version": "2.28.1"
+      "timescaledb_version": "2.28.2"
     },
     {
       "bake_target": "pg17-bookworm",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.28.1-20260609-bookworm",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.28.2-20260609-bookworm",
       "debian_variant": "bookworm",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile",
@@ -63,7 +63,7 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "17-bookworm",
-        "17-pg17.10-ts2.28.1-20260609-bookworm"
+        "17-pg17.10-ts2.28.2-20260609-bookworm"
       ],
       "latest_eligible": false,
       "pg_major": "17",
@@ -77,11 +77,11 @@
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
-      "timescaledb_version": "2.28.1"
+      "timescaledb_version": "2.28.2"
     },
     {
       "bake_target": "pg18-bookworm",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.28.1-20260609-bookworm",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.28.2-20260609-bookworm",
       "debian_variant": "bookworm",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile",
@@ -89,7 +89,7 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "18-bookworm",
-        "18-pg18.4-ts2.28.1-20260609-bookworm"
+        "18-pg18.4-ts2.28.2-20260609-bookworm"
       ],
       "latest_eligible": false,
       "pg_major": "18",
@@ -103,7 +103,7 @@
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
-      "timescaledb_version": "2.28.1"
+      "timescaledb_version": "2.28.2"
     }
   ],
   "skipped": [

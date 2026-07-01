@@ -5,15 +5,10 @@ diag() {
   printf 'command: %s\nartifact: %s\nexpected: %s\nactual: %s\nremediation: %s\n' "$@" >&2
 }
 
-if [[ "$#" -ne 4 ]]; then
-  diag "verify-package-install" "arguments" "timescaledb package/version and toolkit package/version" "$# arguments" "Pass exactly: <timescaledb_package_name> <timescaledb_package_version> <toolkit_package_name> <toolkit_package_version>."
+if [[ "$#" -lt 4 || $(( $# % 2 )) -ne 0 ]]; then
+  diag "verify-package-install" "arguments" "one or more package/version pairs" "$# arguments" "Pass package/version pairs, for example: <timescaledb_package_name> <timescaledb_package_version> <loader_package_name> <loader_package_version> <toolkit_package_name> <toolkit_package_version>."
   exit 64
 fi
-
-timescaledb_package_name="$1"
-timescaledb_package_version="$2"
-toolkit_package_name="$3"
-toolkit_package_version="$4"
 
 verify_exact_package() {
   local package_name="$1"
@@ -33,7 +28,13 @@ verify_exact_package() {
   fi
 }
 
-verify_exact_package "${timescaledb_package_name}" "${timescaledb_package_version}"
-verify_exact_package "${toolkit_package_name}" "${toolkit_package_version}"
+verified_packages=()
+while [[ "$#" -gt 0 ]]; do
+  package_name="$1"
+  package_version="$2"
+  verify_exact_package "${package_name}" "${package_version}"
+  verified_packages+=("${package_name}")
+  shift 2
+done
 
-printf 'PASS verify-package-install %s %s\n' "${timescaledb_package_name}" "${toolkit_package_name}"
+printf 'PASS verify-package-install %s\n' "${verified_packages[*]}"
