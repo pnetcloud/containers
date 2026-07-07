@@ -16,6 +16,7 @@ jobs:
   autocommit:
     name: Update and autocommit resolver artifacts
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       actions: write
       contents: write
@@ -129,6 +130,7 @@ jobs:
     needs: autocommit
     if: "${{ !(github.actor == 'github-actions[bot]' && github.event.head_commit.message == 'chore(cnpg-timescaledb): update release catalogs') }}"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:

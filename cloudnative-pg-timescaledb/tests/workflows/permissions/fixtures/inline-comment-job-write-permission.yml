@@ -6,6 +6,7 @@ permissions:
 jobs:
   autocommit: # inline comments must not hide the job key
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:

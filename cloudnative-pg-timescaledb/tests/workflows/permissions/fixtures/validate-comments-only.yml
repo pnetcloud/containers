@@ -9,6 +9,7 @@ jobs:
   validate:
     name: "mentions make validate, actionlint, shellcheck, apt-get install, and bash -n"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:

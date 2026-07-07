@@ -7,6 +7,7 @@ permissions: {}
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     continue-on-error: true
     steps:
       - name: Job continue on error gates

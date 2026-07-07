@@ -672,6 +672,7 @@ for tuple in \
   "action-missing-version-comment.yml pinned actions include readable version comments" \
   "action-quoted-missing-version-comment.yml pinned actions include readable version comments" \
   "action-name-version-not-comment.yml pinned actions include readable version comments" \
+  "missing-timeout.yml local runner jobs declare timeout-minutes" \
   "missing-top-level-permissions.yml workflow declares explicit top-level permissions" \
   "release-sensitive-permission.yml write permissions are explicitly allowlisted"; do
   read -r fixture pattern <<<"${tuple}"

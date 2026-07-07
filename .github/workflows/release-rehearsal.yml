@@ -29,6 +29,7 @@ jobs:
   rehearsal:
     name: Dry-run or staging release rehearsal
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
       contents: read
     steps:

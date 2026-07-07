@@ -1556,6 +1556,11 @@ def validate_workflow(path, policy):
                 diag(path, "pull_request workflows do not receive write tokens", f"job={job} {permission}: write", "Do not grant write permissions to pull_request workflows.")
             if permission not in RELEASE_WRITE_PERMISSIONS or not permission_allowed(policy, rel, job, permission, value):
                 diag(path, "write permissions are explicitly allowlisted for named jobs", f"job={job} {permission}: write", "Add a justified workflow-policy permission_allowlist entry in the owning story.")
+    for job, job_payload in yaml_jobs.items():
+        if "runs-on" in job_payload:
+            timeout = job_payload.get("timeout-minutes")
+            if not isinstance(timeout, int) or timeout < 1 or timeout > 240:
+                diag(path, "local runner jobs declare timeout-minutes from 1 to 240", f"job={job} timeout-minutes={timeout!r}", "Set a bounded job timeout so hung runners, Docker operations, or registry calls release the workflow queue.")
 
 
 def validate_strict_mode(policy):
