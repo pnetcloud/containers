@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -21,6 +22,9 @@ ROOT = Path(os.environ["CNPG_RESOLVER_ROOT"])
 DEFAULT_METADATA = ROOT / "cloudnative-pg-timescaledb" / "versions.yaml"
 UPSTREAM_IMAGE = "ghcr.io/cloudnative-pg/postgresql"
 DEFAULT_FIXTURE_NAMES = ["standard-trixie-valid.json", "standard-bookworm-valid.json"]
+CNPG_LIVE_RESOLVE_ATTEMPTS = 5
+CNPG_LIVE_RETRY_STATUS = {429, 500, 502, 503, 504}
+CNPG_LIVE_RETRY_PATTERNS = ("429", "500", "502", "503", "504", "timeout", "timed out", "temporary", "connection reset", "bad gateway")
 
 
 def diag(command, artifact, expected, actual, remediation):
@@ -201,10 +205,20 @@ def inspect_remote(tag, command, artifact):
     reference = f"{UPSTREAM_IMAGE}:{tag}"
     if not shutil_which("docker"):
         diag(command, artifact, "fixture inventory or Docker CLI for remote resolution", "no --fixtures/--fixture-file and docker missing", "Pass --fixtures in tests or install Docker for live registry resolution.")
-    try:
-        text = subprocess.check_output(["docker", "buildx", "imagetools", "inspect", reference], text=True, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as exc:
-        return None, exc.output.strip()
+    attempts = []
+    text = ""
+    for attempt in range(1, CNPG_LIVE_RESOLVE_ATTEMPTS + 1):
+        try:
+            text = subprocess.check_output(["docker", "buildx", "imagetools", "inspect", reference], text=True, stderr=subprocess.STDOUT)
+            break
+        except subprocess.CalledProcessError as exc:
+            actual = exc.output.strip()
+            attempts.append(f"attempt {attempt}: {actual}")
+            retryable = any(pattern in actual.lower() for pattern in CNPG_LIVE_RETRY_PATTERNS)
+            if attempt < CNPG_LIVE_RESOLVE_ATTEMPTS and retryable:
+                time.sleep(attempt * 2)
+                continue
+            return None, "; ".join(attempts)
     digest_match = re.search(r"^Digest:\s+(sha256:[0-9a-f]{64})$", text, re.MULTILINE)
     platforms = re.findall(r"^\s*Platform:\s+([^\s]+)\s*$", text, re.MULTILINE)
     if not digest_match:
@@ -217,27 +231,37 @@ def registry_request_json(url, command, artifact, token=None):
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode()), response.headers
-    except urllib.error.HTTPError as exc:
-        if exc.code == 401 and token is None:
-            auth = exc.headers.get("WWW-Authenticate", "")
-            realm = re.search(r'realm="([^"]+)"', auth)
-            service = re.search(r'service="([^"]+)"', auth)
-            scope = re.search(r'scope="([^"]+)"', auth)
-            if realm and service:
-                query = {"service": service.group(1)}
-                if scope:
-                    query["scope"] = scope.group(1)
-                token_url = f"{realm.group(1)}?{urllib.parse.urlencode(query)}"
-                token_payload, _ = registry_request_json(token_url, command, artifact, "")
-                bearer = token_payload.get("token") or token_payload.get("access_token")
-                if bearer:
-                    return registry_request_json(url, command, artifact, bearer)
-        diag(command, artifact, "GHCR tag inventory request succeeds", f"HTTP {exc.code}: {exc.reason}", "Pass --fixtures in tests or allow anonymous pull access to ghcr.io/cloudnative-pg/postgresql.")
-    except Exception as exc:
-        diag(command, artifact, "GHCR tag inventory request succeeds", str(exc), "Pass --fixtures in tests or ensure network access to ghcr.io.")
+    last_error = ""
+    for attempt in range(1, CNPG_LIVE_RESOLVE_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.loads(response.read().decode()), response.headers
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401 and token is None:
+                auth = exc.headers.get("WWW-Authenticate", "")
+                realm = re.search(r'realm="([^"]+)"', auth)
+                service = re.search(r'service="([^"]+)"', auth)
+                scope = re.search(r'scope="([^"]+)"', auth)
+                if realm and service:
+                    query = {"service": service.group(1)}
+                    if scope:
+                        query["scope"] = scope.group(1)
+                    token_url = f"{realm.group(1)}?{urllib.parse.urlencode(query)}"
+                    token_payload, _ = registry_request_json(token_url, command, artifact, "")
+                    bearer = token_payload.get("token") or token_payload.get("access_token")
+                    if bearer:
+                        return registry_request_json(url, command, artifact, bearer)
+            last_error = f"HTTP {exc.code}: {exc.reason}"
+            if exc.code in CNPG_LIVE_RETRY_STATUS and attempt < CNPG_LIVE_RESOLVE_ATTEMPTS:
+                time.sleep(attempt * 2)
+                continue
+            diag(command, artifact, "GHCR tag inventory request succeeds", last_error, "Pass --fixtures in tests or allow anonymous pull access to ghcr.io/cloudnative-pg/postgresql.")
+        except Exception as exc:
+            last_error = str(exc)
+            if attempt < CNPG_LIVE_RESOLVE_ATTEMPTS:
+                time.sleep(attempt * 2)
+                continue
+            diag(command, artifact, "GHCR tag inventory request succeeds", last_error, "Pass --fixtures in tests or ensure network access to ghcr.io.")
 
 
 def response_next_url(headers):

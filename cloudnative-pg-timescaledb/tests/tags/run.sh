@@ -217,7 +217,7 @@ cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/generator_contract.py" "$
 cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/tag_policy.py" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/lib/tag_policy.py"
 cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/tags.sh" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/lib/tags.sh"
 cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${validate_sandbox}/cloudnative-pg-timescaledb/versions.yaml"
-expected_sandbox_date="$(python3 - "${ROOT_DIR}" <<'PY'
+expected_sandbox_date="$(env -u DATE -u TAG_VALIDATION_DATE python3 - "${ROOT_DIR}" <<'PY'
 import sys
 from pathlib import Path
 

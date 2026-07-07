@@ -183,9 +183,11 @@ normalize_fixture_diff() {
     -e 's/index [0-9a-f]+\.\.[0-9a-f]+/index <old>..<new>/g' \
     -e 's/sha256:[0-9a-f]{64}/sha256:<digest>/g' \
     -e 's/ts[0-9]+\.[0-9]+\.[0-9]+-/ts<timescaledb>-/g' \
+    -e 's/(pg[^-]+-ts<timescaledb>-)[0-9]{8}/\1<date>/g' \
     -e 's/[0-9]+\.[0-9]+\.[0-9]+~debian/<timescaledb>~debian/g' \
     -e 's/org\.pnet\.timescaledb\.version="[0-9]+\.[0-9]+\.[0-9]+"/org.pnet.timescaledb.version="<timescaledb>"/g' \
     -e 's/"timescaledb_version": "[0-9]+\.[0-9]+\.[0-9]+"/"timescaledb_version": "<timescaledb>"/g' \
+    -e 's/"release_date": "[0-9]{8}"/"release_date": "<date>"/g' \
     -e 's/timescaledb_version: "[0-9]+\.[0-9]+\.[0-9]+"/timescaledb_version: "<timescaledb>"/g' \
     "$1"
 }

@@ -403,4 +403,11 @@ expect_fail \
   -- \
   "${RESOLVER}" --check-cnpg --metadata
 
+if ! grep -Fq 'CNPG_LIVE_RESOLVE_ATTEMPTS = 5' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/cnpg.sh" \
+  || ! grep -Fq 'CNPG_LIVE_RETRY_STATUS = {429, 500, 502, 503, 504}' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/cnpg.sh" \
+  || ! grep -Fq 'docker", "buildx", "imagetools", "inspect"' "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/cnpg.sh"; then
+  diag "scan cnpg resolver retries" "cloudnative-pg-timescaledb/scripts/lib/cnpg.sh" "live CNPG resolver retries transient GHCR and docker inspect failures" "missing retry constants or inspect command" "Keep scheduled update resilient to transient GHCR 429/5xx and manifest inspect propagation errors."
+  exit 1
+fi
+
 printf 'PASS story-2.1 CNPG resolver fixtures\n'
