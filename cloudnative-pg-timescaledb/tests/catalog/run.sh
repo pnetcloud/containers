@@ -157,6 +157,8 @@ for marker in ["git push", "GH_TOKEN", "gh workflow run build.yml", "--ref", "GI
         fail(workflow, f"autocommit dispatches Build Release Candidates after metadata push using {marker}", "missing", "Use workflow_dispatch so GITHUB_TOKEN-generated metadata commits trigger the build/publish chain.")
 if "cloudnative-pg-timescaledb/scripts/ci-retry.sh gh workflow run build.yml" not in autocommit_steps_text:
     fail(workflow, "autocommit retries Build Release Candidates dispatch", "missing", "Wrap workflow_dispatch in ci-retry.sh so transient GitHub API failures do not break scheduled updates.")
+if "cloudnative-pg-timescaledb/scripts/ci-retry.sh git push" not in autocommit_steps_text:
+    fail(workflow, "autocommit retries resolver metadata push", "missing", "Wrap metadata git push in ci-retry.sh so transient Git transport failures do not break scheduled updates.")
 job = jobs.get("catalog-autocommit")
 if not isinstance(job, dict):
     fail(workflow, "catalog-autocommit job exists", "missing", "Add a named release catalog autocommit job.")
@@ -193,6 +195,12 @@ required_markers = [
 for marker in required_markers:
     if marker not in steps_text:
         fail(workflow, f"catalog-autocommit contains {marker}", "missing", "Keep catalog autocommit path allowlisted, no-op safe, and recursion guarded.")
+for marker in [
+    "cloudnative-pg-timescaledb/scripts/ci-retry.sh git fetch --no-tags --prune --depth=1 origin",
+    "cloudnative-pg-timescaledb/scripts/ci-retry.sh git push",
+]:
+    if marker not in steps_text:
+        fail(workflow, f"catalog-autocommit retries transient git transport for {marker}", "missing", "Use ci-retry.sh for git fetch/push around generated catalog autocommits.")
 if "git add cloudnative-pg-timescaledb/" in steps_text:
     fail(workflow, "catalog-autocommit stages only through the catalog allowlist", "raw git add found", "Use autocommit-stage.sh with CATALOG_AUTOCOMMIT allowlist only.")
 if 'else\\n            make catalog' in steps_text or 'generate-catalog.sh --check' in steps_text:
@@ -288,6 +296,12 @@ required_markers = [
 for marker in required_markers:
     if marker not in steps_text:
         fail(workflow, f"release_metadata_autocommit contains {marker}", "missing", "Keep release metadata persistence allowlisted, digest-aware, branch-safe, and no-op safe.")
+for marker in [
+    "cloudnative-pg-timescaledb/scripts/ci-retry.sh git fetch --no-tags --prune --depth=1 origin",
+    "cloudnative-pg-timescaledb/scripts/ci-retry.sh git push origin",
+]:
+    if marker not in steps_text:
+        fail(workflow, f"release_metadata_autocommit retries transient git transport for {marker}", "missing", "Use ci-retry.sh for git fetch/push around release metadata persistence.")
 if "git add cloudnative-pg-timescaledb/" in steps_text:
     fail(workflow, "release_metadata_autocommit stages only through the release metadata allowlist", "raw git add found", "Use autocommit-stage.sh with RELEASE_METADATA allowlist only.")
 expected = {
