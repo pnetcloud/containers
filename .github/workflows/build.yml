@@ -459,7 +459,20 @@ jobs:
           print("  done")
           print("  cosign verify --certificate-identity \"${EXPECTED_CERTIFICATE_IDENTITY}\" --certificate-oidc-issuer \"${COSIGN_CERTIFICATE_ISSUER}\" \"${subject}\" >\"${output}\"")
           print("}")
-          print(f"docker buildx imagetools inspect {shlex.quote(image + '@' + index_digest)} --raw > {shlex.quote(str(attestation_path))}")
+          print("inspect_attestation_with_retry() {")
+          print("  local subject=\"$1\"")
+          print("  local output=\"$2\"")
+          print("  local attempt")
+          print("  for attempt in 1 2 3 4 5 6; do")
+          print("    if docker buildx imagetools inspect \"${subject}\" --raw >\"${output}\"; then")
+          print("      return 0")
+          print("    fi")
+          print("    printf 'BuildKit attestation manifest not inspectable yet for %s; retry %s/6 after registry propagation delay\\n' \"${subject}\" \"${attempt}\" >&2")
+          print("    sleep 10")
+          print("  done")
+          print("  docker buildx imagetools inspect \"${subject}\" --raw >\"${output}\"")
+          print("}")
+          print(f"inspect_attestation_with_retry {shlex.quote(image + '@' + index_digest)} {shlex.quote(str(attestation_path))}")
           for idx, digest in enumerate(digests):
               subject = f"{image}@{digest}"
               sbom_ref = f"{subject}#sbom"
