@@ -116,7 +116,8 @@ jobs:
           candidate_ref="${IMAGE}:candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${BAKE_TARGET}-index"
           platforms_csv="$(python3 -c 'import json,os; print(",".join(json.loads(os.environ["PLATFORMS_JSON"])))')"
           printf 'Building multi-platform candidate PG=%s DEBIAN=%s platforms=%s ref=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${platforms_csv}" "${candidate_ref}"
-          docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl --sbom=true --provenance=mode=max "${BAKE_TARGET}" \
+          CI_RETRY_ATTEMPTS=2 CI_RETRY_DELAY_SECONDS=30 cloudnative-pg-timescaledb/scripts/ci-retry.sh \
+            docker buildx bake --file cloudnative-pg-timescaledb/docker-bake.hcl --sbom=true --provenance=mode=max "${BAKE_TARGET}" \
             --set "${BAKE_TARGET}.platform=${platforms_csv}" \
             --set "${BAKE_TARGET}.tags=${candidate_ref}" \
             --set "${BAKE_TARGET}.output=type=registry,push=true"
