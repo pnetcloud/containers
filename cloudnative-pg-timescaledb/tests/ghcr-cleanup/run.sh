@@ -145,6 +145,8 @@ for marker in [
     "default: 'true'",
     "Normalize final release indexes",
     "normalize-release-indexes.sh",
+    "normalize_release_index_with_retry",
+    "CI_RETRY_ATTEMPTS=3 CI_RETRY_DELAY_SECONDS=20 cloudnative-pg-timescaledb/scripts/ci-retry.sh",
     "curl_json_with_retry",
     "--retry-all-errors",
     "Manual cleanup public pull not ready",

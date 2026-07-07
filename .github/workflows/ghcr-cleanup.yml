@@ -53,6 +53,9 @@ jobs:
           from pathlib import Path
 
           print("set -Eeuo pipefail")
+          print("normalize_release_index_with_retry() {")
+          print("  CI_RETRY_ATTEMPTS=3 CI_RETRY_DELAY_SECONDS=20 cloudnative-pg-timescaledb/scripts/ci-retry.sh \"$@\"")
+          print("}")
           for path in sorted(Path(sys.argv[1]).glob("sha256-*.json")):
               payload = json.loads(path.read_text())
               image = payload.get("image")
@@ -60,7 +63,7 @@ jobs:
               platform_digests = payload.get("platform_digests") or {}
               if not image or not tags or not isinstance(platform_digests, dict):
                   continue
-              args = ["docker", "buildx", "imagetools", "create"]
+              args = ["normalize_release_index_with_retry", "docker", "buildx", "imagetools", "create"]
               for tag in tags:
                   args.extend(["-t", f"{image}:{tag}"])
               for platform in sorted(platform_digests):
