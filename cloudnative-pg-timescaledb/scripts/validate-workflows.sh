@@ -1523,7 +1523,9 @@ def validate_workflow(path, policy):
             diag(path, "validate workflow runs actionlint through deterministic workflow discovery", "missing", "Use find .github/workflows -type f ... -print0 | sort -z | xargs -0 actionlint.")
         if not command_present(run_text, r"^\s*git\s+ls-files\s+'cloudnative-pg-timescaledb/scripts/\*\.sh'\s+'cloudnative-pg-timescaledb/scripts/\*\*/\*\.sh'\s+\|\s+sort\s+\|\s+xargs\s+shellcheck\b"):
             diag(path, "validate workflow runs shellcheck against git-tracked script list", "missing", "Use git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck.")
-        if not command_present(run_text, r"^\s*(sudo\s+)?apt-get\s+install\b[^\n]*(^|\s)shellcheck([:=/][^\s;|&]+)?(?=\s|[;|&]|$)"):
+        installs_shellcheck = command_present(run_text, r"^\s*(sudo\s+)?apt-get\s+install\b[^\n]*(^|\s)shellcheck([:=/][^\s;|&]+)?(?=\s|[;|&]|$)")
+        installs_shellcheck = installs_shellcheck or command_present(run_text, r"^\s*cloudnative-pg-timescaledb/scripts/ci-apt-install\.sh\b[^\n]*(^|\s)shellcheck([:=/][^\s;|&]+)?(?=\s|[;|&]|$)")
+        if not installs_shellcheck:
             diag(path, "validate workflow installs or provides real shellcheck", "missing", "Install shellcheck before make validate; bash -n is not a sufficient CI gate.")
         if re.search(r"bash\s+-n", run_text) and "shellcheck" not in run_text:
             diag(path, "bash -n is not the CI shell validation gate", "bash -n only", "Run real shellcheck in CI.")

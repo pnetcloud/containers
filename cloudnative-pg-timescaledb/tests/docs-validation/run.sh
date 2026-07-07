@@ -96,8 +96,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - run: |
           set -Eeuo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends shellcheck
+          cloudnative-pg-timescaledb/scripts/ci-apt-install.sh shellcheck
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - run: make validate
       - run: find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z | xargs -0 actionlint

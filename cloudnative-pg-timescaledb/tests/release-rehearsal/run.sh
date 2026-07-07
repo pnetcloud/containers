@@ -31,6 +31,7 @@ require_workflow_arm64_emulation() {
     exit 1
   fi
   for token in \
+    'cloudnative-pg-timescaledb/scripts/ci-apt-install.sh binfmt-support qemu-user-static' \
     'binfmt-support' \
     'qemu-user-static' \
     'update-binfmts --enable qemu-aarch64' \
@@ -40,6 +41,10 @@ require_workflow_arm64_emulation() {
       exit 1
     fi
   done
+  if grep -Eq 'sudo apt-get (update|install)' "${workflow}"; then
+    diag "grep bare apt-get" "${workflow}" "workflow package installs use retrying apt helper" "bare apt-get found" "Use ci-apt-install.sh so transient apt mirror failures do not fail release rehearsal."
+    exit 1
+  fi
   qemu_line="$(grep -nF 'update-binfmts --enable qemu-aarch64' "${workflow}" | head -n1 | cut -d: -f1)"
   rehearsal_line="$(grep -nF 'make release-rehearsal' "${workflow}" | head -n1 | cut -d: -f1)"
   if [[ -z "${qemu_line}" || -z "${rehearsal_line}" || "${qemu_line}" -ge "${rehearsal_line}" ]]; then

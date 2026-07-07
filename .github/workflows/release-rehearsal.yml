@@ -38,8 +38,7 @@ jobs:
       - name: Prepare arm64 emulation
         run: |
           set -Eeuo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends binfmt-support qemu-user-static
+          cloudnative-pg-timescaledb/scripts/ci-apt-install.sh binfmt-support qemu-user-static
           sudo update-binfmts --enable qemu-aarch64 || true
       - name: Run release rehearsal
         env:

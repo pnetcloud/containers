@@ -64,8 +64,7 @@ jobs:
       - name: Prepare Docker Buildx
         run: |
           set -Eeuo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends binfmt-support qemu-user-static
+          cloudnative-pg-timescaledb/scripts/ci-apt-install.sh binfmt-support qemu-user-static
           sudo update-binfmts --enable qemu-aarch64 || true
           docker buildx create --name "candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.bake_target }}" --use
           bootstrap_buildx() {

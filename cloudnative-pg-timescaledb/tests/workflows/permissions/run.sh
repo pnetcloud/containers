@@ -4,6 +4,7 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 FIXTURE_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/permissions/fixtures"
 VALIDATOR="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-workflows.sh"
+PRODUCTION_VALIDATE_WORKFLOW="${ROOT_DIR}/.github/workflows/validate.yml"
 
 diag() {
   printf 'command: %s\nartifact: %s\nexpected: %s\nactual: %s\nremediation: %s\n' "$@" >&2
@@ -267,6 +268,17 @@ expect_fail_with_stubbed_optional_tools() {
   rm -rf "${stub_bin}"
 }
 
+require_production_validate_apt_retry() {
+  if ! grep -Fq 'cloudnative-pg-timescaledb/scripts/ci-apt-install.sh shellcheck' "${PRODUCTION_VALIDATE_WORKFLOW}"; then
+    diag "grep ci-apt-install.sh" "${PRODUCTION_VALIDATE_WORKFLOW}" "validate workflow installs shellcheck through retrying apt helper" "missing" "Use ci-apt-install.sh so transient apt mirror failures do not fail validation."
+    exit 1
+  fi
+  if grep -Eq 'sudo apt-get (update|install)' "${PRODUCTION_VALIDATE_WORKFLOW}"; then
+    diag "grep bare apt-get" "${PRODUCTION_VALIDATE_WORKFLOW}" "validate workflow avoids bare apt-get" "bare apt-get found" "Use ci-apt-install.sh for runner package installation."
+    exit 1
+  fi
+}
+
 for fixture in \
   valid-least-privilege.yml \
   valid-inline-shell-conditional.yml \
@@ -419,6 +431,8 @@ for fixture in \
 done
 
 tmp_root="$(mktemp -d)"
+
+require_production_validate_apt_retry
 
 valid_root="${tmp_root}/valid"
 prepare_root "${valid_root}"

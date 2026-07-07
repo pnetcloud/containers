@@ -21,8 +21,7 @@ jobs:
       - name: Install validation tools
         run: |
           set -Eeuo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends shellcheck
+          cloudnative-pg-timescaledb/scripts/ci-apt-install.sh shellcheck
           go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Validate Renovate config
