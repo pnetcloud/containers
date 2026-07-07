@@ -81,9 +81,12 @@ jobs:
           }
           bootstrap_buildx
       - name: Login to GHCR
+        env:
+          GHCR_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c "printf '%s' \"\${GHCR_TOKEN}\" | docker login ghcr.io -u \"\${GHCR_ACTOR}\" --password-stdin"
       - name: Build and smoke release candidates
         env:
           IMAGE: ${{ matrix.image }}
@@ -193,7 +196,7 @@ jobs:
               printf 'Invalid candidate digest PG=%s DEBIAN=%s platform=%s digest=%s\n' "${PG_MAJOR}" "${DEBIAN_VARIANT}" "${platform}" "${platform_digest}" >&2
               exit 1
             fi
-            docker pull --platform "${platform}" "${candidate_ref}"
+            cloudnative-pg-timescaledb/scripts/ci-retry.sh docker pull --platform "${platform}" "${candidate_ref}"
             SMOKE_IMAGE_REF="${candidate_ref}" SMOKE_EXPECTED_PLATFORM="${platform}" CHECKS=container make smoke PG="${PG_MAJOR}" DEBIAN="${DEBIAN_VARIANT}"
             SMOKE_IMAGE_REF="${candidate_ref}" SMOKE_EXPECTED_PLATFORM="${platform}" CHECKS=sql make smoke PG="${PG_MAJOR}" DEBIAN="${DEBIAN_VARIANT}"
             runtime_architecture="$(docker run --rm --platform "${platform}" --entrypoint /bin/sh "${candidate_ref}" -c 'dpkg --print-architecture')"
@@ -383,9 +386,12 @@ jobs:
         with:
           cosign-release: v3.1.1
       - name: Login to GHCR for signature upload
+        env:
+          GHCR_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c "printf '%s' \"\${GHCR_TOKEN}\" | docker login ghcr.io -u \"\${GHCR_ACTOR}\" --password-stdin"
       - id: evidence
         name: Sign, verify, and write release evidence
         env:
@@ -671,9 +677,12 @@ jobs:
         with:
           cosign-release: v3.1.1
       - name: Login to GHCR for final tag promotion
+        env:
+          GHCR_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c "printf '%s' \"\${GHCR_TOKEN}\" | docker login ghcr.io -u \"\${GHCR_ACTOR}\" --password-stdin"
       - id: publish_metadata
         name: Validate gates and promote final tags
         env:
@@ -1035,9 +1044,12 @@ jobs:
           pattern: ghcr-release-metadata-*
           path: ghcr-cleanup/input/release-metadata
       - name: Login to GHCR for cleanup tag detachment
+        env:
+          GHCR_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c "printf '%s' \"\${GHCR_TOKEN}\" | docker login ghcr.io -u \"\${GHCR_ACTOR}\" --password-stdin"
       - name: Collect protected release digests
         run: |
           set -Eeuo pipefail

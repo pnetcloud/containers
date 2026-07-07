@@ -155,6 +155,8 @@ autocommit_steps_text = json.dumps(autocommit_job.get("steps", []), sort_keys=Tr
 for marker in ["git push", "GH_TOKEN", "gh workflow run build.yml", "--ref", "GITHUB_REF_NAME", "GITHUB_TOKEN", "github.token"]:
     if marker not in autocommit_steps_text:
         fail(workflow, f"autocommit dispatches Build Release Candidates after metadata push using {marker}", "missing", "Use workflow_dispatch so GITHUB_TOKEN-generated metadata commits trigger the build/publish chain.")
+if "cloudnative-pg-timescaledb/scripts/ci-retry.sh gh workflow run build.yml" not in autocommit_steps_text:
+    fail(workflow, "autocommit retries Build Release Candidates dispatch", "missing", "Wrap workflow_dispatch in ci-retry.sh so transient GitHub API failures do not break scheduled updates.")
 job = jobs.get("catalog-autocommit")
 if not isinstance(job, dict):
     fail(workflow, "catalog-autocommit job exists", "missing", "Add a named release catalog autocommit job.")

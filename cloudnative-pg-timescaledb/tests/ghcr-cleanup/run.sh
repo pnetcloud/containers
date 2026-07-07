@@ -135,6 +135,8 @@ for workflow in sys.argv[1:]:
         raise SystemExit(f"workflow cleanup must support guarded untagged deletion: {workflow}")
     if "ghcr-cleanup/output/protected-digests.txt" not in text:
         raise SystemExit(f"workflow must protect release manifest digests before deleting untagged GHCR versions: {workflow}")
+    if "cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c" not in text or "docker login ghcr.io" not in text or "GHCR_TOKEN" not in text:
+        raise SystemExit(f"workflow must retry GHCR cleanup login: {workflow}")
 
 manual = Path(sys.argv[2]).read_text()
 for marker in [

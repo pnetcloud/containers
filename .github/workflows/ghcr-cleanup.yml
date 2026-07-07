@@ -35,9 +35,12 @@ jobs:
       # actions/checkout v6.0.3
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       - name: Login to GHCR for cleanup tag detachment
+        env:
+          GHCR_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          printf '%s' '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c "printf '%s' \"\${GHCR_TOKEN}\" | docker login ghcr.io -u \"\${GHCR_ACTOR}\" --password-stdin"
       - name: Normalize final release indexes
         if: ${{ inputs.dry_run == 'false' }}
         run: |

@@ -123,7 +123,7 @@ jobs:
           git config user.email 'pnetcloud-update-bot@users.noreply.github.com'
           TZ=UTC git commit -m 'chore(cnpg-timescaledb): update resolver metadata'
           git push
-          GH_TOKEN="${{ github.token }}" gh workflow run build.yml --ref "${GITHUB_REF_NAME}"
+          GH_TOKEN="${{ github.token }}" cloudnative-pg-timescaledb/scripts/ci-retry.sh gh workflow run build.yml --ref "${GITHUB_REF_NAME}"
 
   catalog-autocommit:
     name: Generate and autocommit release catalogs
