@@ -706,7 +706,19 @@ jobs:
           args.extend(sources)
           print(" ".join(shlex.quote(arg) for arg in args))
           PY
-          bash "${OUTPUT_DIR}/promote-tags.sh"
+          promote_final_tags() {
+            local attempt
+            for attempt in 1 2 3 4 5 6; do
+              if bash "${OUTPUT_DIR}/promote-tags.sh"; then
+                return 0
+              fi
+              printf 'Final tag promotion not ready yet target=%s attempt=%s\n' '${{ matrix.bake_target }}' "${attempt}" >&2
+              sleep 10
+            done
+            printf 'Final tag promotion failed target=%s\n' '${{ matrix.bake_target }}' >&2
+            return 1
+          }
+          promote_final_tags
           python3 - "${metadata_path}" <<'PY' > "${OUTPUT_DIR}/final-refs.txt"
           import json
           import sys
@@ -844,7 +856,19 @@ jobs:
           PY
           while read -r platform ref; do
             printf 'Verifying public anonymous pull: platform=%s ref=%s\n' "${platform}" "${ref}"
-            docker pull --platform "${platform}" "${ref}"
+            pull_public_ref() {
+              local attempt
+              for attempt in 1 2 3 4 5 6; do
+                if docker pull --platform "${platform}" "${ref}"; then
+                  return 0
+                fi
+                printf 'Public anonymous pull not ready platform=%s ref=%s attempt=%s\n' "${platform}" "${ref}" "${attempt}" >&2
+                sleep 10
+              done
+              printf 'Public anonymous pull failed platform=%s ref=%s\n' "${platform}" "${ref}" >&2
+              return 1
+            }
+            pull_public_ref
           done < /tmp/public-pulls.txt
       - name: Write publish summary
         if: always()
@@ -1102,6 +1126,18 @@ jobs:
           PY
           while IFS= read -r ref; do
             for platform in linux/amd64 linux/arm64; do
-              docker pull --platform "${platform}" "${ref}"
+              pull_public_ref() {
+                local attempt
+                for attempt in 1 2 3 4 5 6; do
+                  if docker pull --platform "${platform}" "${ref}"; then
+                    return 0
+                  fi
+                  printf 'Post-cleanup public pull not ready platform=%s ref=%s attempt=%s\n' "${platform}" "${ref}" "${attempt}" >&2
+                  sleep 10
+                done
+                printf 'Post-cleanup public pull failed platform=%s ref=%s\n' "${platform}" "${ref}" >&2
+                return 1
+              }
+              pull_public_ref
             done
           done < /tmp/cleanup-final-tags.txt

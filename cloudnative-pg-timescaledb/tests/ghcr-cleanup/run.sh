@@ -91,6 +91,7 @@ required = [
     "sleep 10",
     "Verify public pulls after cleanup",
     "docker pull --platform",
+    "pull_public_ref",
 ]
 for workflow in sys.argv[1:]:
     text = Path(workflow).read_text()
@@ -109,11 +110,30 @@ for marker in [
     "default: 'true'",
     "Normalize final release indexes",
     "normalize-release-indexes.sh",
+    "curl_json_with_retry",
+    "--retry-all-errors",
+    "Manual cleanup public pull not ready",
     "--summary-file ghcr-cleanup/output/cleanup-summary.json",
     "Public GHCR tag list still contains candidate-* or sha256-* tags.",
 ]:
     if marker not in manual:
         raise SystemExit(f"manual cleanup workflow missing marker: {marker}")
+PY
+
+python3 - "${SCRIPT}" <<'PY'
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text()
+for marker in [
+    "RETRY_HTTP_STATUS",
+    "RETRY_ATTEMPTS",
+    "urllib.error.URLError",
+    "retry_delay(attempt)",
+    "tombstone push not ready",
+]:
+    if marker not in text:
+        raise SystemExit(f"cleanup script retry coverage missing marker: {marker}")
 PY
 
 printf 'PASS GHCR candidate cleanup fixtures\n'

@@ -17,31 +17,51 @@ from pathlib import Path
 API_VERSION = "2022-11-28"
 SIGNATURE_TAG_RE = re.compile(r"^sha256-[0-9a-f]{64}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+RETRY_HTTP_STATUS = {429, 500, 502, 503, 504}
+RETRY_ATTEMPTS = 5
 
 
 def fail(message):
     raise SystemExit(message)
 
 
+def retry_delay(attempt):
+    time.sleep(attempt * 2)
+
+
 def request_json(url, token):
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": API_VERSION,
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode())
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode(errors="replace")
-        fail(f"GET {url} failed: HTTP {exc.code}: {body}")
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+                "X-GitHub-Api-Version": API_VERSION,
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.loads(response.read().decode())
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            if exc.code in RETRY_HTTP_STATUS and attempt < RETRY_ATTEMPTS:
+                retry_delay(attempt)
+                continue
+            fail(f"GET {url} failed: HTTP {exc.code}: {body}")
+        except urllib.error.URLError as exc:
+            if attempt < RETRY_ATTEMPTS:
+                retry_delay(attempt)
+                continue
+            fail(f"GET {url} failed: {exc.reason}")
+    fail(f"GET {url} failed after {RETRY_ATTEMPTS} attempts")
+
+
+def retryable_delete_status(status):
+    return status in RETRY_HTTP_STATUS
 
 
 def delete_url(url, token):
-    for attempt in range(1, 6):
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
         request = urllib.request.Request(
             url,
             method="DELETE",
@@ -55,18 +75,23 @@ def delete_url(url, token):
             with urllib.request.urlopen(request, timeout=30) as response:
                 if response.status in {202, 204}:
                     return
-                if response.status in {429, 500, 502, 503, 504} and attempt < 5:
-                    time.sleep(attempt * 2)
+                if retryable_delete_status(response.status) and attempt < RETRY_ATTEMPTS:
+                    retry_delay(attempt)
                     continue
                 fail(f"DELETE {url} returned HTTP {response.status}")
         except urllib.error.HTTPError as exc:
             body = exc.read().decode(errors="replace")
             if exc.code == 404:
                 return
-            if exc.code in {429, 500, 502, 503, 504} and attempt < 5:
-                time.sleep(attempt * 2)
+            if exc.code in RETRY_HTTP_STATUS and attempt < RETRY_ATTEMPTS:
+                retry_delay(attempt)
                 continue
             fail(f"DELETE {url} failed: HTTP {exc.code}: {body}")
+        except urllib.error.URLError as exc:
+            if attempt < RETRY_ATTEMPTS:
+                retry_delay(attempt)
+                continue
+            fail(f"DELETE {url} failed: {exc.reason}")
 
 
 def package_base(owner_kind, owner, package_name):
@@ -251,20 +276,30 @@ def push_tombstone(image, tag):
             )
         )
         ref = f"{image}:{tag}"
-        subprocess.run(
-            [
-                "docker",
-                "buildx",
-                "build",
-                "--file",
-                str(dockerfile),
-                "--tag",
-                ref,
-                "--push",
-                tmp,
-            ],
-            check=True,
-        )
+        command = [
+            "docker",
+            "buildx",
+            "build",
+            "--file",
+            str(dockerfile),
+            "--tag",
+            ref,
+            "--push",
+            tmp,
+        ]
+        for attempt in range(1, RETRY_ATTEMPTS + 1):
+            try:
+                subprocess.run(command, check=True)
+                return
+            except subprocess.CalledProcessError:
+                if attempt >= RETRY_ATTEMPTS:
+                    raise
+                print(
+                    f"tombstone push not ready ref={ref} attempt={attempt}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                retry_delay(attempt)
 
 
 def main():

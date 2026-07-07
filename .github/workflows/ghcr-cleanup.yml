@@ -171,8 +171,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           docker logout ghcr.io || true
-          token="$(curl -fsSL 'https://ghcr.io/token?scope=repository:pnetcloud/cloudnative-pg-timescaledb:pull' | jq -r .token)"
-          curl -fsSL -H "Authorization: Bearer ${token}" \
+          curl_json_with_retry() {
+            curl --fail --show-error --silent --location \
+              --retry 5 --retry-all-errors --retry-delay 2 \
+              "$@"
+          }
+          token="$(curl_json_with_retry 'https://ghcr.io/token?scope=repository:pnetcloud/cloudnative-pg-timescaledb:pull' | jq -r .token)"
+          curl_json_with_retry -H "Authorization: Bearer ${token}" \
             'https://ghcr.io/v2/pnetcloud/cloudnative-pg-timescaledb/tags/list' \
             | tee ghcr-cleanup/output/public-tags.json
           if jq -e '.tags[] | select(startswith("candidate-") or startswith("sha256-"))' ghcr-cleanup/output/public-tags.json >/dev/null; then
@@ -181,7 +186,19 @@ jobs:
           fi
           while IFS= read -r ref; do
             for platform in linux/amd64 linux/arm64; do
-              docker pull --platform "${platform}" "${ref}"
+              pull_public_ref() {
+                local attempt
+                for attempt in 1 2 3 4 5 6; do
+                  if docker pull --platform "${platform}" "${ref}"; then
+                    return 0
+                  fi
+                  printf 'Manual cleanup public pull not ready platform=%s ref=%s attempt=%s\n' "${platform}" "${ref}" "${attempt}" >&2
+                  sleep 10
+                done
+                printf 'Manual cleanup public pull failed platform=%s ref=%s\n' "${platform}" "${ref}" >&2
+                return 1
+              }
+              pull_public_ref
             done
           done < ghcr-cleanup/output/final-release-refs.txt
       - name: Write cleanup summary

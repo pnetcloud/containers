@@ -224,6 +224,8 @@ for marker in [
     "validate-publish-gates.sh",
     "--release-gate-metadata",
     "docker buildx imagetools create",
+    "promote_final_tags",
+    "Final tag promotion not ready yet",
     "published.raw.json",
     "published-digests.txt",
     "published platform digest mismatch",
@@ -233,6 +235,7 @@ for marker in [
     "final_tags",
     "docker logout ghcr.io",
     "docker pull --platform",
+    "Public anonymous pull not ready",
     "ghcr-release-metadata-${{ matrix.bake_target }}",
     "GITHUB_STEP_SUMMARY",
 ]:
