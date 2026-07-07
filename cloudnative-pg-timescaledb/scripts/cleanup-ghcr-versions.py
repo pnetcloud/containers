@@ -126,9 +126,33 @@ def tags_for(version):
     return [tag for tag in tags if isinstance(tag, str)]
 
 
-def select_candidate_versions(versions, prefix):
+def parse_utc_datetime(value, field_name):
+    if not isinstance(value, str) or not value:
+        fail(f"{field_name} must be an ISO-8601 UTC timestamp")
+    try:
+        parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise SystemExit(f"{field_name} must be an ISO-8601 UTC timestamp: {value}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
+
+
+def candidate_too_young(version, now, min_age_minutes):
+    if min_age_minutes <= 0:
+        return False
+    created_at = version.get("created_at", "")
+    if not isinstance(created_at, str) or not created_at:
+        return True
+    created = parse_utc_datetime(created_at, "created_at")
+    age = now - created
+    return age < datetime.timedelta(minutes=min_age_minutes)
+
+
+def select_candidate_versions(versions, prefix, now, min_age_minutes):
     selected = []
     skipped_mixed = []
+    skipped_recent = []
     for version in versions:
         version_id = version.get("id")
         tags = tags_for(version)
@@ -142,11 +166,14 @@ def select_candidate_versions(versions, prefix):
             "created_at": version.get("created_at", ""),
             "tags": tags,
         }
+        if candidate_too_young(version, now, min_age_minutes):
+            skipped_recent.append(record)
+            continue
         if len(candidate_tags) == len(tags):
             selected.append(record)
         else:
             skipped_mixed.append(record)
-    return selected, skipped_mixed
+    return selected, skipped_mixed, skipped_recent
 
 
 def select_signature_versions(versions):
@@ -309,6 +336,13 @@ def main():
     parser.add_argument("--package", required=True)
     parser.add_argument("--image", help="Container image reference used when detaching mixed candidate tags, for example ghcr.io/owner/name.")
     parser.add_argument("--candidate-prefix", default="candidate-")
+    parser.add_argument(
+        "--min-candidate-age-minutes",
+        type=int,
+        default=0,
+        help="Do not select candidate-tagged versions newer than this age. Use 0 for run-scoped cleanup.",
+    )
+    parser.add_argument("--now", help="UTC ISO-8601 timestamp used for age checks; defaults to current UTC time.")
     parser.add_argument("--delete-candidates", action="store_true")
     parser.add_argument("--delete-signature-tags", action="store_true", help="Delete main-package cosign signature tags named sha256-<64hex>.")
     parser.add_argument(
@@ -325,6 +359,14 @@ def main():
     parser.add_argument("--max-pages", type=int, default=20)
     args = parser.parse_args()
 
+    if args.min_candidate_age_minutes < 0:
+        fail("--min-candidate-age-minutes must be greater than or equal to 0")
+    now = (
+        parse_utc_datetime(args.now, "--now")
+        if args.now
+        else datetime.datetime.now(datetime.timezone.utc)
+    )
+
     token = os.environ.get("GITHUB_TOKEN", "")
     if not args.versions_file and not token:
         fail("GITHUB_TOKEN is required when --versions-file is not used")
@@ -336,7 +378,12 @@ def main():
 
     protected_digests = load_protected_digests(args)
     versions = load_versions(args, token)
-    selected, skipped_mixed = select_candidate_versions(versions, args.candidate_prefix)
+    selected, skipped_mixed, skipped_recent = select_candidate_versions(
+        versions,
+        args.candidate_prefix,
+        now,
+        args.min_candidate_age_minutes,
+    )
     signature_selected, signature_skipped_mixed = select_signature_versions(versions)
     untagged_selected, untagged_skipped_protected, untagged_skipped_unknown_digest = select_untagged_versions(versions, protected_digests)
 
@@ -373,20 +420,30 @@ def main():
     post_detach_skipped_mixed = []
     if args.detach_mixed_candidates and args.delete_candidates and not args.dry_run:
         post_detach_versions = load_versions(args, token)
-        post_detach_selected, post_detach_skipped_mixed = select_candidate_versions(post_detach_versions, args.candidate_prefix)
+        post_detach_selected, post_detach_skipped_mixed, post_detach_skipped_recent = select_candidate_versions(
+            post_detach_versions,
+            args.candidate_prefix,
+            now,
+            args.min_candidate_age_minutes,
+        )
         post_detach_deleted.extend(delete_versions(args.owner_kind, args.owner, args.package, post_detach_selected, token))
+    else:
+        post_detach_skipped_recent = []
 
     summary = {
         "package": f"{args.owner_kind}/{args.owner}/{args.package}",
         "candidate_prefix": args.candidate_prefix,
+        "min_candidate_age_minutes": args.min_candidate_age_minutes,
         "dry_run": args.dry_run,
         "delete_candidates": args.delete_candidates,
         "detach_mixed_candidates": args.detach_mixed_candidates,
         "selected_count": len(selected),
+        "skipped_recent_candidate_count": len(skipped_recent),
         "deleted_count": len(deleted),
         "post_detach_selected_count": len(post_detach_selected),
         "post_detach_deleted_count": len(post_detach_deleted),
         "post_detach_skipped_mixed_tag_count": len(post_detach_skipped_mixed),
+        "post_detach_skipped_recent_candidate_count": len(post_detach_skipped_recent),
         "signature_selected_count": len(signature_selected),
         "signature_deleted_count": len(signature_deleted),
         "signature_skipped_mixed_tag_count": len(signature_skipped_mixed),
@@ -407,8 +464,10 @@ def main():
         "untagged_skipped_protected": untagged_skipped_protected,
         "untagged_skipped_unknown_digest": untagged_skipped_unknown_digest,
         "selected": selected,
+        "skipped_recent_candidates": skipped_recent,
         "post_detach_selected": post_detach_selected,
         "post_detach_deleted": post_detach_deleted,
+        "post_detach_skipped_recent_candidates": post_detach_skipped_recent,
         "post_detach_skipped_mixed_tags": post_detach_skipped_mixed,
         "skipped_mixed_tags": skipped_mixed,
     }
