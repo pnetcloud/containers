@@ -71,6 +71,12 @@ def first_line(pattern):
 require("pull_request:" not in text, "candidate GHCR push workflow excludes pull_request trigger", "pull_request present", "Keep write-token candidate publishing on push/workflow_dispatch only; validate.yml covers PRs.")
 if path.name == "build.yml":
     require(re.search(r"on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- main\s*\n\s+tags:\s*\n\s+- \"\*\"\s*\n\s+workflow_dispatch:", text), "release build workflow push trigger is restricted to main and tags", text.split("permissions:", 1)[0], "Do not publish GHCR candidates from arbitrary feature branches.")
+    require(
+        re.search(r"\nconcurrency:\s*\n\s+group:\s+cloudnative-pg-timescaledb-build-\$\{\{\s*github\.ref\s*\}\}\s*\n\s+cancel-in-progress:\s+false", text),
+        "release build workflow serializes runs per ref without canceling active releases",
+        text.split("jobs:", 1)[0],
+        "Queue overlapping main/tag/manual release builds instead of letting final tag promotion and cleanup race.",
+    )
 require("docker/build-push-action" not in text and "defaultContext" not in text, "Buildx/Bake uses checkout path context, not default Git context", "default Git context marker found", "Use checkout plus docker buildx bake CLI from the repository workspace.")
 require("actions/checkout@" in text, "workflow checks out repository before generated-file builds", "checkout missing", "Generated Dockerfiles and Bake files must come from checkout path context.")
 if "skipped_summary=\"$(python3 -c" in text:

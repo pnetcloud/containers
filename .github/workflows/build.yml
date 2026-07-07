@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cloudnative-pg-timescaledb-build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   matrix:
     name: Generate image matrix
