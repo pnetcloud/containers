@@ -200,6 +200,10 @@ expect_fail "scanner DB unavailable" "scanner database or metadata unavailable" 
 expect_fail "mismatched scanner artifact identity" "ArtifactName matches one candidate_ref@platform_digest" "${EVALUATOR}" --policy "${POLICY}" --ignore "${IGNORE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-json "${FIXTURE_DIR}/mismatched-scan-artifact.json"
 
 validate_security_scan_workflow "${SCAN_WORKFLOW}"
+grep -Fq '"cloudnative-pg-timescaledb/scripts/ci-retry.sh"' "${SCAN_WORKFLOW}" || {
+  diag "grep Trivy retry" "${SCAN_WORKFLOW}" "workflow retries Trivy docker runs" "Trivy docker run retry missing" "Retry transient Docker Hub, GHCR, or Trivy DB fetch failures without weakening vulnerability policy gates."
+  exit 1
+}
 validate_build_scan_gate "${BUILD_WORKFLOW}"
 expect_fail "missing SARIF upload" "SARIF upload" validate_security_scan_workflow "${FIXTURE_DIR}/missing-sarif-upload.yml"
 expect_fail "scan not required by build" "security_scan job missing" validate_build_scan_gate "${FIXTURE_DIR}/scan-not-required-by-build.yml"

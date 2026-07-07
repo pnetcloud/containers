@@ -97,6 +97,7 @@ jobs:
               json_path = json_dir / f"{record['bake_target']}-{platform_slug}.json"
               scan_ref = f"{record['candidate_ref']}@{record['platform_digest']}"
               command = [
+                  "cloudnative-pg-timescaledb/scripts/ci-retry.sh",
                   "docker", "run", "--rm",
                   "-e", "TRIVY_USERNAME", "-e", "TRIVY_PASSWORD",
                   "-v", f"{Path.cwd()}:/work", "-w", "/work",
@@ -109,6 +110,7 @@ jobs:
               print(" ".join(shlex.quote(part) for part in command) + " || scan_failed=1")
           sarif_ref = f"{records[0]['candidate_ref']}@{records[0]['platform_digest']}"
           sarif_command = [
+              "cloudnative-pg-timescaledb/scripts/ci-retry.sh",
               "docker", "run", "--rm",
               "-e", "TRIVY_USERNAME", "-e", "TRIVY_PASSWORD",
               "-v", f"{Path.cwd()}:/work", "-w", "/work",
