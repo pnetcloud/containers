@@ -74,6 +74,7 @@ def normalize(path):
         for row in payload.get("include", []):
             row["pg_version"] = "<pg_version>"
             row["timescaledb_version"] = "<timescaledb_version>"
+            row["release_date"] = "<date>"
             row["candidate_ref"] = normalize_ref(row.get("candidate_ref"), row)
             row["intended_tags"] = [normalize_tag(tag, row) for tag in row.get("intended_tags", [])]
     if normalize_catalog:
@@ -437,6 +438,7 @@ assert_json_field "docs output json path" "/tmp/story-1-5-custom-compatibility.m
 json_compare "dockerfiles json" "${FIXTURE_DIR}/generate-dockerfiles-valid.json" "${SCRIPT_DIR}/generate-dockerfiles.sh" --json
 json_compare "bake json" "${FIXTURE_DIR}/generate-bake-valid.json" "${SCRIPT_DIR}/generate-bake.sh" --json
 json_compare "matrix json" "${FIXTURE_DIR}/generate-matrix-valid.json" "${SCRIPT_DIR}/generate-matrix.sh" --json
+DATE=20260707 json_compare "matrix json shifted release date" "${FIXTURE_DIR}/generate-matrix-valid.json" "${SCRIPT_DIR}/generate-matrix.sh" --json
 json_compare "catalog json" "${FIXTURE_DIR}/generate-catalog-valid.json" "${SCRIPT_DIR}/generate-catalog.sh" --json
 json_compare "docs json" "${FIXTURE_DIR}/generate-docs-valid.json" "${SCRIPT_DIR}/generate-docs.sh" --json
 

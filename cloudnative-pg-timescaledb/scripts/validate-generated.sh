@@ -149,6 +149,7 @@ def normalize(path):
         for row in payload.get("include", []):
             row["pg_version"] = "<pg_version>"
             row["timescaledb_version"] = "<timescaledb_version>"
+            row["release_date"] = "<date>"
             row["candidate_ref"] = normalize_ref(row.get("candidate_ref"), row)
             row["intended_tags"] = [normalize_tag(tag, row) for tag in row.get("intended_tags", [])]
     if script == "generate-catalog.sh":
