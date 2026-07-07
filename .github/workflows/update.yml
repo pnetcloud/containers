@@ -122,7 +122,7 @@ jobs:
           git config user.name 'pnetcloud-update-bot'
           git config user.email 'pnetcloud-update-bot@users.noreply.github.com'
           TZ=UTC git commit -m 'chore(cnpg-timescaledb): update resolver metadata'
-          cloudnative-pg-timescaledb/scripts/ci-retry.sh git push
+          CI_GIT_PUSH_FETCH_REF="${GITHUB_REF_NAME}" CI_GIT_PUSH_REBASE_REF="origin/${GITHUB_REF_NAME}" cloudnative-pg-timescaledb/scripts/ci-git-push.sh
           GH_TOKEN="${{ github.token }}" cloudnative-pg-timescaledb/scripts/ci-retry.sh gh workflow run build.yml --ref "${GITHUB_REF_NAME}"
 
   catalog-autocommit:
@@ -200,7 +200,7 @@ jobs:
           git config user.name 'pnetcloud-catalog-bot'
           git config user.email 'pnetcloud-catalog-bot@users.noreply.github.com'
           TZ=UTC git commit -m 'chore(cnpg-timescaledb): update release catalogs'
-          cloudnative-pg-timescaledb/scripts/ci-retry.sh git push
+          CI_GIT_PUSH_FETCH_REF="${GITHUB_REF_NAME}" CI_GIT_PUSH_REBASE_REF="origin/${GITHUB_REF_NAME}" cloudnative-pg-timescaledb/scripts/ci-git-push.sh
       - name: Write catalog summary
         if: always()
         env:

@@ -152,13 +152,13 @@ autocommit_permissions = autocommit_job.get("permissions", {})
 if autocommit_permissions.get("contents") != "write" or autocommit_permissions.get("actions") != "write":
     fail(workflow, "autocommit can write resolver commits and dispatch release builds", autocommit_permissions, "Grant contents: write and actions: write only to the resolver autocommit job.")
 autocommit_steps_text = json.dumps(autocommit_job.get("steps", []), sort_keys=True)
-for marker in ["git push", "GH_TOKEN", "gh workflow run build.yml", "--ref", "GITHUB_REF_NAME", "GITHUB_TOKEN", "github.token"]:
+for marker in ["ci-git-push.sh", "GH_TOKEN", "gh workflow run build.yml", "--ref", "GITHUB_REF_NAME", "GITHUB_TOKEN", "github.token"]:
     if marker not in autocommit_steps_text:
         fail(workflow, f"autocommit dispatches Build Release Candidates after metadata push using {marker}", "missing", "Use workflow_dispatch so GITHUB_TOKEN-generated metadata commits trigger the build/publish chain.")
 if "cloudnative-pg-timescaledb/scripts/ci-retry.sh gh workflow run build.yml" not in autocommit_steps_text:
     fail(workflow, "autocommit retries Build Release Candidates dispatch", "missing", "Wrap workflow_dispatch in ci-retry.sh so transient GitHub API failures do not break scheduled updates.")
-if "cloudnative-pg-timescaledb/scripts/ci-retry.sh git push" not in autocommit_steps_text:
-    fail(workflow, "autocommit retries resolver metadata push", "missing", "Wrap metadata git push in ci-retry.sh so transient Git transport failures do not break scheduled updates.")
+if "cloudnative-pg-timescaledb/scripts/ci-git-push.sh" not in autocommit_steps_text or "CI_GIT_PUSH_REBASE_REF" not in autocommit_steps_text:
+    fail(workflow, "autocommit retries resolver metadata push with branch rebase recovery", "missing", "Use ci-git-push.sh so transient Git transport failures and non-fast-forward autocommit races do not break scheduled updates.")
 job = jobs.get("catalog-autocommit")
 if not isinstance(job, dict):
     fail(workflow, "catalog-autocommit job exists", "missing", "Add a named release catalog autocommit job.")
@@ -197,10 +197,11 @@ for marker in required_markers:
         fail(workflow, f"catalog-autocommit contains {marker}", "missing", "Keep catalog autocommit path allowlisted, no-op safe, and recursion guarded.")
 for marker in [
     "cloudnative-pg-timescaledb/scripts/ci-retry.sh git fetch --no-tags --prune --depth=1 origin",
-    "cloudnative-pg-timescaledb/scripts/ci-retry.sh git push",
+    "cloudnative-pg-timescaledb/scripts/ci-git-push.sh",
+    "CI_GIT_PUSH_REBASE_REF",
 ]:
     if marker not in steps_text:
-        fail(workflow, f"catalog-autocommit retries transient git transport for {marker}", "missing", "Use ci-retry.sh for git fetch/push around generated catalog autocommits.")
+        fail(workflow, f"catalog-autocommit retries transient git transport and rebase recovery for {marker}", "missing", "Use ci-git-push.sh for git push around generated catalog autocommits.")
 if "git add cloudnative-pg-timescaledb/" in steps_text:
     fail(workflow, "catalog-autocommit stages only through the catalog allowlist", "raw git add found", "Use autocommit-stage.sh with CATALOG_AUTOCOMMIT allowlist only.")
 if 'else\\n            make catalog' in steps_text or 'generate-catalog.sh --check' in steps_text:
@@ -291,17 +292,18 @@ required_markers = [
     "No release metadata or catalog changes to commit.",
     "git fetch --no-tags --prune --depth=1 origin",
     "git checkout -B",
-    "git push origin",
+    "ci-git-push.sh origin",
 ]
 for marker in required_markers:
     if marker not in steps_text:
         fail(workflow, f"release_metadata_autocommit contains {marker}", "missing", "Keep release metadata persistence allowlisted, digest-aware, branch-safe, and no-op safe.")
 for marker in [
     "cloudnative-pg-timescaledb/scripts/ci-retry.sh git fetch --no-tags --prune --depth=1 origin",
-    "cloudnative-pg-timescaledb/scripts/ci-retry.sh git push origin",
+    "cloudnative-pg-timescaledb/scripts/ci-git-push.sh origin",
+    "CI_GIT_PUSH_REBASE_REF",
 ]:
     if marker not in steps_text:
-        fail(workflow, f"release_metadata_autocommit retries transient git transport for {marker}", "missing", "Use ci-retry.sh for git fetch/push around release metadata persistence.")
+        fail(workflow, f"release_metadata_autocommit retries transient git transport and rebase recovery for {marker}", "missing", "Use ci-git-push.sh for git push around release metadata persistence.")
 if "git add cloudnative-pg-timescaledb/" in steps_text:
     fail(workflow, "release_metadata_autocommit stages only through the release metadata allowlist", "raw git add found", "Use autocommit-stage.sh with RELEASE_METADATA allowlist only.")
 expected = {

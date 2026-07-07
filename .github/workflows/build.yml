@@ -1021,7 +1021,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'chore(cnpg-timescaledb): update release metadata and catalogs'
-          cloudnative-pg-timescaledb/scripts/ci-retry.sh git push origin "HEAD:${GITHUB_REF_NAME}"
+          CI_GIT_PUSH_FETCH_REF="${GITHUB_REF_NAME}" CI_GIT_PUSH_REBASE_REF="origin/${GITHUB_REF_NAME}" cloudnative-pg-timescaledb/scripts/ci-git-push.sh origin "HEAD:${GITHUB_REF_NAME}"
 
   ghcr_cleanup:
     name: Cleanup temporary GHCR versions
