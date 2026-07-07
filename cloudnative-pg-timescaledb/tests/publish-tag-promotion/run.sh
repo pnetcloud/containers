@@ -206,7 +206,7 @@ for marker in ["CHECKS=container make smoke", "CHECKS=sql make smoke"]:
     require(marker in candidate_text, f"candidate job contains {marker}", "missing", "Candidate job must include per-platform smoke gates before publish.")
 for marker in ["--sbom=true", "--provenance=mode=max"]:
     require(marker in candidate_text, f"candidate job emits {marker}", "missing", "Candidate build must produce BuildKit supply-chain evidence.")
-for marker in ["cosign sign --yes", "cosign verify", "validate-release-evidence.py"]:
+for marker in ["cloudnative-pg-timescaledb/scripts/ci-retry.sh cosign sign --yes", "cosign verify", "validate-release-evidence.py"]:
     require(marker in evidence_text, f"release_evidence job contains {marker}", "missing", "Publish must depend on signed and verified release evidence.")
 for marker in [
     "validate-tags.sh",
@@ -230,7 +230,7 @@ for marker in [
     "published-digests.txt",
     "published platform digest mismatch",
     "final-refs.txt",
-    "cosign sign --yes",
+    "cloudnative-pg-timescaledb/scripts/ci-retry.sh cosign sign --yes",
     "published_digest",
     "final_tags",
     "docker logout ghcr.io",

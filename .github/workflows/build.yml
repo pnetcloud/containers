@@ -467,7 +467,7 @@ jobs:
               signature_ref = f"{subject}#signature"
               verification_ref = f"{subject}#verification"
               verification_path = evidence_path.parent / "verification" / (digest.replace(':', '-') + ".json")
-              print(f"cosign sign --yes {shlex.quote(subject)}")
+              print(f"cloudnative-pg-timescaledb/scripts/ci-retry.sh cosign sign --yes {shlex.quote(subject)}")
               print(f"cosign_verify_with_retry {shlex.quote(subject)} {shlex.quote(str(verification_path))}")
               evidence["per_digest_evidence"].append({
                   "digest": digest,
@@ -828,7 +828,7 @@ jobs:
           print(f"{image}@{published_digest}")
           PY
           )"
-          cosign sign --yes "${subject}"
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh cosign sign --yes "${subject}"
           cosign_verify_with_retry() {
             local subject="$1"
             local attempt
