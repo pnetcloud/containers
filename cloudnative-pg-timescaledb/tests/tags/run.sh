@@ -217,6 +217,19 @@ cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/generator_contract.py" "$
 cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/tag_policy.py" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/lib/tag_policy.py"
 cp "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/tags.sh" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/lib/tags.sh"
 cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${validate_sandbox}/cloudnative-pg-timescaledb/versions.yaml"
+expected_sandbox_date="$(python3 - "${ROOT_DIR}" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / "cloudnative-pg-timescaledb" / "scripts" / "lib"))
+from generator_contract import parse_metadata, release_date  # noqa: E402
+
+metadata = root / "cloudnative-pg-timescaledb" / "versions.yaml"
+data = parse_metadata(metadata, "tags sandbox")
+print(release_date("tags sandbox", data["entries"], metadata))
+PY
+)"
 for path in \
   cloudnative-pg-timescaledb/tests/story-1-1-source-of-truth.sh \
   cloudnative-pg-timescaledb/tests/story-1-2-make-help.sh \
@@ -242,6 +255,7 @@ cat >"${validate_sandbox}/cloudnative-pg-timescaledb/scripts/validate-tags.sh" <
 #!/usr/bin/env bash
 set -Eeuo pipefail
 date_arg=""
+expected_date="__EXPECTED_SANDBOX_DATE__"
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --date)
@@ -253,17 +267,18 @@ while [[ "$#" -gt 0 ]]; do
       ;;
   esac
 done
-if [[ "${date_arg}" != "20260609" ]]; then
-  printf 'expected metadata-derived date 20260609, got %s\n' "${date_arg}" >&2
+if [[ "${date_arg}" != "${expected_date}" ]]; then
+  printf 'expected metadata-derived date %s, got %s\n' "${expected_date}" "${date_arg}" >&2
   exit 42
 fi
 printf 'STUB validate-tags date=%s\n' "${date_arg}"
 SH
+sed -i "s/__EXPECTED_SANDBOX_DATE__/${expected_sandbox_date}/g" "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/validate-tags.sh"
 chmod +x "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/validate-tags.sh"
 tmp="$(mktemp)"
 if DATE= TAG_VALIDATION_DATE= "${validate_sandbox}/cloudnative-pg-timescaledb/scripts/validate.sh" >"${tmp}" 2>&1; then
-  if ! grep -Fq 'STUB validate-tags date=20260609' "${tmp}"; then
-    diag "validate.sh sandbox" "metadata-derived tag validation date" "validate-tags receives 20260609" "$(cat "${tmp}")" "Derive make validate tag date from materialized metadata when DATE/TAG_VALIDATION_DATE are unset."
+  if ! grep -Fq "STUB validate-tags date=${expected_sandbox_date}" "${tmp}"; then
+    diag "validate.sh sandbox" "metadata-derived tag validation date" "validate-tags receives ${expected_sandbox_date}" "$(cat "${tmp}")" "Derive make validate tag date from materialized metadata when DATE/TAG_VALIDATION_DATE are unset."
     rm -rf "${validate_sandbox}" "${tmp}"
     exit 1
   fi
