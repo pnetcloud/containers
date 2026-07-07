@@ -97,7 +97,7 @@ jobs:
       - run: |
           set -Eeuo pipefail
           cloudnative-pg-timescaledb/scripts/ci-apt-install.sh shellcheck
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - run: make validate
       - run: find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print0 | sort -z | xargs -0 actionlint
       - run: git ls-files 'cloudnative-pg-timescaledb/scripts/*.sh' 'cloudnative-pg-timescaledb/scripts/**/*.sh' | sort | xargs shellcheck

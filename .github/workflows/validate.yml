@@ -22,12 +22,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           cloudnative-pg-timescaledb/scripts/ci-apt-install.sh shellcheck
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Validate Renovate config
         run: |
           set -Eeuo pipefail
-          npm ci
+          cloudnative-pg-timescaledb/scripts/ci-retry.sh npm ci
           npm exec -- renovate-config-validator renovate.json
       - name: Validate local gates
         run: make validate

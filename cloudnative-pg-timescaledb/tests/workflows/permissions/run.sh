@@ -268,9 +268,17 @@ expect_fail_with_stubbed_optional_tools() {
   rm -rf "${stub_bin}"
 }
 
-require_production_validate_apt_retry() {
+require_production_validate_dependency_retries() {
   if ! grep -Fq 'cloudnative-pg-timescaledb/scripts/ci-apt-install.sh shellcheck' "${PRODUCTION_VALIDATE_WORKFLOW}"; then
     diag "grep ci-apt-install.sh" "${PRODUCTION_VALIDATE_WORKFLOW}" "validate workflow installs shellcheck through retrying apt helper" "missing" "Use ci-apt-install.sh so transient apt mirror failures do not fail validation."
+    exit 1
+  fi
+  if ! grep -Fq 'cloudnative-pg-timescaledb/scripts/ci-retry.sh go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7' "${PRODUCTION_VALIDATE_WORKFLOW}"; then
+    diag "grep ci-retry go install" "${PRODUCTION_VALIDATE_WORKFLOW}" "validate workflow installs actionlint through generic retry helper" "missing" "Use ci-retry.sh for Go module downloads so transient Go proxy failures do not fail validation."
+    exit 1
+  fi
+  if ! grep -Fq 'cloudnative-pg-timescaledb/scripts/ci-retry.sh npm ci' "${PRODUCTION_VALIDATE_WORKFLOW}"; then
+    diag "grep ci-retry npm ci" "${PRODUCTION_VALIDATE_WORKFLOW}" "validate workflow installs npm dependencies through generic retry helper" "missing" "Use ci-retry.sh for npm dependency downloads so transient registry failures do not fail validation."
     exit 1
   fi
   if grep -Eq 'sudo apt-get (update|install)' "${PRODUCTION_VALIDATE_WORKFLOW}"; then
@@ -432,7 +440,7 @@ done
 
 tmp_root="$(mktemp -d)"
 
-require_production_validate_apt_retry
+require_production_validate_dependency_retries
 
 valid_root="${tmp_root}/valid"
 prepare_root "${valid_root}"
