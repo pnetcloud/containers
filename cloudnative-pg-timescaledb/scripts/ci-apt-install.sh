@@ -25,6 +25,26 @@ as_root() {
   fi
 }
 
+disable_runner_third_party_sources() {
+  local sources_dir file backup
+  if [[ "${CI_APT_DISABLE_RUNNER_THIRD_PARTY_SOURCES:-1}" != "1" ]]; then
+    return 0
+  fi
+
+  sources_dir="${CI_APT_SOURCES_DIR:-/etc/apt/sources.list.d}"
+  if [[ ! -d "${sources_dir}" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r -d '' file; do
+    if grep -Eq 'packages\.microsoft\.com|dl\.google\.com' "${file}"; then
+      backup="${file}.disabled-by-pnet-ci"
+      printf 'Disabling runner apt source for CI package install: %s\n' "${file}" >&2
+      as_root mv "${file}" "${backup}"
+    fi
+  done < <(find "${sources_dir}" -maxdepth 1 -type f \( -name '*.list' -o -name '*.sources' \) -print0)
+}
+
 retry_as_root() {
   local attempt status sleep_seconds
   for ((attempt = 1; attempt <= attempts; attempt++)); do
@@ -44,5 +64,6 @@ retry_as_root() {
 }
 
 export DEBIAN_FRONTEND=noninteractive
+disable_runner_third_party_sources
 retry_as_root apt-get update
 retry_as_root apt-get install -y --no-install-recommends "$@"
