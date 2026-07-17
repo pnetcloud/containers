@@ -24,12 +24,12 @@ RUN set -eux; \
     echo "deb [signed-by=/usr/share/keyrings/timescale-timescaledb.gpg] https://packagecloud.io/timescale/timescaledb/debian/ trixie main" > /etc/apt/sources.list.d/timescale-timescaledb.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      "timescaledb-2-postgresql-18=2.28.2~debian13-1804" \
-      "timescaledb-2-loader-postgresql-18=2.28.2~debian13-1804" \
+      "timescaledb-2-postgresql-18=2.28.3~debian13-1804" \
+      "timescaledb-2-loader-postgresql-18=2.28.3~debian13-1804" \
       "timescaledb-toolkit-postgresql-18=1:1.23.0~debian13"; \
     /usr/local/bin/verify-package-install \
-      "timescaledb-2-postgresql-18" "2.28.2~debian13-1804" \
-      "timescaledb-2-loader-postgresql-18" "2.28.2~debian13-1804" \
+      "timescaledb-2-postgresql-18" "2.28.3~debian13-1804" \
+      "timescaledb-2-loader-postgresql-18" "2.28.3~debian13-1804" \
       "timescaledb-toolkit-postgresql-18" "1:1.23.0~debian13"; \
     if [ "base" = "package" ]; then \
       apt-get install -y --no-install-recommends "postgresql-18-pgvector="; \
@@ -54,7 +54,7 @@ LABEL org.opencontainers.image.source="https://github.com/pnetcloud/containers" 
       org.pnet.debian.variant="trixie" \
       org.pnet.cnpg.tag="18.4-standard-trixie" \
       org.pnet.cnpg.digest="sha256:802cb43a4d482acf1037b418e421c865b16959ba22e07f16fc003e06cb21084c" \
-      org.pnet.timescaledb.version="2.28.2" \
+      org.pnet.timescaledb.version="2.28.3" \
       org.pnet.timescaledb_toolkit.version="1.23.0"
 
 USER 26
