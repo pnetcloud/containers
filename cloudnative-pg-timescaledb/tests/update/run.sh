@@ -186,6 +186,7 @@ normalize_fixture_diff() {
     -e 's/(pg[^-]+-ts<timescaledb>-)[0-9]{8}/\1<date>/g' \
     -e 's/[0-9]+\.[0-9]+\.[0-9]+~debian/<timescaledb>~debian/g' \
     -e 's/org\.pnet\.timescaledb\.version="[0-9]+\.[0-9]+\.[0-9]+"/org.pnet.timescaledb.version="<timescaledb>"/g' \
+    -e 's/org\.pnet\.timescaledb_toolkit\.version="[0-9]+\.[0-9]+\.[0-9]+"/org.pnet.timescaledb_toolkit.version="<toolkit>"/g' \
     -e 's/"timescaledb_version": "[0-9]+\.[0-9]+\.[0-9]+"/"timescaledb_version": "<timescaledb>"/g' \
     -e 's/"release_date": "[0-9]{8}"/"release_date": "<date>"/g' \
     -e 's/timescaledb_version: "[0-9]+\.[0-9]+\.[0-9]+"/timescaledb_version: "<timescaledb>"/g' \
