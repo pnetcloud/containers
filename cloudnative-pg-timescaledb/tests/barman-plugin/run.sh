@@ -275,6 +275,76 @@ PY
   rm -rf "${tmp_dir}"
 }
 
+assert_trusted_http_override_does_not_receive_token() {
+  local tmp_dir port_file server_pid api_url
+  tmp_dir="$(mktemp -d)"
+  port_file="${tmp_dir}/port"
+  python3 - "${port_file}" <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+import json
+import sys
+
+port_file = Path(sys.argv[1])
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.headers.get("Authorization"):
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b'{"message":"authorization header on insecure HTTP"}')
+            return
+        payload = [{"tag_name": "v0.86.0", "draft": False, "prerelease": False}]
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        return
+
+
+server = HTTPServer(("127.0.0.1", 0), Handler)
+port_file.write_text(f"http://127.0.0.1:{server.server_port}/releases\n")
+server.serve_forever()
+PY
+  server_pid="$!"
+  for _ in {1..50}; do
+    [[ -s "${port_file}" ]] && break
+    sleep 0.1
+  done
+  if [[ ! -s "${port_file}" ]]; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin trusted-http server" "${port_file}" "server writes API URL" "missing" "Keep trusted HTTP token-scope test server start-up reliable."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  api_url="$(cat "${port_file}")"
+  if ! BARMAN_PLUGIN_API_URL="${api_url}" BARMAN_PLUGIN_TRUSTED_TOKEN_HOSTS="127.0.0.1" GITHUB_TOKEN="test-token" BARMAN_PLUGIN_CHECKED_AT_UTC="2026-07-05" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/barman-plugin.sh" --json >"${tmp_dir}/trusted-http.out"; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin --json" "trusted HTTP API override does not receive GitHub token" "exit 0" "$(cat "${tmp_dir}/trusted-http.out" 2>/dev/null)" "Send GITHUB_TOKEN only to HTTPS release API URLs."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  kill "${server_pid}" 2>/dev/null || true
+  wait "${server_pid}" 2>/dev/null || true
+  python3 - "${tmp_dir}/trusted-http.out" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+if payload.get("release") != "v0.86.0":
+    raise SystemExit(f"expected latest stable release v0.86.0 from trusted HTTP override, got {payload}")
+PY
+  rm -rf "${tmp_dir}"
+}
+
 assert_retrying_release_fetch() {
   local tmp_dir port_file count_file server_pid api_url
   tmp_dir="$(mktemp -d)"
@@ -519,6 +589,71 @@ PY
   rm -rf "${tmp_dir}"
 }
 
+assert_pagination_limit_with_stable_tags_fails() {
+  local tmp_dir port_file server_pid api_url status
+  tmp_dir="$(mktemp -d)"
+  port_file="${tmp_dir}/port"
+  python3 - "${port_file}" <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+import json
+import sys
+
+port_file = Path(sys.argv[1])
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        payload = [{"tag_name": "v0.85.0", "draft": False, "prerelease": False}]
+        body = json.dumps(payload).encode("utf-8")
+        next_url = f"http://127.0.0.1:{self.server.server_port}/releases?page=2"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Link", f"<{next_url}>; rel=\"next\"")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        return
+
+
+server = HTTPServer(("127.0.0.1", 0), Handler)
+port_file.write_text(f"http://127.0.0.1:{server.server_port}/releases\n")
+server.serve_forever()
+PY
+  server_pid="$!"
+  for _ in {1..50}; do
+    [[ -s "${port_file}" ]] && break
+    sleep 0.1
+  done
+  if [[ ! -s "${port_file}" ]]; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin pagination-limit server" "${port_file}" "server writes API URL" "missing" "Keep pagination limit test server start-up reliable."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  api_url="$(cat "${port_file}")"
+  set +e
+  BARMAN_PLUGIN_API_URL="${api_url}" BARMAN_PLUGIN_MAX_PAGES=1 BARMAN_PLUGIN_CHECKED_AT_UTC="2026-07-06" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/barman-plugin.sh" --json >"${tmp_dir}/pagination-limit.out" 2>&1
+  status="$?"
+  set -e
+  kill "${server_pid}" 2>/dev/null || true
+  wait "${server_pid}" 2>/dev/null || true
+  if [[ "${status}" == "0" ]]; then
+    diag "barman-plugin --json" "truncated pagination with stable tags fails closed" "non-zero exit" "$(cat "${tmp_dir}/pagination-limit.out" 2>/dev/null)" "Do not choose a Barman release from an incomplete paginated scan."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  if ! grep -q "pagination limit reached before the last page" "${tmp_dir}/pagination-limit.out"; then
+    diag "barman-plugin --json" "truncated pagination diagnostic" "mentions pagination limit" "$(tr '\n' ' ' <"${tmp_dir}/pagination-limit.out")" "Keep incomplete-scan diagnostics actionable."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  rm -rf "${tmp_dir}"
+}
+
 base_tmp="$(mktemp -d)"
 upstream="${base_tmp}/upstream"
 prepare_upstream "${upstream}"
@@ -563,9 +698,11 @@ expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-dockerfile-continuation
 expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-dockerfile-copy" "plugin-barman-cloud"
 expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-docs.md" "CloudNativePG Barman Cloud Plugin"
 assert_non_github_override_does_not_receive_token
+assert_trusted_http_override_does_not_receive_token
 assert_retrying_release_fetch
 assert_invalid_json_release_fetch_retries
 assert_paged_semver_release_fetch
+assert_pagination_limit_with_stable_tags_fails
 
 rm -rf "${base_tmp}"
 printf 'PASS story-2.7 Barman plugin reference fixtures\n'

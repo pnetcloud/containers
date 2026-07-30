@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 
 SOURCE_URL = "https://github.com/cloudnative-pg/plugin-barman-cloud/releases"
-API_URL = os.environ.get("BARMAN_PLUGIN_API_URL", "https://api.github.com/repos/cloudnative-pg/plugin-barman-cloud/releases?per_page=30")
+API_URL = os.environ.get("BARMAN_PLUGIN_API_URL", "https://api.github.com/repos/cloudnative-pg/plugin-barman-cloud/releases?per_page=100")
 TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
 BARMAN_PLUGIN_RETRY_STATUS = {429, 500, 502, 503, 504}
 BARMAN_PLUGIN_RETRY_PATTERNS = ("timeout", "timed out", "temporary", "connection reset", "bad gateway", "service unavailable", "rate limit")
@@ -99,7 +99,8 @@ def url_host(url):
 
 
 def should_authorize_url(url):
-    return url_host(url) in trusted_token_hosts()
+    parsed = urllib.parse.urlparse(url)
+    return parsed.scheme == "https" and (parsed.hostname or "").lower() in trusted_token_hosts()
 
 
 def response_next_url(headers):
@@ -181,8 +182,8 @@ def fetch_latest(checked_at):
             if isinstance(release, dict) and not release.get("draft") and not release.get("prerelease") and TAG_RE.fullmatch(tag):
                 stable_tags.add(tag)
         url = response_next_url(response_headers)
-    if url and not stable_tags:
-        diag("barman-plugin", API_URL, f"stable release appears within {max_pages} release pages", "pagination limit reached", "Increase BARMAN_PLUGIN_MAX_PAGES or use a deterministic BARMAN_PLUGIN_FIXTURE.")
+    if url:
+        diag("barman-plugin", API_URL, f"all release pages are scanned within BARMAN_PLUGIN_MAX_PAGES={max_pages}", "pagination limit reached before the last page", "Increase BARMAN_PLUGIN_MAX_PAGES or use a deterministic BARMAN_PLUGIN_FIXTURE.")
     if not stable_tags:
         diag("barman-plugin", API_URL, "at least one stable vX.Y.Z release", "no stable release found in scanned pages", "Publish or fixture a stable CloudNativePG Barman Cloud Plugin release.")
     return reference_for_release(sorted(stable_tags, key=semver_key)[-1], checked_at)
