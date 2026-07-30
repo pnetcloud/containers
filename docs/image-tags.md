@@ -9,13 +9,13 @@ Use immutable or major-prefixed tags in CloudNativePG `imageName` fields. Prefer
 Primary Debian `trixie` immutable tags use `{major}-pg{pg_version}-ts{timescaledb_version}-{yyyymmdd}`:
 
 ```text
-18-pg18.4-ts2.27.2-20260609
+18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>
 ```
 
 Secondary Debian `bookworm` immutable tags append the `-bookworm` suffix:
 
 ```text
-18-pg18.4-ts2.27.2-20260609-bookworm
+18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>-bookworm
 ```
 
 ## Rolling Tags
@@ -24,11 +24,11 @@ Primary rolling major tags such as `17` and `18` are for Debian `trixie` only. S
 
 `latest` is convenience-only in v1. It points only to PostgreSQL `18` on Debian `trixie`; it is never assigned to Debian `bookworm`, PostgreSQL `17`, or experimental PostgreSQL `19beta1`.
 
-PostgreSQL `19beta1` is experimental. It never receives `latest` or normal rolling tags such as `19beta1`; use only experimental immutable tags such as `19beta1-pg19beta1-ts2.27.2-20260609` or `19beta1-pg19beta1-ts2.27.2-20260609-bookworm`.
+PostgreSQL `19beta1` is experimental. It never receives `latest` or normal rolling tags such as `19beta1`; use only experimental immutable tags such as `19beta1-pg19beta1-ts<timescaledb_version>-<yyyymmdd>` or `19beta1-pg19beta1-ts<timescaledb_version>-<yyyymmdd>-bookworm`.
 
 ## CloudNativePG Examples
 
-Use a major-prefixed immutable tag when you want a fixed release:
+Use a major-prefixed immutable tag when you want a fixed release. Replace the placeholder values with a tag from the generated release metadata or GHCR package page before applying the manifest:
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -36,7 +36,7 @@ kind: Cluster
 metadata:
   name: app-db
 spec:
-  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609
+  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>
 ```
 
 Use a rolling major tag only when that is an explicit operations choice:

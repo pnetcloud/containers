@@ -127,6 +127,13 @@ if path.name == "build.yml":
     require("cleanup-ghcr-versions.py" in cleanup_body and "--delete-candidates" in cleanup_body, "GHCR cleanup invokes candidate-only deletion script", cleanup_body[:500], "Use the audited cleanup selector instead of ad hoc GitHub API deletes.")
     require('--candidate-prefix "candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-"' in cleanup_body, "GHCR cleanup is scoped to the current build run candidates", cleanup_body[:500], "Do not let a successful release workflow delete candidate tags from another active run.")
     require("--detach-mixed-candidates" in cleanup_body and "--image" in cleanup_body, "GHCR cleanup detaches mixed candidate tags before deletion", cleanup_body[:500], "Move candidate tags off release package versions before deleting temporary candidates.")
+    for step_id in ["cleanup_login", "collect_protected_digests", "delete_auxiliary_versions"]:
+        require(f"id: {step_id}" in cleanup_body, f"GHCR cleanup step {step_id} has an explicit id", cleanup_body[:700], "Give cleanup steps stable ids so later steps can report and branch on outcomes.")
+    require(cleanup_body.count("continue-on-error: true") >= 3, "GHCR cleanup maintenance steps are non-authoritative after publish", cleanup_body[:1200], "Do not fail an already-published release solely because temporary package cleanup is flaky.")
+    require("steps.cleanup_login.outcome == 'success'" in cleanup_body and "steps.collect_protected_digests.outcome == 'success'" in cleanup_body, "GHCR cleanup chains cleanup-only work by step outcome", cleanup_body[:1200], "Skip dependent cleanup operations when an earlier cleanup step fails.")
+    require("Temporary GHCR cleanup did not complete" in cleanup_body and "Investigate cleanup logs separately" in cleanup_body, "GHCR cleanup writes a non-authoritative failure summary", cleanup_body[:2400], "Surface cleanup debt clearly without weakening publish gates.")
+    require("Release ref has no inspectable index digest" in cleanup_body and "Release ref has no protected platform digests" in cleanup_body, "GHCR cleanup validates protected digests for each final release ref before deletion", cleanup_body[:1800], "Do not delete candidates when any final ref lacks protected index or platform digest evidence.")
+    require("Verify public pulls after cleanup" in cleanup_body and "steps.delete_auxiliary_versions.outcome == 'success' || steps.delete_auxiliary_versions.outcome == 'failure'" in cleanup_body, "public pull verification after cleanup runs after any attempted deletion and remains blocking then", cleanup_body[-1200:], "If cleanup may have changed registry state, keep anonymous public pull verification as the cleanup job's hard postcondition.")
 PY
 }
 

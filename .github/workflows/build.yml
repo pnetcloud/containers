@@ -1057,14 +1057,19 @@ jobs:
         with:
           pattern: ghcr-release-metadata-*
           path: ghcr-cleanup/input/release-metadata
-      - name: Login to GHCR for cleanup tag detachment
+      - id: cleanup_login
+        name: Login to GHCR for cleanup tag detachment
+        continue-on-error: true
         env:
           GHCR_ACTOR: ${{ github.actor }}
           GHCR_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c "printf '%s' \"\${GHCR_TOKEN}\" | docker login ghcr.io -u \"\${GHCR_ACTOR}\" --password-stdin"
-      - name: Collect protected release digests
+      - id: collect_protected_digests
+        name: Collect protected release digests
+        if: ${{ steps.cleanup_login.outcome == 'success' }}
+        continue-on-error: true
         run: |
           set -Eeuo pipefail
           mkdir -p ghcr-cleanup/output
@@ -1107,14 +1112,25 @@ jobs:
             inspect_raw="ghcr-cleanup/output/$(printf '%s' "${ref}" | tr '/:@' '____').raw.json"
             inspect_text="${inspect_raw%.raw.json}.txt"
             inspect_release_ref "${ref}" "${inspect_raw}" "${inspect_text}"
-            awk '/Digest:/ {print $2; exit}' "${inspect_text}" >> ghcr-cleanup/output/protected-digests.txt
+            index_digest="$(awk '/Digest:/ {print $2; exit}' "${inspect_text}")"
+            if [[ -z "${index_digest}" ]]; then
+              printf 'Release ref has no inspectable index digest ref=%s\n' "${ref}" >&2
+              exit 1
+            fi
+            printf '%s\n' "${index_digest}" >> ghcr-cleanup/output/protected-digests.txt
+            platform_digest_file="${inspect_raw%.raw.json}.platform-digests.txt"
             jq -r '
               .manifests[]?
               | select((.annotations["vnd.docker.reference.type"] // "") != "attestation-manifest")
               | select((.platform.os // "") == "linux")
               | select((.platform.architecture // "") == "amd64" or (.platform.architecture // "") == "arm64")
               | .digest // empty
-            ' "${inspect_raw}" >> ghcr-cleanup/output/protected-digests.txt
+            ' "${inspect_raw}" > "${platform_digest_file}"
+            if [[ ! -s "${platform_digest_file}" ]]; then
+              printf 'Release ref has no protected platform digests ref=%s\n' "${ref}" >&2
+              exit 1
+            fi
+            cat "${platform_digest_file}" >> ghcr-cleanup/output/protected-digests.txt
           done < ghcr-cleanup/output/final-release-refs.txt
           sort -u ghcr-cleanup/output/protected-digests.txt -o ghcr-cleanup/output/protected-digests.txt
           if [[ ! -s ghcr-cleanup/output/protected-digests.txt ]]; then
@@ -1123,7 +1139,10 @@ jobs:
           fi
           printf 'Protected release digest count: '
           wc -l < ghcr-cleanup/output/protected-digests.txt
-      - name: Delete auxiliary package versions
+      - id: delete_auxiliary_versions
+        name: Delete auxiliary package versions
+        if: ${{ steps.cleanup_login.outcome == 'success' && steps.collect_protected_digests.outcome == 'success' }}
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -1140,7 +1159,29 @@ jobs:
             --delete-untagged \
             --protected-digests-file ghcr-cleanup/output/protected-digests.txt \
             --detach-mixed-candidates
+      - name: Report cleanup outcome
+        if: always()
+        env:
+          LOGIN_OUTCOME: ${{ steps.cleanup_login.outcome }}
+          COLLECT_OUTCOME: ${{ steps.collect_protected_digests.outcome }}
+          DELETE_OUTCOME: ${{ steps.delete_auxiliary_versions.outcome }}
+        run: |
+          set -Eeuo pipefail
+          {
+            printf '### Temporary GHCR cleanup\n\n'
+            printf '| Operation | Outcome |\n'
+            printf '| --- | --- |\n'
+            printf '| GHCR cleanup login | %s |\n' "${LOGIN_OUTCOME:-skipped}"
+            printf '| Protected digest collection | %s |\n' "${COLLECT_OUTCOME:-skipped}"
+            printf '| Auxiliary package deletion | %s |\n\n' "${DELETE_OUTCOME:-skipped}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+          if [[ "${LOGIN_OUTCOME}" != "success" || "${COLLECT_OUTCOME}" != "success" || "${DELETE_OUTCOME}" != "success" ]]; then
+            {
+              printf 'Temporary GHCR cleanup did not complete. Final tag promotion, signing, and pre-cleanup public publish verification completed before this job; release metadata/catalog autocommit was successful or intentionally skipped by workflow guard. If deletion was attempted, post-cleanup public pull verification runs separately. Investigate cleanup logs separately.\n'
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
       - name: Verify public pulls after cleanup
+        if: ${{ steps.delete_auxiliary_versions.outcome == 'success' || steps.delete_auxiliary_versions.outcome == 'failure' }}
         run: |
           set -Eeuo pipefail
           docker logout ghcr.io || true

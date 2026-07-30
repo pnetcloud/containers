@@ -1,9 +1,10 @@
 # Verifying Images and Release Evidence
 
 Use immutable digest references when verifying this public image family. Mutable tags are useful for selection, but verification must target the exact digest that release evidence covers.
+Replace the placeholder values in `IMAGE_REF` with an actual immutable tag and digest from generated release metadata or the published catalog before running the command.
 
 ```bash
-IMAGE_REF="ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+IMAGE_REF="ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 EXPECTED_CERTIFICATE_IDENTITY="https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main"
 export COSIGN_REPOSITORY="ghcr.io/pnetcloud/cloudnative-pg-timescaledb-signatures"
 

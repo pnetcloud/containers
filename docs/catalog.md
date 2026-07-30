@@ -70,6 +70,7 @@ Do not use `latest` as the primary CloudNativePG path. Catalog references keep P
 ## Digest Policy
 
 Release catalogs are generated from release-complete published images. When release metadata provides a published multi-platform index digest, catalog entries prefer the immutable tag plus the manifest-list digest:
+Replace the placeholder values below with actual tag and digest values from generated release metadata before use.
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -79,12 +80,14 @@ metadata:
 spec:
   images:
     - major: 17
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.27.2-20260609@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     - major: 18
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 ```
 
 The digest must identify the published multi-platform index, not a single per-platform digest. Catalogs must not reference unpublished images, unsigned digests, missing digests, wrong PostgreSQL majors, or wrong Debian variants.
+
+Replace placeholder tag fields with published release metadata values before applying illustrative YAML by hand. The committed generated catalog files already contain release-derived image references after publication.
 
 Stable catalogs include PostgreSQL `17` and PostgreSQL `18` entries after those images have completed release publication. PostgreSQL `19beta1` is experimental; keep it out of stable catalog examples unless the example is explicitly marked experimental.
 

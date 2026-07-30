@@ -20,13 +20,13 @@ ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18
 
 ## Image Tags
 
-Immutable `trixie` tags use `{major}-pg{pg_version}-ts{timescaledb_version}-{yyyymmdd}`, for example `18-pg18.4-ts2.27.2-20260609`. Secondary Debian `bookworm` tags append `-bookworm`, for example `18-pg18.4-ts2.27.2-20260609-bookworm`; rolling secondary tags also keep the OS suffix, such as `18-bookworm`.
+Immutable `trixie` tags use `{major}-pg{pg_version}-ts{timescaledb_version}-{yyyymmdd}`, for example `18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>`. Secondary Debian `bookworm` tags append `-bookworm`, for example `18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>-bookworm`; rolling secondary tags also keep the OS suffix, such as `18-bookworm`.
 
-CloudNativePG `imageName` examples should use immutable or major-prefixed tags, not `latest`. `latest` is convenience-only for PostgreSQL `18` on Debian `trixie`; PostgreSQL `19beta1` is experimental and never receives `latest` or normal rolling tags. Experimental preview examples use immutable tags such as `19beta1-pg19beta1-ts2.27.2-20260609`.
+CloudNativePG `imageName` examples should use immutable or major-prefixed tags, not `latest`. `latest` is convenience-only for PostgreSQL `18` on Debian `trixie`; PostgreSQL `19beta1` is experimental and never receives `latest` or normal rolling tags. Experimental preview examples use immutable tags such as `19beta1-pg19beta1-ts<timescaledb_version>-<yyyymmdd>`.
 
 ```yaml
 spec:
-  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609
+  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18
 ```
 
 See `docs/image-tags.md` in the repository root for detailed tag policy and CloudNativePG examples.
@@ -60,7 +60,7 @@ spec:
     major: 18
 ```
 
-Release catalogs are generated from release-complete published images. When release metadata provides a digest, catalog entries prefer the published multi-platform index or manifest-list digest, for example `ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb`. Catalogs must not reference unpublished images, unsigned digests, missing digests, wrong PostgreSQL majors, or wrong Debian variants. Do not use `latest` as the primary CloudNativePG catalog path. PostgreSQL `19beta1` is experimental and regular catalog examples omit it unless explicitly marked experimental.
+Release catalogs are generated from release-complete published images. When release metadata provides a digest, catalog entries prefer the published multi-platform index or manifest-list digest, for example `ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>@sha256:<64-hex-digest>`. Replace placeholder values with an actual published release metadata ref before use. Catalogs must not reference unpublished images, unsigned digests, missing digests, wrong PostgreSQL majors, or wrong Debian variants. Do not use `latest` as the primary CloudNativePG catalog path. PostgreSQL `19beta1` is experimental and regular catalog examples omit it unless explicitly marked experimental.
 
 See the root `docs/catalog.md` for full catalog usage guidance.
 
@@ -74,7 +74,7 @@ Backup guidance remains compatible with direct image tags:
 
 ```yaml
 spec:
-  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609
+  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18
 ```
 
 It also remains compatible with generated catalogs:
@@ -92,10 +92,10 @@ See the root `docs/barman-plugin.md` for the backup integration boundary.
 
 ## Security Verification
 
-Verify public images by immutable digest, not mutable tags alone:
+Verify public images by immutable digest, not mutable tags alone. Replace placeholder values in `IMAGE_REF` with the exact tag and digest from generated release metadata or the published catalog before running the command.
 
 ```bash
-IMAGE_REF="ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+IMAGE_REF="ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg<pg_version>-ts<timescaledb_version>-<yyyymmdd>@sha256:<64-hex-digest>"
 EXPECTED_CERTIFICATE_IDENTITY="https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main"
 export COSIGN_REPOSITORY="ghcr.io/pnetcloud/cloudnative-pg-timescaledb-signatures"
 cosign verify "$IMAGE_REF" --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity "$EXPECTED_CERTIFICATE_IDENTITY"

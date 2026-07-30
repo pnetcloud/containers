@@ -201,7 +201,7 @@ expect_boundary_fail() {
   rm -f "${tmp}"
 }
 
-assert_authenticated_release_fetch() {
+assert_non_github_override_does_not_receive_token() {
   local tmp_dir port_file server_pid api_url
   tmp_dir="$(mktemp -d)"
   port_file="${tmp_dir}/port"
@@ -216,10 +216,10 @@ port_file = Path(sys.argv[1])
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.headers.get("Authorization") != "Bearer test-token":
-            self.send_response(403)
+        if self.headers.get("Authorization"):
+            self.send_response(400)
             self.end_headers()
-            self.wfile.write(b'{"message":"rate limit exceeded"}')
+            self.wfile.write(b'{"message":"unexpected authorization header"}')
             return
         payload = [
             {"tag_name": "v0.99.0", "draft": False, "prerelease": False},
@@ -248,7 +248,7 @@ PY
   if [[ ! -s "${port_file}" ]]; then
     kill "${server_pid}" 2>/dev/null || true
     wait "${server_pid}" 2>/dev/null || true
-    diag "barman-plugin auth server" "${port_file}" "server writes API URL" "missing" "Keep authenticated resolver test server start-up reliable."
+    diag "barman-plugin override server" "${port_file}" "server writes API URL" "missing" "Keep resolver override test server start-up reliable."
     rm -rf "${tmp_dir}"
     exit 1
   fi
@@ -256,7 +256,7 @@ PY
   if ! BARMAN_PLUGIN_API_URL="${api_url}" GITHUB_TOKEN="test-token" BARMAN_PLUGIN_CHECKED_AT_UTC="2026-07-01" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/barman-plugin.sh" --json >"${tmp_dir}/auth.out"; then
     kill "${server_pid}" 2>/dev/null || true
     wait "${server_pid}" 2>/dev/null || true
-    diag "barman-plugin --json" "authenticated GitHub API request" "exit 0" "$(cat "${tmp_dir}/auth.out" 2>/dev/null)" "Use GITHUB_TOKEN/GH_TOKEN for release API requests to avoid anonymous rate limits."
+    diag "barman-plugin --json" "non-GitHub API override does not receive GitHub token" "exit 0" "$(cat "${tmp_dir}/auth.out" 2>/dev/null)" "Send GITHUB_TOKEN only to the trusted GitHub API host."
     rm -rf "${tmp_dir}"
     exit 1
   fi
@@ -268,9 +268,253 @@ import json
 import sys
 payload = json.loads(Path(sys.argv[1]).read_text())
 if payload.get("release") != "v0.99.0":
-    raise SystemExit(f"expected authenticated latest stable release v0.99.0, got {payload}")
+    raise SystemExit(f"expected latest stable release v0.99.0 from override API, got {payload}")
 if payload.get("checked_at_utc") != "2026-07-01":
     raise SystemExit(f"expected deterministic checked_at_utc, got {payload}")
+PY
+  rm -rf "${tmp_dir}"
+}
+
+assert_retrying_release_fetch() {
+  local tmp_dir port_file count_file server_pid api_url
+  tmp_dir="$(mktemp -d)"
+  port_file="${tmp_dir}/port"
+  count_file="${tmp_dir}/count"
+  python3 - "${port_file}" "${count_file}" <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+import json
+import sys
+
+port_file = Path(sys.argv[1])
+count_file = Path(sys.argv[2])
+count_file.write_text("0\n")
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        count = int(count_file.read_text().strip()) + 1
+        count_file.write_text(f"{count}\n")
+        if count < 3:
+            body = b'{"message":"temporary upstream failure"}'
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        payload = [{"tag_name": "v0.88.0", "draft": False, "prerelease": False}]
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        return
+
+
+server = HTTPServer(("127.0.0.1", 0), Handler)
+port_file.write_text(f"http://127.0.0.1:{server.server_port}/releases\n")
+server.serve_forever()
+PY
+  server_pid="$!"
+  for _ in {1..50}; do
+    [[ -s "${port_file}" ]] && break
+    sleep 0.1
+  done
+  if [[ ! -s "${port_file}" ]]; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin retry server" "${port_file}" "server writes API URL" "missing" "Keep retry test server start-up reliable."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  api_url="$(cat "${port_file}")"
+  if ! BARMAN_PLUGIN_API_URL="${api_url}" BARMAN_PLUGIN_CHECKED_AT_UTC="2026-07-02" BARMAN_PLUGIN_RETRY_DELAY_SECONDS=0 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/barman-plugin.sh" --json >"${tmp_dir}/retry.out"; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin --json" "transient GitHub API failures" "eventual exit 0" "$(cat "${tmp_dir}/retry.out" 2>/dev/null)" "Retry retryable GitHub API failures before failing scheduled metadata updates."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  kill "${server_pid}" 2>/dev/null || true
+  wait "${server_pid}" 2>/dev/null || true
+  python3 - "${tmp_dir}/retry.out" "${count_file}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+count = int(Path(sys.argv[2]).read_text().strip())
+if payload.get("release") != "v0.88.0":
+    raise SystemExit(f"expected retried latest stable release v0.88.0, got {payload}")
+if count != 3:
+    raise SystemExit(f"expected exactly 3 HTTP attempts, got {count}")
+PY
+  rm -rf "${tmp_dir}"
+}
+
+assert_invalid_json_release_fetch_retries() {
+  local tmp_dir port_file count_file server_pid api_url
+  tmp_dir="$(mktemp -d)"
+  port_file="${tmp_dir}/port"
+  count_file="${tmp_dir}/count"
+  python3 - "${port_file}" "${count_file}" <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+import json
+import sys
+
+port_file = Path(sys.argv[1])
+count_file = Path(sys.argv[2])
+count_file.write_text("0\n")
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        count = int(count_file.read_text().strip()) + 1
+        count_file.write_text(f"{count}\n")
+        if count == 1:
+            body = b"{not-json"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        payload = [{"tag_name": "v0.87.0", "draft": False, "prerelease": False}]
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        return
+
+
+server = HTTPServer(("127.0.0.1", 0), Handler)
+port_file.write_text(f"http://127.0.0.1:{server.server_port}/releases\n")
+server.serve_forever()
+PY
+  server_pid="$!"
+  for _ in {1..50}; do
+    [[ -s "${port_file}" ]] && break
+    sleep 0.1
+  done
+  if [[ ! -s "${port_file}" ]]; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin invalid-json server" "${port_file}" "server writes API URL" "missing" "Keep invalid JSON retry test server start-up reliable."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  api_url="$(cat "${port_file}")"
+  if ! BARMAN_PLUGIN_API_URL="${api_url}" BARMAN_PLUGIN_CHECKED_AT_UTC="2026-07-04" BARMAN_PLUGIN_RETRY_DELAY_SECONDS=0 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/barman-plugin.sh" --json >"${tmp_dir}/invalid-json.out"; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin --json" "transient invalid JSON API response" "eventual exit 0" "$(cat "${tmp_dir}/invalid-json.out" 2>/dev/null)" "Retry malformed transient API responses before failing scheduled metadata updates."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  kill "${server_pid}" 2>/dev/null || true
+  wait "${server_pid}" 2>/dev/null || true
+  python3 - "${tmp_dir}/invalid-json.out" "${count_file}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+count = int(Path(sys.argv[2]).read_text().strip())
+if payload.get("release") != "v0.87.0":
+    raise SystemExit(f"expected retried release v0.87.0 after invalid JSON, got {payload}")
+if count != 2:
+    raise SystemExit(f"expected exactly 2 HTTP attempts, got {count}")
+PY
+  rm -rf "${tmp_dir}"
+}
+
+assert_paged_semver_release_fetch() {
+  local tmp_dir port_file server_pid api_url
+  tmp_dir="$(mktemp -d)"
+  port_file="${tmp_dir}/port"
+  python3 - "${port_file}" <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+import json
+import sys
+
+port_file = Path(sys.argv[1])
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if "page=2" in self.path:
+            payload = [
+                {"tag_name": "v0.100.0", "draft": False, "prerelease": False},
+                {"tag_name": "v0.101.0-rc1", "draft": False, "prerelease": True},
+            ]
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        payload = [
+            {"tag_name": "v0.99.0", "draft": False, "prerelease": False},
+            {"tag_name": "v0.101.0-rc1", "draft": False, "prerelease": True},
+        ]
+        body = json.dumps(payload).encode("utf-8")
+        next_url = f"http://127.0.0.1:{self.server.server_port}/releases?page=2"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Link", f"<{next_url}>; rel=\"next\"")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        return
+
+
+server = HTTPServer(("127.0.0.1", 0), Handler)
+port_file.write_text(f"http://127.0.0.1:{server.server_port}/releases\n")
+server.serve_forever()
+PY
+  server_pid="$!"
+  for _ in {1..50}; do
+    [[ -s "${port_file}" ]] && break
+    sleep 0.1
+  done
+  if [[ ! -s "${port_file}" ]]; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin pagination server" "${port_file}" "server writes API URL" "missing" "Keep pagination test server start-up reliable."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  api_url="$(cat "${port_file}")"
+  if ! BARMAN_PLUGIN_API_URL="${api_url}" BARMAN_PLUGIN_CHECKED_AT_UTC="2026-07-03" "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/lib/barman-plugin.sh" --json >"${tmp_dir}/paged.out"; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "barman-plugin --json" "paginated GitHub release API" "exit 0" "$(cat "${tmp_dir}/paged.out" 2>/dev/null)" "Scan paginated releases and choose the highest stable semver tag."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  kill "${server_pid}" 2>/dev/null || true
+  wait "${server_pid}" 2>/dev/null || true
+  python3 - "${tmp_dir}/paged.out" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+if payload.get("release") != "v0.100.0":
+    raise SystemExit(f"expected highest paginated stable release v0.100.0, got {payload}")
 PY
   rm -rf "${tmp_dir}"
 }
@@ -318,7 +562,10 @@ expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-dockerfile" "barman-clo
 expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-dockerfile-continuation" "barman-cloud"
 expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-dockerfile-copy" "plugin-barman-cloud"
 expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-docs.md" "CloudNativePG Barman Cloud Plugin"
-assert_authenticated_release_fetch
+assert_non_github_override_does_not_receive_token
+assert_retrying_release_fetch
+assert_invalid_json_release_fetch_retries
+assert_paged_semver_release_fetch
 
 rm -rf "${base_tmp}"
 printf 'PASS story-2.7 Barman plugin reference fixtures\n'

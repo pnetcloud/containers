@@ -57,7 +57,7 @@ if not doc.exists():
 text = doc.read_text()
 command_text = re.sub(r"\\\s*\n\s*", " ", text)
 
-require(re.escape(repo) + r"[^\n\s`]*@sha256:[0-9a-f]{64}", "examples verify immutable digest references", "Use ghcr.io/...@sha256:<digest>, not tags alone.")
+require(re.escape(repo) + r"[^\n\s`]*@sha256:(?:[0-9a-f]{64}|<64-hex-digest>)", "examples verify immutable digest references", "Use ghcr.io/...@sha256:<digest>, not tags alone.")
 require(r"cosign\s+verify", "cosign verification command is documented", "Show how to verify keyless signatures.")
 issuer_values = option_values("--certificate-oidc-issuer")
 if issuer not in issuer_values:

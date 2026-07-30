@@ -94,6 +94,98 @@ entries:
 PY
 }
 
+assert_live_packagecloud_retry() {
+  local tmp_dir port_file count_file server_pid base_url metadata stdout_file
+  tmp_dir="$(mktemp -d)"
+  port_file="${tmp_dir}/port"
+  count_file="${tmp_dir}/count"
+  metadata="${tmp_dir}/versions.yaml"
+  stdout_file="${tmp_dir}/resolver.out"
+  write_metadata "${metadata}" "18" "trixie" "\"linux/amd64\", \"linux/arm64\"" "true" "false" ""
+  python3 - "${port_file}" "${count_file}" <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+import sys
+
+port_file = Path(sys.argv[1])
+count_file = Path(sys.argv[2])
+count_file.write_text("0\n")
+packages = b"""Package: timescaledb-2-postgresql-18
+Version: 2.30.0~debian13-1804
+
+Package: timescaledb-toolkit-postgresql-18
+Version: 1:1.24.0~debian13
+
+"""
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        count = int(count_file.read_text().strip()) + 1
+        count_file.write_text(f"{count}\n")
+        if count < 3:
+            body = b"temporary packagecloud failure"
+            self.send_response(500)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(packages)))
+        self.end_headers()
+        self.wfile.write(packages)
+
+    def log_message(self, format, *args):
+        return
+
+
+server = HTTPServer(("127.0.0.1", 0), Handler)
+port_file.write_text(f"http://127.0.0.1:{server.server_port}\n")
+server.serve_forever()
+PY
+  server_pid="$!"
+  for _ in {1..50}; do
+    [[ -s "${port_file}" ]] && break
+    sleep 0.1
+  done
+  if [[ ! -s "${port_file}" ]]; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "packagecloud retry server" "${port_file}" "server writes base URL" "missing" "Keep live PackageCloud retry test server start-up reliable."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  base_url="$(cat "${port_file}")"
+  if ! PACKAGECLOUD_BASE_URL="${base_url}" PACKAGECLOUD_ALLOW_TEST_BASE_URL=1 PACKAGECLOUD_RETRY_DELAY_SECONDS=0 "${RESOLVER}" --check-packages --metadata "${metadata}" --json >"${stdout_file}"; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "${RESOLVER} --check-packages --metadata ${metadata}" "transient PackageCloud index failures" "eventual exit 0" "$(cat "${stdout_file}" 2>/dev/null)" "Retry retryable PackageCloud failures before failing scheduled metadata updates."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  kill "${server_pid}" 2>/dev/null || true
+  wait "${server_pid}" 2>/dev/null || true
+  python3 - "${stdout_file}" "${count_file}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+count = int(Path(sys.argv[2]).read_text().strip())
+entries = payload.get("entries", [])
+if len(entries) != 1:
+    raise SystemExit(f"expected one resolved metadata entry, got {payload}")
+entry = entries[0]
+if entry.get("timescaledb_package_version") != "2.30.0~debian13-1804" or entry.get("toolkit_package_version") != "1:1.24.0~debian13":
+    raise SystemExit(f"unexpected resolved package versions after retry: {entry}")
+if count < 4:
+    raise SystemExit(f"expected retries plus both architecture fetches, got {count} HTTP requests")
+PY
+  rm -rf "${tmp_dir}"
+}
+
 for fixture in \
   trixie-amd64-available.json \
   trixie-arm64-available.json \
@@ -112,11 +204,30 @@ for fixture in \
   missing-toolkit-nonpublish-skip.json \
   pg19beta1-cnpg-present-packages-missing.json \
   invalid-pg19beta1-package-name.json \
-  missing-arm64-package.json; do
+  missing-arm64-package.json \
+  only-prerelease-timescaledb.json \
+  epoch-timescaledb.json; do
   expect_file "${FIXTURE_DIR}/${fixture}"
 done
 
 "${RESOLVER}" --check-packages --fixtures "${FIXTURE_DIR}" >/tmp/story-2-2-positive.out
+assert_live_packagecloud_retry
+
+invalid_base_url_metadata="$(mktemp)"
+write_metadata "${invalid_base_url_metadata}" "18" "trixie" "\"linux/amd64\"" "false" "false" "linux/arm64 intentionally omitted from this base URL guard test"
+expect_fail "live PackageCloud base URL override requires explicit test opt-in" \
+  "command: resolve-versions --check-packages" \
+  "artifact: PACKAGECLOUD_BASE_URL" \
+  "official https://packagecloud.io unless PACKAGECLOUD_ALLOW_TEST_BASE_URL=1" \
+  "--" \
+  env PACKAGECLOUD_BASE_URL=http://127.0.0.1:9 "${RESOLVER}" --check-packages --metadata "${invalid_base_url_metadata}"
+expect_fail "relative PackageCloud base URL is rejected" \
+  "command: resolve-versions --check-packages" \
+  "artifact: PACKAGECLOUD_BASE_URL" \
+  "absolute HTTP(S) base URL" \
+  "--" \
+  env PACKAGECLOUD_BASE_URL=/relative PACKAGECLOUD_ALLOW_TEST_BASE_URL=1 "${RESOLVER}" --check-packages --metadata "${invalid_base_url_metadata}"
+rm -f "${invalid_base_url_metadata}"
 
 json_stdout="$(mktemp)"
 json_stderr="$(mktemp)"
@@ -222,6 +333,37 @@ expect_fail "missing arm64 package" \
   "${RESOLVER}" --check-packages --metadata "${mismatch_metadata}" --fixture-file "${FIXTURE_DIR}/missing-arm64-package.json"
 rm -f "${mismatch_metadata}"
 
+prerelease_metadata="$(mktemp)"
+write_metadata "${prerelease_metadata}" "18" "trixie" "\"linux/amd64\", \"linux/arm64\"" "true" "false" ""
+expect_fail "only prerelease TimescaleDB packages" \
+  "command: resolve-versions --check-packages" \
+  "artifact: ${prerelease_metadata}" \
+  "package_type=timescaledb" \
+  "only prerelease package versions" \
+  "Wait for stable PackageCloud packages" \
+  "--" \
+  "${RESOLVER}" --check-packages --metadata "${prerelease_metadata}" --fixture-file "${FIXTURE_DIR}/only-prerelease-timescaledb.json"
+rm -f "${prerelease_metadata}"
+
+epoch_metadata="$(mktemp)"
+epoch_json="$(mktemp)"
+write_metadata "${epoch_metadata}" "18" "trixie" "\"linux/amd64\", \"linux/arm64\"" "true" "false" ""
+"${RESOLVER}" --check-packages --metadata "${epoch_metadata}" --fixture-file "${FIXTURE_DIR}/epoch-timescaledb.json" --json >"${epoch_json}"
+python3 - "${epoch_json}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+entry = json.loads(Path(sys.argv[1]).read_text())["entries"][0]
+if entry["timescaledb_package_version"] != "1:2.30.0~debian13-1804":
+    raise SystemExit(f"TimescaleDB package version should preserve Debian epoch: {entry}")
+if entry["timescaledb_version"] != "2.30.0":
+    raise SystemExit(f"TimescaleDB extension version should strip Debian epoch: {entry}")
+if entry["toolkit_version"] != "1.24.0":
+    raise SystemExit(f"Toolkit extension version should strip Debian epoch: {entry}")
+PY
+rm -f "${epoch_metadata}" "${epoch_json}"
+
 nonpublish_metadata="$(mktemp)"
 write_metadata "${nonpublish_metadata}" "18" "trixie" "\"linux/amd64\", \"linux/arm64\"" "false" "false" "timescaledb-toolkit-postgresql-18 PostgreSQL 18 trixie linux/amd64 linux/arm64 unsupported by upstream packagecloud fixture"
 "${RESOLVER}" --check-packages --metadata "${nonpublish_metadata}" --fixture-file "${FIXTURE_DIR}/missing-toolkit-nonpublish-skip.json" >/tmp/story-2-2-nonpublish-toolkit.out
@@ -317,5 +459,99 @@ expect_fail "missing option value" \
   "remediation:" \
   "--" \
   "${RESOLVER}" --check-packages --fixtures
+
+assert_retrying_package_index_fetch() {
+  local tmp_dir metadata port_file count_file server_pid base_url json_out
+  tmp_dir="$(mktemp -d)"
+  metadata="${tmp_dir}/versions.yaml"
+  port_file="${tmp_dir}/port"
+  count_file="${tmp_dir}/count"
+  json_out="${tmp_dir}/packages.json"
+  write_metadata "${metadata}" "18" "trixie" "\"linux/amd64\"" "false" "false" "linux/arm64 intentionally omitted from this live retry test"
+  python3 - "${port_file}" "${count_file}" <<'PY' &
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+import sys
+
+port_file = Path(sys.argv[1])
+count_file = Path(sys.argv[2])
+count_file.write_text("0\n")
+
+packages = b"""Package: timescaledb-2-postgresql-18
+Version: 2.29.0~debian13-1804
+Architecture: amd64
+
+Package: timescaledb-toolkit-postgresql-18
+Version: 1:1.24.0~debian13
+Architecture: amd64
+
+"""
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        count = int(count_file.read_text().strip()) + 1
+        count_file.write_text(f"{count}\n")
+        if count < 3:
+            body = b"temporary packagecloud failure"
+            self.send_response(500)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(packages)))
+        self.end_headers()
+        self.wfile.write(packages)
+
+    def log_message(self, format, *args):
+        return
+
+
+server = HTTPServer(("127.0.0.1", 0), Handler)
+port_file.write_text(f"http://127.0.0.1:{server.server_port}\n")
+server.serve_forever()
+PY
+  server_pid="$!"
+  for _ in {1..50}; do
+    [[ -s "${port_file}" ]] && break
+    sleep 0.1
+  done
+  if [[ ! -s "${port_file}" ]]; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "packagecloud retry server" "${port_file}" "server writes base URL" "missing" "Keep retry test server start-up reliable."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  base_url="$(tr -d '\n' <"${port_file}")"
+  if ! PACKAGECLOUD_BASE_URL="${base_url}" PACKAGECLOUD_ALLOW_TEST_BASE_URL=1 PACKAGECLOUD_RETRY_DELAY_SECONDS=0 "${RESOLVER}" --check-packages --metadata "${metadata}" --json >"${json_out}"; then
+    kill "${server_pid}" 2>/dev/null || true
+    wait "${server_pid}" 2>/dev/null || true
+    diag "resolve-versions --check-packages" "transient Packagecloud failures" "eventual exit 0" "$(cat "${json_out}" 2>/dev/null)" "Retry retryable Packagecloud index failures before failing scheduled metadata updates."
+    rm -rf "${tmp_dir}"
+    exit 1
+  fi
+  kill "${server_pid}" 2>/dev/null || true
+  wait "${server_pid}" 2>/dev/null || true
+  python3 - "${json_out}" "${count_file}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+payload = json.loads(Path(sys.argv[1]).read_text())
+count = int(Path(sys.argv[2]).read_text().strip())
+entry = payload["entries"][0]
+if entry["timescaledb_version"] != "2.29.0" or entry["toolkit_version"] != "1.24.0":
+    raise SystemExit(f"expected retried package versions, got {entry}")
+if count != 3:
+    raise SystemExit(f"expected exactly 3 HTTP attempts, got {count}")
+PY
+  rm -rf "${tmp_dir}"
+}
+
+assert_retrying_package_index_fetch
 
 printf 'PASS story-2.2 packagecloud resolver fixtures\n'

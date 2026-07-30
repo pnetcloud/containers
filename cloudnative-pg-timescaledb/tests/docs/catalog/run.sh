@@ -75,7 +75,7 @@ for major in ["17", "18"]:
 require(r"imageCatalogRef", "Cluster examples use imageCatalogRef", "Use the CloudNativePG imageCatalogRef path for catalog consumption examples.")
 require(r"kind:\s*ClusterImageCatalog", "imageCatalogRef names ClusterImageCatalog kind", "Include kind: ClusterImageCatalog in examples.")
 require(r"name:\s*cloudnative-pg-timescaledb-standard-(?:trixie|bookworm)", "imageCatalogRef names a generated catalog", "Reference the generated catalog resource name.")
-require(r"@sha256:[0-9a-f]{64}", "catalog examples use digest-pinned image references", "Prefer digest-pinned references after release metadata is available.")
+require(r"@sha256:(?:[0-9a-f]{64}|<64-hex-digest>)", "catalog examples use digest-pinned image references", "Prefer digest-pinned references after release metadata is available.")
 require(r"(?:multi-platform\s+index|manifest-list)\s+digest|digest.{0,80}(?:multi-platform\s+index|manifest-list)", "catalog docs prefer published multi-platform index digests", "Document manifest-list digests rather than per-platform digests.")
 require(r"release-complete.{0,120}published|published.{0,120}release-complete", "catalogs are generated from release-complete published images", "Document the release metadata gate for generated catalogs.")
 require(r"unpublished.{0,120}(?:must\s+not|never|not\s+reference)|(?:must\s+not|never|not\s+reference).{0,120}unpublished", "catalogs must not reference unpublished images", "Warn that generated catalogs must only reference published images.")

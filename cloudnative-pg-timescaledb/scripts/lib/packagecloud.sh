@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -28,8 +29,9 @@ DEFAULT_FIXTURE_NAMES = [
 PLATFORM_ARCH = {"linux/amd64": "amd64", "linux/arm64": "arm64"}
 DEBIAN_VARIANTS = {"trixie", "bookworm"}
 PACKAGE_TYPES = {"timescaledb", "toolkit"}
-PACKAGECLOUD_BASE_URL = "https://packagecloud.io"
+PACKAGECLOUD_BASE_URL = os.environ.get("PACKAGECLOUD_BASE_URL", "https://packagecloud.io").rstrip("/")
 PACKAGE_INDEX_CACHE = {}
+PACKAGECLOUD_LIVE_RETRY_STATUS = {429, 500, 502, 503, 504}
 
 
 def diag(command, artifact, expected, actual, remediation):
@@ -40,6 +42,39 @@ def diag(command, artifact, expected, actual, remediation):
         f"actual: {actual}\n"
         f"remediation: {remediation}"
     )
+
+
+def env_int(name, default, minimum=1):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        diag("resolve-versions --check-packages", name, f"integer >= {minimum}", raw, f"Unset {name} or set it to a bounded integer retry count.")
+    if value < minimum:
+        diag("resolve-versions --check-packages", name, f"integer >= {minimum}", raw, f"Unset {name} or set it to a bounded integer retry count.")
+    return value
+
+
+def validate_base_url(command):
+    if PACKAGECLOUD_BASE_URL != "https://packagecloud.io" and os.environ.get("PACKAGECLOUD_ALLOW_TEST_BASE_URL") != "1":
+        diag(command, "PACKAGECLOUD_BASE_URL", "official https://packagecloud.io unless PACKAGECLOUD_ALLOW_TEST_BASE_URL=1 in tests", PACKAGECLOUD_BASE_URL or "empty", "Use --fixtures for deterministic tests, or set PACKAGECLOUD_ALLOW_TEST_BASE_URL=1 only for local retry harnesses.")
+    if not re.fullmatch(r"https?://[^/\s]+(?:/[^/\s]+)*", PACKAGECLOUD_BASE_URL):
+        diag(command, "PACKAGECLOUD_BASE_URL", "absolute HTTP(S) base URL", PACKAGECLOUD_BASE_URL or "empty", "Unset PACKAGECLOUD_BASE_URL or set it to an absolute PackageCloud-compatible HTTP(S) base URL.")
+
+
+def retry_delay(attempt):
+    delay = os.environ.get("PACKAGECLOUD_RETRY_DELAY_SECONDS")
+    if delay is None:
+        time.sleep(attempt * 2)
+        return
+    try:
+        seconds = float(delay)
+    except ValueError:
+        seconds = 0
+    if seconds > 0:
+        time.sleep(seconds)
 
 
 def parse_scalar(raw):
@@ -152,11 +187,23 @@ def expected_package_name(package_type, pg_major):
     return f"timescaledb-toolkit-postgresql-{package_major}"
 
 
+def strip_debian_epoch(version):
+    if ":" not in version:
+        return version
+    epoch, remainder = version.split(":", 1)
+    if re.fullmatch(r"[0-9]+", epoch):
+        return remainder
+    return version
+
+
 def extension_version(package_type, package_version):
     version = package_version.split("~", 1)[0]
-    if package_type == "toolkit" and ":" in version:
-        version = version.split(":", 1)[1]
-    return version
+    return strip_debian_epoch(version)
+
+
+def is_prerelease_package_version(version):
+    upstream_version = strip_debian_epoch(version).split("~debian", 1)[0]
+    return re.search(r"(?:^|[0-9~+._-])(?:alpha|beta|pre|preview|rc|dev)[0-9A-Za-z_.+-]*", upstream_version, re.IGNORECASE) is not None
 
 
 def version_key(version):
@@ -342,17 +389,33 @@ def fetch_package_index(repo, distribution, architecture, command):
     url = f"{PACKAGECLOUD_BASE_URL}/{quote(user)}/{quote(repo_name)}/debian/dists/{quote(distribution)}/main/binary-{quote(architecture)}/Packages"
     if url in PACKAGE_INDEX_CACHE:
         return url, PACKAGE_INDEX_CACHE[url]
-    request = Request(url, headers={"Accept": "text/plain", "User-Agent": "pnet-cloudnative-pg-timescaledb-resolver"})
-    try:
-        with urlopen(request, timeout=30) as response:
-            text = response.read().decode("utf-8")
-    except HTTPError as exc:
-        if exc.code == 404:
-            PACKAGE_INDEX_CACHE[url] = []
-            return url, []
-        diag(command, url, "public Packagecloud Debian Packages index", f"HTTP {exc.code}", "Retry later or use --fixtures for deterministic validation.")
-    except (URLError, TimeoutError, UnicodeDecodeError) as exc:
-        diag(command, url, "public Packagecloud Debian Packages index", str(exc), "Retry later or use --fixtures for deterministic validation.")
+    attempts_limit = env_int("PACKAGECLOUD_LIVE_RESOLVE_ATTEMPTS", 5)
+    attempts = []
+    for attempt in range(1, attempts_limit + 1):
+        request = Request(url, headers={"Accept": "text/plain", "User-Agent": "pnet-cloudnative-pg-timescaledb-resolver"})
+        try:
+            with urlopen(request, timeout=30) as response:
+                text = response.read().decode("utf-8")
+                break
+        except HTTPError as exc:
+            if exc.code == 404:
+                PACKAGE_INDEX_CACHE[url] = []
+                return url, []
+            actual = f"HTTP {exc.code}"
+            attempts.append(f"attempt {attempt}: {actual}")
+            if exc.code in PACKAGECLOUD_LIVE_RETRY_STATUS and attempt < attempts_limit:
+                retry_delay(attempt)
+                continue
+            diag(command, url, f"public Packagecloud Debian Packages index within {attempts_limit} attempts", "; ".join(attempts), "Retry later or use --fixtures for deterministic validation.")
+        except (URLError, TimeoutError, UnicodeDecodeError, OSError) as exc:
+            actual = str(exc)
+            attempts.append(f"attempt {attempt}: {actual}")
+            if attempt < attempts_limit:
+                retry_delay(attempt)
+                continue
+            diag(command, url, f"public Packagecloud Debian Packages index within {attempts_limit} attempts", "; ".join(attempts), "Retry later or use --fixtures for deterministic validation.")
+    else:
+        diag(command, url, f"public Packagecloud Debian Packages index within {attempts_limit} attempts", "; ".join(attempts), "Retry later or use --fixtures for deterministic validation.")
     PACKAGE_INDEX_CACHE[url] = parse_debian_packages_index(text)
     return url, PACKAGE_INDEX_CACHE[url]
 
@@ -386,6 +449,7 @@ def fetch_package_versions(repo, distribution, architecture, pg_major, package_t
 
 
 def load_live_inventory(data, repo, command):
+    validate_base_url(command)
     records = []
     requested = set()
     for entry in data["entries"]:
@@ -442,11 +506,17 @@ def resolve_package(command, artifact, inventory, entry, package_type, preserve_
         if not arch:
             fail_entry(command, artifact, entry, package_type, platform, package_name, f"unsupported platform {platform}", "Use only linux/amd64 and linux/arm64.")
         records = inventory.get((package_type, pg_package_major(entry["pg_major"]), entry["debian_variant"], arch), [])
-        versions = {record["version"] for record in records if record["name"] == package_name}
+        matching_versions = {record["version"] for record in records if record["name"] == package_name}
+        versions = {version for version in matching_versions if not is_prerelease_package_version(version)}
         if not versions:
-            actual = f"missing package for architecture {arch}"
+            if matching_versions:
+                actual = f"only prerelease package versions for architecture {arch}: {sorted(matching_versions)}"
+                remediation = "Wait for stable PackageCloud packages or mark the row non-publishable with a resolver-owned skip reason."
+            else:
+                actual = f"missing package for architecture {arch}"
+                remediation = "Publishable rows require TimescaleDB and Toolkit packages on every required platform."
             if entry["publish"]:
-                fail_entry(command, artifact, entry, package_type, platform, package_name, actual, "Publishable rows require TimescaleDB and Toolkit packages on every required platform.")
+                fail_entry(command, artifact, entry, package_type, platform, package_name, actual, remediation)
             missing_platforms.append((platform, arch))
             continue
         versions_by_platform[platform] = versions

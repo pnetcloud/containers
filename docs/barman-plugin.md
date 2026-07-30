@@ -31,7 +31,7 @@ kind: Cluster
 metadata:
   name: app-db
 spec:
-  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.27.2-20260609
+  imageName: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18
 ```
 
 Generated catalog examples remain valid as well:
