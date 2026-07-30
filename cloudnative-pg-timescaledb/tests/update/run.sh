@@ -5,7 +5,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 FIXTURE_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/update/fixtures"
 CNPG_FIXTURES="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/cnpg-resolver/fixtures"
 PKG_FIXTURES="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/packagecloud/fixtures"
-BARMAN_PLUGIN_FIXTURE="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json"
 EXECUTED_FIXTURES=()
 
 diag() {
@@ -63,12 +62,67 @@ PY
   (cd "${target}" && git init -q && git config user.email test@example.invalid && git config user.name test && git add . && git commit -qm baseline)
 }
 
+write_barman_fixture_from_metadata() {
+  local metadata="$1"
+  local target="$2"
+  python3 - "${ROOT_DIR}" "${metadata}" "${target}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+root = Path(sys.argv[1])
+metadata = Path(sys.argv[2])
+target = Path(sys.argv[3])
+sys.path.insert(0, str(root / "cloudnative-pg-timescaledb" / "scripts" / "lib"))
+import generator_contract  # noqa: E402
+
+data = generator_contract.parse_metadata(metadata, "update fixture barman reference")
+plugin = data.get("barman_plugin")
+if not plugin:
+    raise SystemExit(f"missing barman_plugin in {metadata}")
+payload = {
+    "release": plugin["release"],
+    "manifest_url": plugin["manifest_url"],
+    "plugin_image": plugin["plugin_image"],
+    "sidecar_image": plugin["sidecar_image"],
+    "source_url": plugin["source_url"],
+    "checked_at_utc": plugin["updated_at_utc"],
+    "expected_changed": False,
+}
+target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+}
+
+write_barman_doc_from_metadata() {
+  local metadata="$1"
+  local target="$2"
+  python3 - "${ROOT_DIR}" "${metadata}" "${target}" <<'PY'
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+root = Path(sys.argv[1])
+metadata = Path(sys.argv[2])
+target = Path(sys.argv[3])
+sys.path.insert(0, str(root / "cloudnative-pg-timescaledb" / "scripts" / "lib"))
+import generator_contract  # noqa: E402
+
+data = generator_contract.parse_metadata(metadata, "update fixture barman doc")
+plugin = data.get("barman_plugin")
+if not plugin:
+    raise SystemExit(f"missing barman_plugin in {metadata}")
+target.parent.mkdir(parents=True, exist_ok=True)
+target.write_text(generator_contract.render_barman_plugin_reference(plugin))
+PY
+}
+
 prepare_upstream() {
   local target="$1"
   mkdir -p "${target}"
   ln -s "${CNPG_FIXTURES}" "${target}/cnpg"
   ln -s "${PKG_FIXTURES}" "${target}/packages"
-  cp "${BARMAN_PLUGIN_FIXTURE}" "${target}/barman-plugin.json"
+  write_barman_fixture_from_metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${target}/barman-plugin.json"
 }
 
 write_manifest_fixture() {
@@ -288,6 +342,7 @@ run_committed_fixture() {
     cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" "${project}/cloudnative-pg-timescaledb/release-metadata"
   fi
   cp "${fixture_root}/input/versions.yaml" "${project}/cloudnative-pg-timescaledb/versions.yaml"
+  write_barman_doc_from_metadata "${project}/cloudnative-pg-timescaledb/versions.yaml" "${project}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md"
   if [[ "${fixture}" == "no-op" ]]; then
     local baseline_manifest="${project}/cloudnative-pg-timescaledb/update-fixture-cnpg-manifest.json"
     write_manifest_fixture "${project}/cloudnative-pg-timescaledb/versions.yaml" "${baseline_manifest}"
@@ -365,7 +420,10 @@ dated_change_project="${base_tmp}/changed-explicit-date"
 prepare_project "${dated_change_project}"
 cp "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${dated_change_project}/cloudnative-pg-timescaledb/versions.yaml"
 (cd "${dated_change_project}" && git add . && if ! git diff --cached --quiet; then git commit -qm changed-explicit-date-input; fi)
-if ! UPDATE_DATE=20260701 run_update "${dated_change_project}" "${FIXTURE_DIR}/changed-packages/upstream" "${base_tmp}/changed-date.out" "${base_tmp}/changed-date.err"; then
+changed_date_upstream="${base_tmp}/changed-date-upstream"
+cp -R "${FIXTURE_DIR}/changed-packages/upstream" "${changed_date_upstream}"
+write_barman_fixture_from_metadata "${dated_change_project}/cloudnative-pg-timescaledb/versions.yaml" "${changed_date_upstream}/barman-plugin.json"
+if ! UPDATE_DATE=20260701 run_update "${dated_change_project}" "${changed_date_upstream}" "${base_tmp}/changed-date.out" "${base_tmp}/changed-date.err"; then
   diag "make update" "changed-explicit-date" "exit 0" "$(cat "${base_tmp}/changed-date.err")" "Changed resolver fixtures should use the explicit UTC release date."
   exit 1
 fi
@@ -381,7 +439,7 @@ mkdir -p "${newer_cnpg_upstream}/cnpg"
 cp "${CNPG_FIXTURES}/standard-trixie-valid.json" "${newer_cnpg_upstream}/cnpg/standard-trixie-valid.json"
 cp "${CNPG_FIXTURES}/standard-bookworm-valid.json" "${newer_cnpg_upstream}/cnpg/standard-bookworm-valid.json"
 ln -s "${PKG_FIXTURES}" "${newer_cnpg_upstream}/packages"
-cp "${BARMAN_PLUGIN_FIXTURE}" "${newer_cnpg_upstream}/barman-plugin.json"
+write_barman_fixture_from_metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${newer_cnpg_upstream}/barman-plugin.json"
 python3 - "${newer_cnpg_upstream}/cnpg/standard-trixie-valid.json" <<'PY'
 import json
 from pathlib import Path
@@ -429,7 +487,7 @@ mkdir -p "${digest_upstream}/cnpg"
 cp "${CNPG_FIXTURES}/standard-trixie-valid.json" "${digest_upstream}/cnpg/standard-trixie-valid.json"
 cp "${CNPG_FIXTURES}/standard-bookworm-valid.json" "${digest_upstream}/cnpg/standard-bookworm-valid.json"
 ln -s "${PKG_FIXTURES}" "${digest_upstream}/packages"
-cp "${BARMAN_PLUGIN_FIXTURE}" "${digest_upstream}/barman-plugin.json"
+write_barman_fixture_from_metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${digest_upstream}/barman-plugin.json"
 python3 - "${digest_upstream}/cnpg/standard-trixie-valid.json" <<'PY'
 from pathlib import Path
 import sys
@@ -468,7 +526,7 @@ bad_upstream="${base_tmp}/bad-upstream"
 mkdir -p "${bad_upstream}"
 ln -s "${CNPG_FIXTURES}" "${bad_upstream}/cnpg"
 mkdir -p "${bad_upstream}/packages"
-cp "${BARMAN_PLUGIN_FIXTURE}" "${bad_upstream}/barman-plugin.json"
+write_barman_fixture_from_metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${bad_upstream}/barman-plugin.json"
 ln -s "${PKG_FIXTURES}/trixie-amd64-available.json" "${bad_upstream}/packages/trixie-amd64-available.json"
 ln -s "${PKG_FIXTURES}/trixie-arm64-available.json" "${bad_upstream}/packages/trixie-arm64-available.json"
 ln -s "${PKG_FIXTURES}/bookworm-amd64-available.json" "${bad_upstream}/packages/bookworm-amd64-available.json"
@@ -515,7 +573,7 @@ payload["manifests"] = [
 path.write_text(json.dumps(payload, separators=(",", ":")))
 PY
 ln -s "${PKG_FIXTURES}" "${missing_cnpg_upstream}/packages"
-cp "${BARMAN_PLUGIN_FIXTURE}" "${missing_cnpg_upstream}/barman-plugin.json"
+write_barman_fixture_from_metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${missing_cnpg_upstream}/barman-plugin.json"
 run_update "${cnpg_skip_project}" "${missing_cnpg_upstream}" "${base_tmp}/cnpg-skip.out" "${base_tmp}/cnpg-skip.err" || { diag "make update" "update-cnpg-resolver-skip-reason" "exit 0" "$(cat "${base_tmp}/cnpg-skip.err")" "Resolver-prefixed CNPG skip reasons should be updateable."; exit 1; }
 grep -Fq 'skip_reason: "resolver:cnpg-unavailable: ghcr.io/cloudnative-pg/postgresql:18.4-standard-bookworm PostgreSQL 18 bookworm missing tag"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg resolver skip" "update-cnpg-resolver-skip-reason" "CNPG missing-tag skip reason updated" "missing" "Update resolver-prefixed CNPG skip reasons to upstream evidence."; exit 1; }
 grep -Fq 'cnpg_tag: "18.4-standard-bookworm"' "${cnpg_skip_project}/cloudnative-pg-timescaledb/versions.yaml" || { diag "grep cnpg unresolved tag" "update-cnpg-resolver-skip-reason" "unresolved CNPG tag remains aligned with package-constrained missing-tag evidence" "missing" "Derive CNPG tag from package versions before CNPG resolution so missing-tag diagnostics name the final required base."; exit 1; }
@@ -556,7 +614,7 @@ payload["manifests"].append({
 path.write_text(json.dumps(payload, separators=(",", ":")))
 PY
 ln -s "${PKG_FIXTURES}" "${unsupported_cnpg_upstream}/packages"
-cp "${BARMAN_PLUGIN_FIXTURE}" "${unsupported_cnpg_upstream}/barman-plugin.json"
+write_barman_fixture_from_metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${unsupported_cnpg_upstream}/barman-plugin.json"
 if run_update "${unsupported_upstream_project}" "${unsupported_cnpg_upstream}" "${base_tmp}/unsupported-upstream.out" "${base_tmp}/unsupported-upstream.err"; then
   diag "make update" "reject-unsupported-upstream-cnpg-tuple" "non-zero" "exit 0" "Unsupported upstream CNPG tuples must hard-fail."
   exit 1

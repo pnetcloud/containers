@@ -121,22 +121,13 @@ if not reference.exists():
 
 text = doc.read_text()
 reference_text = reference.read_text()
-fields = {
-    "release": reference_field("Release"),
-    "manifest_url": reference_field("Manifest URL"),
-    "plugin_image": reference_field("Plugin image"),
-    "sidecar_image": reference_field("Sidecar image"),
-}
 
 if required_phrase not in text:
     fail(doc, f"docs include exact phrase {required_phrase!r}", "missing", "Identify the supported backup path with the canonical plugin name.")
-for field, value in fields.items():
-    if value not in text:
-        fail(doc, f"docs include current generated barman_plugin.{field}", "missing", "Copy Barman plugin reference values only from the generated Story 2.7 artifact.")
-require_bound_reference("Release", fields["release"], "barman_plugin.release")
-require_bound_reference("Manifest URL", fields["manifest_url"], "barman_plugin.manifest_url")
-require_bound_reference("Plugin image", fields["plugin_image"], "barman_plugin.plugin_image")
-require_bound_reference("Sidecar image", fields["sidecar_image"], "barman_plugin.sidecar_image")
+require(r"cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference\.md", "docs point to the generated Barman plugin reference artifact", "Link volatile plugin release and image values instead of copying them into hand-written docs.")
+reject(r"Release\s*[:|]\s*`?v[0-9]+\.[0-9]+\.[0-9]+`?", "docs do not duplicate generated Barman release values", "Keep volatile plugin release values only in the generated Story 2.7 artifact.")
+reject(r"https://github\.com/cloudnative-pg/plugin-barman-cloud/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/manifest\.yaml", "docs do not duplicate generated Barman manifest URLs", "Keep volatile plugin manifest URLs only in the generated Story 2.7 artifact.")
+reject(r"ghcr\.io/cloudnative-pg/plugin-barman-cloud(?:-sidecar)?:v[0-9]+\.[0-9]+\.[0-9]+", "docs do not duplicate generated Barman image tags", "Keep volatile plugin image tags only in the generated Story 2.7 artifact.")
 
 require(r"supported\s+v1\s+backup\s+integration\s+path|backup\s+integration\s+path.{0,120}supported\s+for\s+v1", "CloudNativePG Barman Cloud Plugin is the supported v1 backup integration path", "State the supported v1 backup integration path explicitly.")
 require(r"PostgreSQL.{0,160}extension\s+runtime|extension\s+runtime.{0,160}PostgreSQL", "image scope is PostgreSQL and extension runtime contents", "Separate image runtime contents from backup plugin deployment.")
@@ -214,9 +205,9 @@ validate_barman_docs "${FIXTURE_DIR}/valid-plugin-docs.md"
 
 expect_docs_fail legacy-barman-cloud-install.md "legacy Barman tooling|legacy barman-cloud commands|barman-cloud"
 expect_docs_fail legacy-barman-cloud-binary-required.md "legacy in-image barman-cloud|barman-cloud"
-expect_docs_fail missing-plugin-reference.md "CloudNativePG Barman Cloud Plugin|barman_plugin"
-expect_docs_fail wrong-plugin-image.md "barman_plugin.plugin_image|plugin image"
-expect_docs_fail direct-image-example-broken.md "direct image tag example|plugin image is not used|Cluster imageName"
+expect_docs_fail missing-plugin-reference.md "CloudNativePG Barman Cloud Plugin|generated Barman plugin reference|barman_plugin"
+expect_docs_fail wrong-plugin-image.md "generated Barman plugin reference|Barman image tags|plugin image"
+expect_docs_fail direct-image-example-broken.md "generated Barman plugin reference|Barman image tags|direct image tag example|plugin image is not used|Cluster imageName"
 
 "${VALIDATOR}" "${FIXTURE_DIR}/valid-plugin-doc.md" >/tmp/story-3-6-valid-plugin-doc.out
 grep -Fq 'PASS validate-barman-boundary plugin path gates' /tmp/story-3-6-valid-plugin-doc.out || {

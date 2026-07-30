@@ -6,18 +6,9 @@ This repository builds PostgreSQL images with TimescaleDB, TimescaleDB Toolkit, 
 
 ## Current Plugin Reference
 
-The generated reference artifact is `cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md`. Public backup docs must match that generated Story 2.7 reference.
+The generated reference artifact is `cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md`. Use the current release, manifest, plugin image, and sidecar image from that generated Story 2.7 reference through the CloudNativePG plugin deployment path.
 
-Current generated values:
-
-| Field | Value |
-| --- | --- |
-| Release | `v0.13.0` |
-| Manifest URL | `https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/v0.13.0/manifest.yaml` |
-| Plugin image | `ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.13.0` |
-| Sidecar image | `ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:v0.13.0` |
-
-Use the manifest and images above through the CloudNativePG plugin deployment path. The CloudNativePG Barman Cloud Plugin path does not install, require, or validate legacy in-image `barman-cloud` binaries in v1 images.
+The CloudNativePG Barman Cloud Plugin path does not install, require, or validate legacy in-image `barman-cloud` binaries in v1 images.
 
 ## Image Boundary
 

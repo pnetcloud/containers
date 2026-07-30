@@ -99,6 +99,53 @@ for debian in ["trixie", "bookworm"]:
 PY
 }
 
+write_barman_fixture_from_metadata() {
+  local metadata="$1"
+  local target="$2"
+  local expected_changed="$3"
+  python3 - "${metadata}" "${target}" "${expected_changed}" <<'PY'
+from pathlib import Path
+import json
+import re
+import sys
+
+metadata = Path(sys.argv[1])
+target = Path(sys.argv[2])
+expected_changed = sys.argv[3] == "true"
+text = metadata.read_text().splitlines()
+fields = {}
+in_barman = False
+for raw in text:
+    if raw == "barman_plugin:":
+        in_barman = True
+        continue
+    if in_barman and raw and not raw.startswith("  "):
+        break
+    if in_barman and raw.startswith("  ") and ":" in raw:
+        key, value = raw.strip().split(":", 1)
+        fields[key] = value.strip().strip('"')
+
+release = fields["release"]
+if expected_changed:
+    match = re.fullmatch(r"v([0-9]+)\.([0-9]+)\.([0-9]+)", release)
+    if not match:
+        raise SystemExit(f"cannot bump release {release!r}")
+    major, minor, patch = (int(part) for part in match.groups())
+    release = f"v{major}.{minor}.{patch + 1}"
+
+payload = {
+    "release": release,
+    "manifest_url": f"https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/{release}/manifest.yaml",
+    "plugin_image": f"ghcr.io/cloudnative-pg/plugin-barman-cloud:{release}",
+    "sidecar_image": f"ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:{release}",
+    "source_url": fields["source_url"],
+    "checked_at_utc": fields["updated_at_utc"],
+    "expected_changed": expected_changed,
+}
+target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+}
+
 run_update() {
   local project="$1"
   local upstream="$2"
@@ -231,10 +278,14 @@ PY
 base_tmp="$(mktemp -d)"
 upstream="${base_tmp}/upstream"
 prepare_upstream "${upstream}"
+current_reference="${base_tmp}/current-reference.json"
+changed_reference="${base_tmp}/changed-reference.json"
+write_barman_fixture_from_metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${current_reference}" false
+write_barman_fixture_from_metadata "${ROOT_DIR}/cloudnative-pg-timescaledb/versions.yaml" "${changed_reference}" true
 
 current_project="${base_tmp}/current"
 prepare_project "${current_project}"
-if ! run_update "${current_project}" "${upstream}" "${FIXTURE_DIR}/current-reference.json" "${base_tmp}/current.out" "${base_tmp}/current.err"; then
+if ! run_update "${current_project}" "${upstream}" "${current_reference}" "${base_tmp}/current.out" "${base_tmp}/current.err"; then
   diag "make update" "current-reference" "exit 0" "$(cat "${base_tmp}/current.err")" "Current Barman reference should be a deterministic no-op."
   exit 1
 fi
@@ -244,7 +295,7 @@ status="$(cd "${current_project}" && git status --porcelain --untracked-files=al
 
 changed_project="${base_tmp}/changed"
 prepare_project "${changed_project}"
-if ! run_update "${changed_project}" "${upstream}" "${FIXTURE_DIR}/changed-reference.json" "${base_tmp}/changed.out" "${base_tmp}/changed.err"; then
+if ! run_update "${changed_project}" "${upstream}" "${changed_reference}" "${base_tmp}/changed.out" "${base_tmp}/changed.err"; then
   diag "make update" "changed-reference" "exit 0" "$(cat "${base_tmp}/changed.err")" "Changed Barman reference should update metadata and generated docs deterministically."
   exit 1
 fi
@@ -253,7 +304,14 @@ status="$(cd "${changed_project}" && git status --porcelain --untracked-files=al
 expected_status=$' M cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md\n M cloudnative-pg-timescaledb/versions.yaml'
 [[ "${status}" == "${expected_status}" ]] || { diag "git status" "changed-reference" "only versions.yaml and generated Barman doc change" "${status}" "Keep Barman updates deterministic and reviewable."; exit 1; }
 grep -Fq 'CloudNativePG Barman Cloud Plugin' "${changed_project}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" || { diag "grep" "barman-plugin-reference.md" "required plugin phrase" "missing" "Generated docs must use the plugin path wording."; exit 1; }
-grep -Fq 'ghcr.io/cloudnative-pg/plugin-barman-cloud:v0.14.0' "${changed_project}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" || { diag "grep" "barman-plugin-reference.md" "new plugin image" "missing" "Generated docs must include the new plugin image."; exit 1; }
+expected_plugin_image="$(python3 - "${changed_reference}" <<'PY'
+from pathlib import Path
+import json
+import sys
+print(json.loads(Path(sys.argv[1]).read_text())["plugin_image"])
+PY
+)"
+grep -Fq "${expected_plugin_image}" "${changed_project}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md" || { diag "grep" "barman-plugin-reference.md" "new plugin image ${expected_plugin_image}" "missing" "Generated docs must include the new plugin image."; exit 1; }
 
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-barman-boundary.sh"
 expect_boundary_fail "${FIXTURE_DIR}/legacy-barman-cloud-dockerfile" "barman-cloud"

@@ -96,6 +96,50 @@ slug() {
   printf '%s' "$1" | tr -c 'A-Za-z0-9_.-' '-'
 }
 
+write_barman_fixture_for_checkout() {
+  local checkout="$1"
+  local target="$2"
+  python3 - "${checkout}/cloudnative-pg-timescaledb/versions.yaml" "${target}" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+metadata = Path(sys.argv[1])
+target = Path(sys.argv[2])
+if metadata.exists():
+    text = metadata.read_text().splitlines()
+    fields = {}
+    in_barman = False
+    for raw in text:
+        if raw == "barman_plugin:":
+            in_barman = True
+            continue
+        if in_barman and raw and not raw.startswith("  "):
+            break
+        if in_barman and raw.startswith("  ") and ":" in raw:
+            key, value = raw.strip().split(":", 1)
+            fields[key] = value.strip().strip('"')
+else:
+    fields = {
+        "release": "v0.0.0",
+        "source_url": "https://github.com/cloudnative-pg/plugin-barman-cloud/releases",
+        "updated_at_utc": "1970-01-01",
+    }
+
+release = fields["release"]
+payload = {
+    "release": release,
+    "manifest_url": f"https://github.com/cloudnative-pg/plugin-barman-cloud/releases/download/{release}/manifest.yaml",
+    "plugin_image": f"ghcr.io/cloudnative-pg/plugin-barman-cloud:{release}",
+    "sidecar_image": f"ghcr.io/cloudnative-pg/plugin-barman-cloud-sidecar:{release}",
+    "source_url": fields["source_url"],
+    "checked_at_utc": fields["updated_at_utc"],
+    "expected_changed": False,
+}
+target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+}
+
 run_orchestration() {
   local date_value="${DATE_VALUE:-}"
   local dry_run="${DRY_RUN_VALUE:-}"
@@ -111,7 +155,6 @@ run_orchestration() {
   local source_sha=""
   local matrix_json=""
   local update_fixture_root=""
-  local barman_plugin_fixture=""
   local step_index=0
 
   if [[ -z "${date_value}" ]]; then
@@ -191,8 +234,7 @@ run_orchestration() {
   mkdir -p "${update_fixture_root}"
   ln -s "${checkout}/cloudnative-pg-timescaledb/tests/cnpg-resolver/fixtures" "${update_fixture_root}/cnpg"
   ln -s "${checkout}/cloudnative-pg-timescaledb/tests/packagecloud/fixtures" "${update_fixture_root}/packages"
-  barman_plugin_fixture="${checkout}/cloudnative-pg-timescaledb/tests/barman-plugin/fixtures/current-reference.json"
-  cp "${barman_plugin_fixture}" "${update_fixture_root}/barman-plugin.json"
+  write_barman_fixture_for_checkout "${checkout}" "${update_fixture_root}/barman-plugin.json"
   local commands_file="${logs_dir}/commands.tsv"
   local last_log_file=""
   : > "${commands_file}"
