@@ -434,7 +434,13 @@ diff -u "${FIXTURE_DIR}/valid-bookworm-catalog.yaml" "${stale_generated_dir}/cat
 partial_dir="${tmpdir}/partial-release"
 materialize_release_metadata "${partial_dir}" valid
 rm -f "${partial_dir}/18-bookworm.json"
-expect_fail "partial release metadata" "every publishable stable PostgreSQL/Debian row|18-bookworm" "${GENERATOR}" --release-metadata "${partial_dir}" --output "${tmpdir}/partial-generated-catalog"
+partial_generated="${tmpdir}/partial-generated-catalog"
+"${GENERATOR}" --release-metadata "${partial_dir}" --output "${partial_generated}"
+if grep -q '18-pg18.4-ts2.27.2-20260609-bookworm' "${partial_generated}/catalog-standard-bookworm.yaml"; then
+  diag "${GENERATOR} --release-metadata ${partial_dir}" "partial release metadata" "missing release rows are omitted from generated catalogs" "18-bookworm present" "Catalog only rows that passed publish gates."
+  exit 1
+fi
+"${GENERATOR}" --release-metadata "${partial_dir}" --validate-catalog "${partial_generated}/catalog-standard-bookworm.yaml"
 
 empty_record_id_dir="${tmpdir}/empty-record-id-release"
 materialize_release_metadata "${empty_record_id_dir}" valid

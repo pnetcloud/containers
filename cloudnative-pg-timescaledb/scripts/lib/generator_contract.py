@@ -762,27 +762,6 @@ def duplicate_release_record_diag(command, key, first_artifact, second_artifact,
     )
 
 
-def require_complete_stable_release_records(records, entries, command, artifact):
-    expected = {
-        (entry["pg_major"], entry["debian_variant"]): row_id(entry)
-        for entry in entries
-        if entry["publish"] is True and entry["experimental"] is not True
-    }
-    missing = sorted(
-        row
-        for key, row in expected.items()
-        if key not in records
-    )
-    if missing:
-        diag(
-            command,
-            artifact,
-            "release metadata includes every publishable stable PostgreSQL/Debian row",
-            {"missing": missing, "present": sorted(f"{key[0]}-{key[1]}" for key in records)},
-            "Pass the complete Story 4.5 release metadata set before generating or validating stable catalogs.",
-        )
-
-
 def normalize_release_record(data, entries, payload, command, artifact):
     image = f"{data['image']['registry']}/{data['image']['repository']}"
     required = {
@@ -863,8 +842,6 @@ def normalize_release_record(data, entries, payload, command, artifact):
 
 def catalog_summary(data, entries, output_root="cloudnative-pg-timescaledb/catalog", release_metadata=None):
     release_records = load_release_records(data, entries, release_metadata or [], "generate-catalog")
-    if release_metadata:
-        require_complete_stable_release_records(release_records, entries, "generate-catalog", "release metadata set")
     catalogs = []
     for debian in ["trixie", "bookworm"]:
         rows = []
@@ -1189,7 +1166,6 @@ def validate_catalog_file(data, entries, release_metadata, catalog_path):
     release_records = load_release_records(data, entries, release_metadata, command)
     if not release_records:
         diag(command, catalog_path, "at least one release metadata record", "none", "Pass --release-metadata from Story 4.5 publish output before validating release catalogs.")
-    require_complete_stable_release_records(release_records, entries, command, catalog_path)
     image = f"{data['image']['registry']}/{data['image']['repository']}"
     payload = parse_catalog_yaml(catalog_path, command)
     if payload.get("apiVersion") != "postgresql.cnpg.io/v1" or payload.get("kind") != "ClusterImageCatalog":
