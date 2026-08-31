@@ -6,6 +6,7 @@ FIXTURE_DIR="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/security-scan/fixtures
 POLICY="${ROOT_DIR}/cloudnative-pg-timescaledb/config/vulnerability-policy.yaml"
 IGNORE="${ROOT_DIR}/cloudnative-pg-timescaledb/config/vulnerability-ignore.yaml"
 EVALUATOR="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/evaluate-vulnerability-scan.py"
+SCAN_GATE="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/check-vulnerability-scan-gate.py"
 SCAN_FILE_VALIDATOR="${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-vulnerability-scan-files.py"
 CANDIDATE_METADATA="${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/build-candidates/fixtures/valid-candidate-metadata.json"
 BUILD_WORKFLOW="${ROOT_DIR}/.github/workflows/build.yml"
@@ -76,6 +77,40 @@ PY
   rm -f "${output}"
 }
 
+check_scan_gate_fixture() {
+  local amd64 arm64 summary github_output reason_output passed
+  amd64="$(mktemp)"
+  arm64="$(mktemp)"
+  summary="$(mktemp)"
+  github_output="$(mktemp)"
+  reason_output="$(mktemp)"
+  "${EVALUATOR}" --policy "${POLICY}" --ignore "${IGNORE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-json "${FIXTURE_DIR}/valid-scan-pass.json" --output "${amd64}"
+  "${EVALUATOR}" --policy "${POLICY}" --ignore "${IGNORE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-json "${FIXTURE_DIR}/valid-scan-pass-arm64.json" --output "${arm64}"
+  python3 - "${amd64}" "${arm64}" "${summary}" <<'PY'
+import json
+import sys
+from pathlib import Path
+Path(sys.argv[3]).write_text(json.dumps([json.loads(Path(sys.argv[1]).read_text()), json.loads(Path(sys.argv[2]).read_text())], indent=2, sort_keys=True) + "\n")
+PY
+  passed="$("${SCAN_GATE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-summary "${summary}" --github-output "${github_output}" --reason-output "${reason_output}")"
+  [[ "${passed}" == "true" ]] || { diag "check-vulnerability-scan-gate.py" "${summary}" "passed scan gate" "${passed}" "Pass only matching candidate scan summaries whose rows all passed."; exit 1; }
+  grep -Fxq "passed=true" "${github_output}" || { diag "grep scan gate output" "${github_output}" "passed=true" "missing" "Expose scan gate status to workflow steps."; exit 1; }
+  [[ ! -s "${reason_output}" ]] || { diag "test empty reason" "${reason_output}" "empty passing failure reason" "$(cat "${reason_output}")" "Do not emit a failure reason for passing scan summaries."; exit 1; }
+  python3 - "${summary}" <<'PY'
+import json
+import sys
+from pathlib import Path
+payload = json.loads(Path(sys.argv[1]).read_text())
+payload[0]["digest"] = "sha256:" + "0" * 64
+Path(sys.argv[1]).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+PY
+  : > "${github_output}"
+  passed="$("${SCAN_GATE}" --candidate-metadata "${CANDIDATE_METADATA}" --scan-summary "${summary}" --github-output "${github_output}" --reason-output "${reason_output}")"
+  [[ "${passed}" == "false" ]] || { diag "check-vulnerability-scan-gate.py" "${summary}" "mismatched scan gate fails closed" "${passed}" "Reject scan summaries that do not belong to the candidate metadata."; exit 1; }
+  grep -Fq "vulnerability scan summary does not match candidate digests" "${reason_output}" || { diag "grep mismatch reason" "${reason_output}" "candidate digest mismatch reason" "$(cat "${reason_output}")" "Keep mismatched scan evidence diagnosable."; exit 1; }
+  rm -f "${amd64}" "${arm64}" "${summary}" "${github_output}" "${reason_output}"
+}
+
 validate_security_scan_workflow() {
   local file="$1"
   python3 - "${file}" <<'PY'
@@ -111,6 +146,7 @@ require("scanner_metadata_status" in text and "db_update_status" in text, "workf
 require("scanner_failed: ${{ steps.scan.outputs.scanner_failed }}" in text, "workflow exposes scanner_failed as a scan job output", "scanner_failed output missing", "Make scanner and SARIF generation failures explicit before downstream jobs run.")
 require("SARIF output is missing; vulnerability scanner or SARIF generation failed" in text, "workflow writes deterministic SARIF diagnostics when SARIF generation fails", "SARIF diagnostic placeholder missing", "Create a diagnostic SARIF artifact before upload-artifact runs so the gate fails for the scanner reason, not a missing file.")
 require("vulnerability scanner or SARIF generation failed" in text, "workflow summaries distinguish scanner/SARIF failure from policy failure", "scanner failure summary reason missing", "Surface infrastructure scanner failures separately from vulnerability policy failures.")
+require("Enforce vulnerability gate" not in text, "security scan workflow records policy failures without failing the whole release matrix", "hard enforcing step found", "Let downstream publish gates skip only rows whose scan summary is not passed.")
 require("validate-vulnerability-scan-files.py" in text, "workflow validates scanner JSON file coverage and candidate identity before evaluation", "scan file validator missing", "Fail closed when scanner JSON output is missing or mismatched.")
 require("evaluate-vulnerability-scan.py" in text, "workflow evaluates scanner JSON with repository policy", "evaluator missing", "Convert scanner output into a deterministic release gate result.")
 require("actions/upload-artifact@" in text and "vulnerability-scan-json" in text and "vulnerability-scan-summary" in text, "workflow always stores scanner JSON and summary artifacts", "JSON artifact upload missing", "Persist scan evidence even when the gate fails.")
@@ -151,6 +187,7 @@ def require(condition, expected, actual, remediation):
 
 require("security_scan:" in text, "build workflow has required security_scan job", "security_scan job missing", "Wire scans into the same build run.")
 require("uses: ./.github/workflows/security-scan.yml" in text, "build workflow invokes required reusable security-scan.yml", "reusable workflow call missing", "Do not replace the required scan workflow with inline helper steps.")
+require("check-vulnerability-scan-gate.py" in text and "--candidate-metadata" in text and "--scan-summary" in text, "build workflow uses shared candidate-bound scan gate checker", "shared scan gate checker missing", "Avoid duplicated scan gate snippets and reject scan summaries for the wrong candidate digest.")
 require(re.search(r"security_scan:[\s\S]*needs:[\s\S]*candidate", text), "security_scan needs candidate", "candidate dependency missing", "Scan only release candidates that passed build and smoke gates.")
 require("artifact_name: release-candidate-${{ matrix.bake_target }}" in text, "security_scan consumes candidate metadata artifact from Story 4.2", "candidate artifact input missing", "Scan the same candidate metadata that later publish gates consume.")
 require("security-events: write" in text, "build delegates SARIF upload permission to security scan gate", "security-events permission missing", "Reusable scan workflow needs permission for code scanning upload.")
@@ -182,9 +219,11 @@ grep -Fq 'fail_on_unfixed_threshold_exceeded: false' "${POLICY}" || { diag "grep
 grep -Fq 'undeclared_ignores: reject' "${IGNORE}" || { diag "grep ignore policy" "${IGNORE}" "undeclared ignores rejected" "missing" "Keep ignores explicit and reviewable."; exit 1; }
 grep -Fq 'fail closed' "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/vulnerability-policy.md" || { diag "grep vulnerability docs" "cloudnative-pg-timescaledb/docs/vulnerability-policy.md" "fail-closed behavior documented" "missing" "Document scanner DB failure behavior."; exit 1; }
 grep -Fq 'FixedVersion' "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/vulnerability-policy.md" || { diag "grep vulnerability docs" "cloudnative-pg-timescaledb/docs/vulnerability-policy.md" "fixable versus unfixed threshold behavior documented" "missing" "Document which vulnerabilities block release and which remain evidence-only."; exit 1; }
+grep -Fq 'validate-publish-gates.sh is the hard release boundary' "${ROOT_DIR}/cloudnative-pg-timescaledb/docs/vulnerability-policy.md" || { diag "grep vulnerability docs" "cloudnative-pg-timescaledb/docs/vulnerability-policy.md" "publish gate remains the hard scan boundary" "missing" "Document that failed scan summaries skip publish rows instead of weakening final promotion."; exit 1; }
 
 evaluate_pass_fixture
 evaluate_unfixed_fixture
+check_scan_gate_fixture
 scan_dir="$(mktemp -d)"
 cp "${FIXTURE_DIR}/valid-scan-pass.json" "${scan_dir}/pg18-trixie-linux-amd64.json"
 cp "${FIXTURE_DIR}/valid-scan-pass-arm64.json" "${scan_dir}/pg18-trixie-linux-arm64.json"

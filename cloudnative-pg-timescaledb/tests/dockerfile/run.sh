@@ -116,10 +116,16 @@ fi
 grep -RE "FROM ghcr.io/cloudnative-pg/postgresql:.+@sha256:" "${output}" >/tmp/story-3-1-from.out
 grep -Fq 'ARG TARGETARCH' "${dockerfile}" || { diag "grep TARGETARCH" "${dockerfile}" "BuildKit TARGETARCH arg is declared" "missing" "Expose BuildKit TARGETARCH inside the stage for multi-platform builds."; exit 1; }
 grep -Fq 'ARG TARGETARCH=amd64' "${dockerfile}" && { diag "grep TARGETARCH default" "${dockerfile}" "no default TARGETARCH" "ARG TARGETARCH=amd64" "Do not override BuildKit TARGETARCH during arm64 builds."; exit 1; }
-if grep -Eq 'apt-get[[:space:]]+([^;]+[[:space:]])?upgrade([[:space:];]|$)' "${dockerfile}"; then
-  diag "grep forbidden upgrade" "${dockerfile}" "no full apt-get upgrade in generated Dockerfile" "$(grep -En 'apt-get[[:space:]]+([^;]+[[:space:]])?upgrade([[:space:];]|$)' "${dockerfile}")" "Update the CNPG base digest for base security fixes instead of drifting the pinned base at build time."
-  exit 1
-fi
+grep -Fq 'apt-mark hold "postgresql-18" "postgresql-client-18"' "${dockerfile}" || { diag "grep PostgreSQL hold" "${dockerfile}" "PostgreSQL packages held before Debian security upgrade" "missing" "Refresh base OS security packages without drifting the metadata PostgreSQL server version."; exit 1; }
+grep -Fq 'apt-get upgrade -y --no-install-recommends' "${dockerfile}" || { diag "grep Debian security upgrade" "${dockerfile}" "Debian security packages upgraded during build" "missing" "Consume Debian security repository fixes when the pinned CNPG digest is stale."; exit 1; }
+grep -Fq 'apt-mark unhold "postgresql-18" "postgresql-client-18"' "${dockerfile}" || { diag "grep PostgreSQL unhold" "${dockerfile}" "PostgreSQL package holds removed after Debian security upgrade" "missing" "Do not leave package holds in the final image layer."; exit 1; }
+python3 - "${dockerfile}" <<'PY'
+import sys
+from pathlib import Path
+text = Path(sys.argv[1]).read_text()
+if text.index('apt-mark unhold "postgresql-18" "postgresql-client-18"') < text.index('"timescaledb-toolkit-postgresql-18='):
+    raise SystemExit("PostgreSQL package hold is removed before extension packages are installed")
+PY
 
 skipped_output="${tmp_root}/skipped"
 run_generate "${FIXTURE_DIR}/skipped-nonpublish-missing-cnpg-digest.yaml" "${skipped_output}" "${manifest}" >/tmp/story-3-1-skipped.out

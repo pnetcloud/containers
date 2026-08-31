@@ -382,11 +382,29 @@ jobs:
         with:
           name: vulnerability-scan-summary-${{ matrix.bake_target }}
           path: release-evidence/input/scan-summary
+      - id: scan_gate
+        name: Check vulnerability scan gate
+        env:
+          CANDIDATE_METADATA: release-evidence/input/candidate/release-candidate.json
+          SCAN_SUMMARY: release-evidence/input/scan-summary/vulnerability-scan-summary.json
+        run: |
+          set -Eeuo pipefail
+          reason_file="$(mktemp)"
+          passed="$(cloudnative-pg-timescaledb/scripts/check-vulnerability-scan-gate.py \
+            --candidate-metadata "${CANDIDATE_METADATA}" \
+            --scan-summary "${SCAN_SUMMARY}" \
+            --github-output "${GITHUB_OUTPUT}" \
+            --reason-output "${reason_file}")"
+          if [[ "${passed}" != "true" ]]; then
+            printf 'Skipping release row because vulnerability scan did not pass: %s (%s)\n' '${{ matrix.bake_target }}' "$(cat "${reason_file}")"
+          fi
       - name: Install pinned cosign with retry
+        if: steps.scan_gate.outputs.passed == 'true'
         run: |
           set -Eeuo pipefail
           cloudnative-pg-timescaledb/scripts/install-cosign.sh
       - name: Login to GHCR for signature upload
+        if: steps.scan_gate.outputs.passed == 'true'
         env:
           GHCR_ACTOR: ${{ github.actor }}
           GHCR_TOKEN: ${{ github.token }}
@@ -395,6 +413,7 @@ jobs:
           cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c "printf '%s' \"\${GHCR_TOKEN}\" | docker login ghcr.io -u \"\${GHCR_ACTOR}\" --password-stdin"
       - id: evidence
         name: Sign, verify, and write release evidence
+        if: steps.scan_gate.outputs.passed == 'true'
         env:
           CANDIDATE_METADATA: release-evidence/input/candidate/release-candidate.json
           SCAN_SUMMARY: release-evidence/input/scan-summary/vulnerability-scan-summary.json
@@ -509,6 +528,8 @@ jobs:
         env:
           EVIDENCE_PATH: ${{ steps.evidence.outputs.evidence_path }}
           SUMMARY_STATUS: ${{ job.status }}
+          SCAN_GATE_PASSED: ${{ steps.scan_gate.outputs.passed }}
+          SCAN_GATE_FAILURE_REASON: ${{ steps.scan_gate.outputs.failure_reason }}
         run: |
           set -Eeuo pipefail
           export CANDIDATE_DIGEST="n/a" INDEX_DIGEST="n/a" PLATFORM_DIGESTS="n/a" SBOM_STATUS="n/a" SBOM_REF="n/a" PROVENANCE_STATUS="n/a" PROVENANCE_REF="n/a" SIGNATURE_STATUS="n/a" SIGNATURE_REF="n/a" SCAN_RESULT="n/a" IMAGE_REF="n/a" OIDC_ISSUER="n/a" OIDC_IDENTITY="n/a"
@@ -541,7 +562,10 @@ jobs:
             )"
           fi
           export EVIDENCE_PATH="${EVIDENCE_PATH:-n/a}"
-          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+          if [[ "${SCAN_GATE_PASSED}" != "true" ]]; then
+            export SUMMARY_STATUS="failure"
+            FAILURE_REASON="${SCAN_GATE_FAILURE_REASON:-vulnerability scan did not pass}; release row skipped"
+          elif [[ "${SUMMARY_STATUS}" == "success" ]]; then
             FAILURE_REASON="none"
           else
             FAILURE_REASON="release evidence or signing failed; inspect job logs"
@@ -581,6 +605,7 @@ jobs:
             --require-failure-reason
       # actions/upload-artifact v7.0.1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: steps.scan_gate.outputs.passed == 'true'
         with:
           name: release-evidence-${{ matrix.bake_target }}
           path: release-evidence/output/${{ matrix.bake_target }}
@@ -615,12 +640,30 @@ jobs:
         with:
           name: vulnerability-scan-summary-${{ matrix.bake_target }}
           path: tag-validation/input/scan-summary
+      - id: scan_gate
+        name: Check vulnerability scan gate
+        env:
+          CANDIDATE_METADATA: tag-validation/input/candidate/release-candidate.json
+          SCAN_SUMMARY: tag-validation/input/scan-summary/vulnerability-scan-summary.json
+        run: |
+          set -Eeuo pipefail
+          reason_file="$(mktemp)"
+          passed="$(cloudnative-pg-timescaledb/scripts/check-vulnerability-scan-gate.py \
+            --candidate-metadata "${CANDIDATE_METADATA}" \
+            --scan-summary "${SCAN_SUMMARY}" \
+            --github-output "${GITHUB_OUTPUT}" \
+            --reason-output "${reason_file}")"
+          if [[ "${passed}" != "true" ]]; then
+            printf 'Skipping release row because vulnerability scan did not pass: %s (%s)\n' '${{ matrix.bake_target }}' "$(cat "${reason_file}")"
+          fi
       # actions/download-artifact v8.0.1
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        if: steps.scan_gate.outputs.passed == 'true'
         with:
           name: release-evidence-${{ matrix.bake_target }}
           path: tag-validation/input/release-evidence
       - name: Validate final tag policy and write release gate metadata
+        if: steps.scan_gate.outputs.passed == 'true'
         env:
           CANDIDATE_METADATA: tag-validation/input/candidate/release-candidate.json
           SCAN_SUMMARY: tag-validation/input/scan-summary/vulnerability-scan-summary.json
@@ -637,8 +680,31 @@ jobs:
             --scan-summary "${SCAN_SUMMARY}" \
             --tag-validation-status passed \
             --gate-output "${OUTPUT_DIR}/release-gate-metadata.json"
+      - name: Write tag validation summary
+        if: always()
+        env:
+          SUMMARY_STATUS: ${{ job.status }}
+          SCAN_GATE_PASSED: ${{ steps.scan_gate.outputs.passed }}
+          SCAN_GATE_FAILURE_REASON: ${{ steps.scan_gate.outputs.failure_reason }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "${SCAN_GATE_PASSED}" != "true" ]]; then
+            SUMMARY_STATUS="failure"
+            FAILURE_REASON="${SCAN_GATE_FAILURE_REASON:-vulnerability scan did not pass}; release row skipped"
+          elif [[ "${SUMMARY_STATUS}" == "success" ]]; then
+            FAILURE_REASON="none"
+          else
+            FAILURE_REASON="tag validation failed; inspect job logs"
+          fi
+          {
+            printf "## Tag validation\n\n"
+            printf -- "- Status: \`%s\`\n" "${SUMMARY_STATUS}"
+            printf -- "- Scan gate: \`%s\`\n" "${SCAN_GATE_PASSED:-false}"
+            printf -- "- Failure reason: \`%s\`\n" "${FAILURE_REASON}"
+          } >> "${GITHUB_STEP_SUMMARY}"
       # actions/upload-artifact v7.0.1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: steps.scan_gate.outputs.passed == 'true'
         with:
           name: release-gate-metadata-${{ matrix.bake_target }}
           path: tag-validation/output/${{ matrix.bake_target }}/release-gate-metadata.json
@@ -676,21 +742,41 @@ jobs:
         with:
           name: vulnerability-scan-summary-${{ matrix.bake_target }}
           path: publish/input/scan-summary
+      - id: scan_gate
+        name: Check vulnerability scan gate
+        env:
+          CANDIDATE_METADATA: publish/input/candidate/release-candidate.json
+          SCAN_SUMMARY: publish/input/scan-summary/vulnerability-scan-summary.json
+        run: |
+          set -Eeuo pipefail
+          reason_file="$(mktemp)"
+          passed="$(cloudnative-pg-timescaledb/scripts/check-vulnerability-scan-gate.py \
+            --candidate-metadata "${CANDIDATE_METADATA}" \
+            --scan-summary "${SCAN_SUMMARY}" \
+            --github-output "${GITHUB_OUTPUT}" \
+            --reason-output "${reason_file}")"
+          if [[ "${passed}" != "true" ]]; then
+            printf 'Skipping release row because vulnerability scan did not pass: %s (%s)\n' '${{ matrix.bake_target }}' "$(cat "${reason_file}")"
+          fi
       # actions/download-artifact v8.0.1
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        if: steps.scan_gate.outputs.passed == 'true'
         with:
           name: release-evidence-${{ matrix.bake_target }}
           path: publish/input/release-evidence
       # actions/download-artifact v8.0.1
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        if: steps.scan_gate.outputs.passed == 'true'
         with:
           name: release-gate-metadata-${{ matrix.bake_target }}
           path: publish/input/release-gate-metadata
       - name: Install pinned cosign with retry
+        if: steps.scan_gate.outputs.passed == 'true'
         run: |
           set -Eeuo pipefail
           cloudnative-pg-timescaledb/scripts/install-cosign.sh
       - name: Login to GHCR for final tag promotion
+        if: steps.scan_gate.outputs.passed == 'true'
         env:
           GHCR_ACTOR: ${{ github.actor }}
           GHCR_TOKEN: ${{ github.token }}
@@ -699,6 +785,7 @@ jobs:
           cloudnative-pg-timescaledb/scripts/ci-retry.sh bash -c "printf '%s' \"\${GHCR_TOKEN}\" | docker login ghcr.io -u \"\${GHCR_ACTOR}\" --password-stdin"
       - id: publish_metadata
         name: Validate gates and promote final tags
+        if: steps.scan_gate.outputs.passed == 'true'
         env:
           CANDIDATE_METADATA: publish/input/candidate/release-candidate.json
           SCAN_SUMMARY: publish/input/scan-summary/vulnerability-scan-summary.json
@@ -870,6 +957,7 @@ jobs:
           print("final_tags=" + ",".join(metadata["final_tags"]))
           PY
       - name: Verify public anonymous pulls
+        if: steps.scan_gate.outputs.passed == 'true'
         env:
           METADATA_PATH: publish/output/${{ matrix.bake_target }}/ghcr-release-metadata.json
         run: |
@@ -906,6 +994,8 @@ jobs:
         env:
           METADATA_PATH: publish/output/${{ matrix.bake_target }}/ghcr-release-metadata.json
           SUMMARY_STATUS: ${{ job.status }}
+          SCAN_GATE_PASSED: ${{ steps.scan_gate.outputs.passed }}
+          SCAN_GATE_FAILURE_REASON: ${{ steps.scan_gate.outputs.failure_reason }}
           SKIPPED_COMBINATIONS: ${{ needs.matrix.outputs.skipped_summary }}
         run: |
           set -Eeuo pipefail
@@ -935,7 +1025,10 @@ jobs:
           PY
             )"
           fi
-          if [[ "${SUMMARY_STATUS}" == "success" ]]; then
+          if [[ "${SCAN_GATE_PASSED}" != "true" ]]; then
+            export SUMMARY_STATUS="failure"
+            FAILURE_REASON="${SCAN_GATE_FAILURE_REASON:-vulnerability scan did not pass}; release row skipped"
+          elif [[ "${SUMMARY_STATUS}" == "success" ]]; then
             FAILURE_REASON="none"
           else
             FAILURE_REASON="publish failed; inspect job logs"
@@ -955,6 +1048,7 @@ jobs:
             --require-failure-reason
       # actions/upload-artifact v7.0.1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: steps.scan_gate.outputs.passed == 'true'
         with:
           name: ghcr-release-metadata-${{ matrix.bake_target }}
           path: publish/output/${{ matrix.bake_target }}/ghcr-release-metadata.json

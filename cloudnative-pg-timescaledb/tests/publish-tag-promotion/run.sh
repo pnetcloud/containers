@@ -214,11 +214,18 @@ for marker in [
     "--tag-validation-status",
     "--gate-output",
     "release-gate-metadata-${{ matrix.bake_target }}",
+    "Check vulnerability scan gate",
+    "Write tag validation summary",
+    "SCAN_GATE_FAILURE_REASON",
 ]:
     require(marker in tag_text, f"tag_validation job contains {marker}", "missing", "Tag validation must emit same-run release gate metadata before publish.")
 for marker in [
     "release-candidate-${{ matrix.bake_target }}",
     "vulnerability-scan-summary-${{ matrix.bake_target }}",
+    "Check vulnerability scan gate",
+    "check-vulnerability-scan-gate.py",
+    "Skipping release row because vulnerability scan did not pass",
+    "steps.scan_gate.outputs.passed == 'true'",
     "release-evidence-${{ matrix.bake_target }}",
     "release-gate-metadata-${{ matrix.bake_target }}",
     "validate-publish-gates.sh",

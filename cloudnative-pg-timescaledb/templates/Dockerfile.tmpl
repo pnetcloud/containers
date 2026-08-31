@@ -17,7 +17,9 @@ RUN set -eux; \
     test "${VERSION_CODENAME}" = "{{debian_variant}}"; \
     test "$(dpkg --print-architecture)" = "${TARGETARCH}"; \
     export DEBIAN_FRONTEND=noninteractive; \
+    apt-mark hold "postgresql-{{pg_major}}" "postgresql-client-{{pg_major}}"; \
     apt-get update; \
+    apt-get upgrade -y --no-install-recommends; \
     apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
     install -d -m 0755 /usr/share/keyrings; \
     curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /usr/share/keyrings/timescale-timescaledb.gpg; \
@@ -45,6 +47,7 @@ RUN set -eux; \
       test -f "/usr/share/postgresql/{{pg_major}}/extension/pgaudit.control"; \
       dpkg-query -S "/usr/share/postgresql/{{pg_major}}/extension/pgaudit.control"; \
     fi; \
+    apt-mark unhold "postgresql-{{pg_major}}" "postgresql-client-{{pg_major}}"; \
     rm -rf /var/lib/apt/lists/* /tmp/*
 
 LABEL org.opencontainers.image.source="{{source_repository}}" \

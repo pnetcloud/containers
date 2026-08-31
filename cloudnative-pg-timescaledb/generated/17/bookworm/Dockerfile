@@ -17,7 +17,9 @@ RUN set -eux; \
     test "${VERSION_CODENAME}" = "bookworm"; \
     test "$(dpkg --print-architecture)" = "${TARGETARCH}"; \
     export DEBIAN_FRONTEND=noninteractive; \
+    apt-mark hold "postgresql-17" "postgresql-client-17"; \
     apt-get update; \
+    apt-get upgrade -y --no-install-recommends; \
     apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
     install -d -m 0755 /usr/share/keyrings; \
     curl -fsSL https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /usr/share/keyrings/timescale-timescaledb.gpg; \
@@ -45,6 +47,7 @@ RUN set -eux; \
       test -f "/usr/share/postgresql/17/extension/pgaudit.control"; \
       dpkg-query -S "/usr/share/postgresql/17/extension/pgaudit.control"; \
     fi; \
+    apt-mark unhold "postgresql-17" "postgresql-client-17"; \
     rm -rf /var/lib/apt/lists/* /tmp/*
 
 LABEL org.opencontainers.image.source="https://github.com/pnetcloud/containers" \

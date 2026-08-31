@@ -330,14 +330,6 @@ jobs:
           path: security-scan/output/sarif/vulnerability-scan.sarif
           if-no-files-found: error
           retention-days: 30
-      - name: Enforce vulnerability gate
-        run: |
-          set -Eeuo pipefail
-          if [[ '${{ steps.evaluate.outputs.failed }}' == 'true' ]]; then
-            printf 'Vulnerability scan failed for PG=%s DEBIAN=%s bake_target=%s\n' '${{ inputs.pg_major }}' '${{ inputs.debian_variant }}' '${{ inputs.bake_target }}' >&2
-            exit 1
-          fi
-
   upload_sarif:
     name: Upload vulnerability SARIF ${{ inputs.pg_major }} ${{ inputs.debian_variant }}
     needs: scan
