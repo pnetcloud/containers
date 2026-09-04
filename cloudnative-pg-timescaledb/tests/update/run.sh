@@ -337,14 +337,15 @@ run_committed_fixture() {
   local stderr_file="${base_tmp}/committed-${fixture}.err"
   local actual_diff="${base_tmp}/committed-${fixture}.diff"
   local fixture_root="${FIXTURE_DIR}/${fixture}"
+  local baseline_manifest
   prepare_project "${project}"
   if [[ "${fixture}" == "no-op" && -d "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" ]]; then
     cp -R "${ROOT_DIR}/cloudnative-pg-timescaledb/release-metadata" "${project}/cloudnative-pg-timescaledb/release-metadata"
   fi
   cp "${fixture_root}/input/versions.yaml" "${project}/cloudnative-pg-timescaledb/versions.yaml"
   write_barman_doc_from_metadata "${project}/cloudnative-pg-timescaledb/versions.yaml" "${project}/cloudnative-pg-timescaledb/docs/generated/barman-plugin-reference.md"
-  if [[ "${fixture}" == "no-op" ]]; then
-    local baseline_manifest="${project}/cloudnative-pg-timescaledb/update-fixture-cnpg-manifest.json"
+  if [[ -f "${fixture_root}/expected-diff.patch" || "${fixture}" == "no-op" ]]; then
+    baseline_manifest="${project}/cloudnative-pg-timescaledb/update-fixture-cnpg-manifest.json"
     write_manifest_fixture "${project}/cloudnative-pg-timescaledb/versions.yaml" "${baseline_manifest}"
     (cd "${project}" && CNPG_MANIFEST_FIXTURE="${baseline_manifest}" make --no-print-directory generate >/tmp/story-2-3-${fixture}-baseline-generate.out)
     rm -f "${baseline_manifest}"
