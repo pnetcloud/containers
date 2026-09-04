@@ -5,5 +5,7 @@ metadata:
   name: cloudnative-pg-timescaledb-standard-trixie
 spec:
   images:
+    - major: 17
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.11-ts2.29.2-20260904@sha256:f834b708ed54f06ec4dba4697ae5304ae7a5b2be839606553331b8367e59e03a
     - major: 18
-      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.29.2-20260819@sha256:b6ce9f630a388c409efe5122998600f34e70489a48b6751c40345990c7992c77
+      image: ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.6-ts2.29.2-20260904@sha256:f49c8795cab9064fb213a26ac00d92c3f983dfa833cbdd6c10f51f723a77bda8
