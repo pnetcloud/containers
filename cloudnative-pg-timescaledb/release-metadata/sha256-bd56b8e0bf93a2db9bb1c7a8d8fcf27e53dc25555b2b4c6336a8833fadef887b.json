@@ -1,0 +1,24 @@
+{
+  "candidate_digest": "sha256:6870a600533f8e95deeca80843acf467938c9ed8f4efbcf0520aa821c2ecce2d",
+  "cosign_certificate_identity": "https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main",
+  "cosign_certificate_issuer": "https://token.actions.githubusercontent.com",
+  "final_tags": [
+    "17-bookworm",
+    "17-pg17.10-ts2.29.2-20260819-bookworm"
+  ],
+  "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
+  "index_digest": "sha256:6da041713d9effe4251d968e1cc8a65b8ae1c1ef5c0efa8e95ab527f407167ef",
+  "platform_digests": {
+    "linux/amd64": "sha256:6870a600533f8e95deeca80843acf467938c9ed8f4efbcf0520aa821c2ecce2d",
+    "linux/arm64": "sha256:76b8e93fd8eec08a729acbcf786bb250f6054d88738d3811e7ec956f4e5fba46"
+  },
+  "promotion_status": "validated",
+  "provenance_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:6da041713d9effe4251d968e1cc8a65b8ae1c1ef5c0efa8e95ab527f407167ef#provenance",
+  "published_digest": "sha256:bc195d7d03d511a1cb95b486ca3e6c826d32d95f4c096d2487db59e771cd7a23",
+  "release_metadata_record_id": "sha256:bd56b8e0bf93a2db9bb1c7a8d8fcf27e53dc25555b2b4c6336a8833fadef887b",
+  "release_metadata_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:bc195d7d03d511a1cb95b486ca3e6c826d32d95f4c096d2487db59e771cd7a23",
+  "sbom_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:6da041713d9effe4251d968e1cc8a65b8ae1c1ef5c0efa8e95ab527f407167ef#sbom",
+  "scan_result": "passed",
+  "signature_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb@sha256:bc195d7d03d511a1cb95b486ca3e6c826d32d95f4c096d2487db59e771cd7a23#signature",
+  "verified": true
+}
