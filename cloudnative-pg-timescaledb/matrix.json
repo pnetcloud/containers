@@ -2,7 +2,7 @@
   "include": [
     {
       "bake_target": "pg17-trixie",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.29.2-20260819",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.11-ts2.29.2-20260904",
       "debian_variant": "trixie",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile",
@@ -10,18 +10,18 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "17",
-        "17-pg17.10-ts2.29.2-20260819"
+        "17-pg17.11-ts2.29.2-20260904"
       ],
       "latest_eligible": false,
       "pg_major": "17",
-      "pg_version": "17.10",
+      "pg_version": "17.11",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
       ],
       "provenance_ref": "",
       "publish": true,
-      "release_date": "20260819",
+      "release_date": "20260904",
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
@@ -29,7 +29,7 @@
     },
     {
       "bake_target": "pg18-trixie",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.29.2-20260819",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.6-ts2.29.2-20260904",
       "debian_variant": "trixie",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
@@ -37,19 +37,19 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "18",
-        "18-pg18.4-ts2.29.2-20260819",
+        "18-pg18.6-ts2.29.2-20260904",
         "latest"
       ],
       "latest_eligible": true,
       "pg_major": "18",
-      "pg_version": "18.4",
+      "pg_version": "18.6",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
       ],
       "provenance_ref": "",
       "publish": true,
-      "release_date": "20260819",
+      "release_date": "20260904",
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
@@ -57,7 +57,7 @@
     },
     {
       "bake_target": "pg17-bookworm",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.10-ts2.29.2-20260819-bookworm",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.11-ts2.29.2-20260904-bookworm",
       "debian_variant": "bookworm",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile",
@@ -65,18 +65,18 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "17-bookworm",
-        "17-pg17.10-ts2.29.2-20260819-bookworm"
+        "17-pg17.11-ts2.29.2-20260904-bookworm"
       ],
       "latest_eligible": false,
       "pg_major": "17",
-      "pg_version": "17.10",
+      "pg_version": "17.11",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
       ],
       "provenance_ref": "",
       "publish": true,
-      "release_date": "20260819",
+      "release_date": "20260904",
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
@@ -84,7 +84,7 @@
     },
     {
       "bake_target": "pg18-bookworm",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.4-ts2.29.2-20260819-bookworm",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.6-ts2.29.2-20260904-bookworm",
       "debian_variant": "bookworm",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile",
@@ -92,18 +92,18 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "18-bookworm",
-        "18-pg18.4-ts2.29.2-20260819-bookworm"
+        "18-pg18.6-ts2.29.2-20260904-bookworm"
       ],
       "latest_eligible": false,
       "pg_major": "18",
-      "pg_version": "18.4",
+      "pg_version": "18.6",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
       ],
       "provenance_ref": "",
       "publish": true,
-      "release_date": "20260819",
+      "release_date": "20260904",
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
