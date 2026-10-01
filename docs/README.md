@@ -18,6 +18,7 @@ This directory collects the public docs for the container image families in this
 ## Maintaining Images
 
 - [Maintainer guide](maintainer-guide.md) - update, generate, validate, release rehearsal, and GHCR cleanup workflow.
+- [Reliability audit (2026-09-28)](audits/2026-09-28.md) - observed release state, confirmed defects, and verification limits.
 - [Generated files](generated-files.md) - which files are generated and how to refresh them.
 - [Generator contracts](generator-contracts.md) - deterministic generator behavior expected by validation.
 - [Generated matrix schema](../cloudnative-pg-timescaledb/docs/generated/matrix-schema.md) - CI matrix contract.
