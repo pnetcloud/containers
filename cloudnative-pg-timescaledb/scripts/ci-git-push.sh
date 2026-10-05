@@ -33,8 +33,9 @@ retry_push() {
   for ((attempt = 1; attempt <= attempts; attempt++)); do
     if git push "$@"; then
       return 0
+    else
+      status="$?"
     fi
-    status="$?"
     if ((attempt == attempts)); then
       printf 'git push failed after %s attempts: git push ' "${attempts}" >&2
       printf '%q ' "$@" >&2

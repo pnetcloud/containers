@@ -219,7 +219,7 @@ expect_pass_with_stubbed_optional_tools() {
   local stub_bin tmp
   stub_bin="$(mktemp -d)"
   printf '#!/usr/bin/env sh\nexit 0\n' >"${stub_bin}/actionlint"
-  printf '#!/usr/bin/env sh\nexit 0\n' >"${stub_bin}/shellcheck"
+  printf '#!/usr/bin/env sh\nprintf "[]\\n"\n' >"${stub_bin}/shellcheck"
   chmod +x "${stub_bin}/actionlint" "${stub_bin}/shellcheck"
   tmp="$(mktemp)"
   if ! PATH="${stub_bin}:${PATH}" run_validator "${target}" >"${tmp}" 2>&1; then
@@ -262,7 +262,7 @@ expect_fail_with_stubbed_optional_tools() {
   local stub_bin
   stub_bin="$(mktemp -d)"
   printf '#!/usr/bin/env sh\nexit 0\n' >"${stub_bin}/actionlint"
-  printf '#!/usr/bin/env sh\nexit 0\n' >"${stub_bin}/shellcheck"
+  printf '#!/usr/bin/env sh\nprintf "[]\\n"\n' >"${stub_bin}/shellcheck"
   chmod +x "${stub_bin}/actionlint" "${stub_bin}/shellcheck"
   PATH="${stub_bin}:${PATH}" expect_fail "${description}" "${pattern}" "${target}"
   rm -rf "${stub_bin}"

@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "*"
   workflow_dispatch:
 
 permissions:
@@ -359,7 +357,7 @@ jobs:
       - matrix
       - candidate
       - security_scan
-    if: ${{ needs.matrix.outputs.has_include == 'true' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
+    if: ${{ needs.matrix.outputs.has_include == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -719,7 +717,7 @@ jobs:
       - security_scan
       - release_evidence
       - tag_validation
-    if: ${{ needs.matrix.outputs.has_include == 'true' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
+    if: ${{ needs.matrix.outputs.has_include == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -1060,7 +1058,7 @@ jobs:
     needs:
       - matrix
       - publish
-    if: "${{ needs.matrix.outputs.has_include == 'true' && startsWith(github.ref, 'refs/heads/') && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && !(github.actor == 'github-actions[bot]' && github.event_name == 'push' && contains(github.event.head_commit.message, 'chore(cnpg-timescaledb): update release metadata and catalogs')) }}"
+    if: "${{ needs.matrix.outputs.has_include == 'true' && github.ref == 'refs/heads/main' && !(github.actor == 'github-actions[bot]' && github.event_name == 'push' && contains(github.event.head_commit.message, 'chore(cnpg-timescaledb): update release metadata and catalogs')) }}"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1131,13 +1129,81 @@ jobs:
           git commit -m 'chore(cnpg-timescaledb): update release metadata and catalogs'
           CI_GIT_PUSH_FETCH_REF="${GITHUB_REF_NAME}" CI_GIT_PUSH_REBASE_REF="origin/${GITHUB_REF_NAME}" cloudnative-pg-timescaledb/scripts/ci-git-push.sh origin "HEAD:${GITHUB_REF_NAME}"
 
+  github_release:
+    name: Publish GitHub Release and changelog
+    needs:
+      - matrix
+      - publish
+      - release_metadata_autocommit
+    if: ${{ needs.matrix.outputs.has_include == 'true' && needs.publish.result == 'success' && needs.release_metadata_autocommit.result == 'success' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      # actions/checkout v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+      # actions/download-artifact v8.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: ghcr-release-metadata-*
+          path: github-release/input
+      - name: Check published digests and write changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          release_tag="cnpg-timescaledb-r${GITHUB_RUN_ID}"
+          previous_tag="$(gh release list --repo "${GITHUB_REPOSITORY}" --limit 100 --json tagName --jq '.[].tagName' | awk -v run="${GITHUB_RUN_ID}" '/^cnpg-timescaledb-r[0-9]+$/ { id=$0; sub(/^cnpg-timescaledb-r/, "", id); if (id+0 < run+0) { print; exit } }')"
+          python3 - github-release/input <<'PY' > github-release/published-refs.txt
+          import json
+          import sys
+          from pathlib import Path
+          for path in sorted(Path(sys.argv[1]).rglob('ghcr-release-metadata.json')):
+              record = json.loads(path.read_text())
+              for tag in record['final_tags']:
+                  print(f"{record['image']}:{tag} {record['published_digest']}")
+          PY
+          while read -r ref expected; do
+            actual="$(cloudnative-pg-timescaledb/scripts/ci-retry.sh docker buildx imagetools inspect "${ref}" | awk '/Digest:/ {print $2; exit}')"
+            if [[ "${actual}" != "${expected}" ]]; then
+              printf 'Published digest changed or unavailable: %s expected=%s actual=%s\n' "${ref}" "${expected}" "${actual}" >&2
+              exit 1
+            fi
+          done < github-release/published-refs.txt
+          python3 cloudnative-pg-timescaledb/scripts/write-release-notes.py \
+            --matrix cloudnative-pg-timescaledb/matrix.json \
+            --metadata-dir github-release/input \
+            --versions cloudnative-pg-timescaledb/versions.yaml \
+            --previous-tag "${previous_tag}" \
+            --source-sha "${GITHUB_SHA}" \
+            --repo-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --output github-release/notes.md
+          existing_tag="$(git ls-remote --tags origin "refs/tags/${release_tag}" | awk 'NR == 1 {print $1}')"
+          if [[ -n "${existing_tag}" && "${existing_tag}" != "${GITHUB_SHA}" ]]; then
+            printf 'Release tag %s points to %s, expected %s\n' "${release_tag}" "${existing_tag}" "${GITHUB_SHA}" >&2
+            exit 1
+          fi
+          if gh release view "${release_tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release edit "${release_tag}" --repo "${GITHUB_REPOSITORY}" --notes-file github-release/notes.md
+          else
+            gh release create "${release_tag}" --repo "${GITHUB_REPOSITORY}" \
+              --target "${GITHUB_SHA}" --title "CloudNativePG TimescaleDB ${release_tag}" \
+              --notes-file github-release/notes.md
+          fi
+          gh release view "${release_tag}" --repo "${GITHUB_REPOSITORY}" --json url --jq .url >> "${GITHUB_STEP_SUMMARY}"
+
   ghcr_cleanup:
     name: Cleanup temporary GHCR versions
     needs:
       - matrix
       - publish
       - release_metadata_autocommit
-    if: "${{ always() && needs.matrix.outputs.has_include == 'true' && needs.publish.result == 'success' && (needs.release_metadata_autocommit.result == 'success' || needs.release_metadata_autocommit.result == 'skipped') && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}"
+    if: "${{ always() && needs.matrix.outputs.has_include == 'true' && needs.publish.result == 'success' && (needs.release_metadata_autocommit.result == 'success' || needs.release_metadata_autocommit.result == 'skipped') && github.ref == 'refs/heads/main' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
