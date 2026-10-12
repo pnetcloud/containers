@@ -20,7 +20,7 @@ entries:
     pg_version: "17.11"
     debian_variant: trixie
     cnpg_tag: "17.11-standard-trixie"
-    cnpg_digest: "sha256:d456fe7392b0b2147b4cea0dc124d51aee7ad3ec522c57f3177799e01f29a2d1"
+    cnpg_digest: "sha256:b3d52e61dc97095efbb603dcb38178491ab3d4b99753cfe6e642ac57366469c1"
     timescaledb_version: "2.30.2"
     timescaledb_package_name: "timescaledb-2-postgresql-17"
     timescaledb_package_version: "2.30.2~debian13-1711"
@@ -36,12 +36,12 @@ entries:
     experimental: false
     latest_eligible: false
     skip_reason: ""
-    tags: ["17", "17-pg17.11-ts2.30.2-20261005"]
+    tags: ["17", "17-pg17.11-ts2.30.2-20261012"]
   - pg_major: "18"
     pg_version: "18.6"
     debian_variant: trixie
     cnpg_tag: "18.6-standard-trixie"
-    cnpg_digest: "sha256:79be0d10e78b7ac4520cf6c5db199a8bb7f6de53b3229f47e90cab5865528a0d"
+    cnpg_digest: "sha256:c7747d8d1049fff9cf30d9cd83d14d609c957afb5ffbcd114145f393ea1850e1"
     timescaledb_version: "2.30.2"
     timescaledb_package_name: "timescaledb-2-postgresql-18"
     timescaledb_package_version: "2.30.2~debian13-1806"
@@ -57,7 +57,7 @@ entries:
     experimental: false
     latest_eligible: true
     skip_reason: ""
-    tags: ["18", "18-pg18.6-ts2.30.2-20261005", "latest"]
+    tags: ["18", "18-pg18.6-ts2.30.2-20261012", "latest"]
   - pg_major: "19beta1"
     pg_version: "19beta1"
     debian_variant: trixie
@@ -82,7 +82,7 @@ entries:
     pg_version: "17.11"
     debian_variant: bookworm
     cnpg_tag: "17.11-standard-bookworm"
-    cnpg_digest: "sha256:49c1dd79092d7d8dad03d07151ef7157416e233576c639af8d60ec02c4ae297d"
+    cnpg_digest: "sha256:fe22b9fcd038dcd08c2019b17d95f517f137801e5f39d857a895d65e8c63033b"
     timescaledb_version: "2.30.2"
     timescaledb_package_name: "timescaledb-2-postgresql-17"
     timescaledb_package_version: "2.30.2~debian12-1711"
@@ -98,12 +98,12 @@ entries:
     experimental: false
     latest_eligible: false
     skip_reason: ""
-    tags: ["17-bookworm", "17-pg17.11-ts2.30.2-20261005-bookworm"]
+    tags: ["17-bookworm", "17-pg17.11-ts2.30.2-20261012-bookworm"]
   - pg_major: "18"
     pg_version: "18.6"
     debian_variant: bookworm
     cnpg_tag: "18.6-standard-bookworm"
-    cnpg_digest: "sha256:94aa172fc7ce295d482f5fe8bcf8d1e3423f30c15ba40c7d34114b68dc152b0a"
+    cnpg_digest: "sha256:a0080e77dc18d1d12aafef100643871a884e1db75a990a6e9e5dd456b35610f6"
     timescaledb_version: "2.30.2"
     timescaledb_package_name: "timescaledb-2-postgresql-18"
     timescaledb_package_version: "2.30.2~debian12-1806"
@@ -119,7 +119,7 @@ entries:
     experimental: false
     latest_eligible: false
     skip_reason: ""
-    tags: ["18-bookworm", "18-pg18.6-ts2.30.2-20261005-bookworm"]
+    tags: ["18-bookworm", "18-pg18.6-ts2.30.2-20261012-bookworm"]
   - pg_major: "19beta1"
     pg_version: "19beta1"
     debian_variant: bookworm
