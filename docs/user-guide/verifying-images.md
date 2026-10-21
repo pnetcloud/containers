@@ -13,7 +13,7 @@ cosign verify "$IMAGE_REF" \
   --certificate-identity "$EXPECTED_CERTIFICATE_IDENTITY"
 ```
 
-For release-tagged runs, derive `EXPECTED_CERTIFICATE_IDENTITY=https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/tags/<tag>` from the exact release ref. Do not use broad certificate identity regex matching; verification must use the exact workflow identity for the release ref.
+For GitHub Releases created by the current `main` workflow, use the exact `cosign_certificate_identity` in the matching release metadata: `https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main`. The GitHub Release tag identifies the source commit; it is not the signing workflow ref. Do not use broad certificate identity regex matching.
 
 Public image verification does not require private registry credentials. Pull, inspect, cosign, and Trivy examples should work against public GHCR references. Cosign signatures are stored in `ghcr.io/pnetcloud/cloudnative-pg-timescaledb-signatures` so the main image package only carries release tags.
 
