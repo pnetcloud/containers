@@ -26,12 +26,12 @@ RUN set -eux; \
     echo "deb [signed-by=/usr/share/keyrings/timescale-timescaledb.gpg] https://packagecloud.io/timescale/timescaledb/debian/ bookworm main" > /etc/apt/sources.list.d/timescale-timescaledb.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      "timescaledb-2-postgresql-18=2.30.2~debian12-1806" \
-      "timescaledb-2-loader-postgresql-18=2.30.2~debian12-1806" \
+      "timescaledb-2-postgresql-18=2.31.0~debian12-1806" \
+      "timescaledb-2-loader-postgresql-18=2.31.0~debian12-1806" \
       "timescaledb-toolkit-postgresql-18=1:1.26.0~debian12"; \
     /usr/local/bin/verify-package-install \
-      "timescaledb-2-postgresql-18" "2.30.2~debian12-1806" \
-      "timescaledb-2-loader-postgresql-18" "2.30.2~debian12-1806" \
+      "timescaledb-2-postgresql-18" "2.31.0~debian12-1806" \
+      "timescaledb-2-loader-postgresql-18" "2.31.0~debian12-1806" \
       "timescaledb-toolkit-postgresql-18" "1:1.26.0~debian12"; \
     if [ "base" = "package" ]; then \
       apt-get install -y --no-install-recommends "postgresql-18-pgvector="; \
@@ -57,7 +57,7 @@ LABEL org.opencontainers.image.source="https://github.com/pnetcloud/containers" 
       org.pnet.debian.variant="bookworm" \
       org.pnet.cnpg.tag="18.6-standard-bookworm" \
       org.pnet.cnpg.digest="sha256:a8042813b0d1abe564bebb129479f9a865fb9d78a322edc36c204ac1ea9e5ddd" \
-      org.pnet.timescaledb.version="2.30.2" \
+      org.pnet.timescaledb.version="2.31.0" \
       org.pnet.timescaledb_toolkit.version="1.26.0"
 
 USER 26
