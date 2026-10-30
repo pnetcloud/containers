@@ -106,6 +106,10 @@ ALLOWED_WRITE_GRANTS = {
         "Commit release metadata and digest-aware catalogs after successful publish",
         "4.6",
     ),
+    (".github/workflows/build.yml", "github_release", "contents: write"): (
+        "Create GitHub Release and tag after all published image digests are verified",
+        "release-process",
+    ),
     (".github/workflows/build.yml", "ghcr_cleanup", "packages: write"): (
         "Delete temporary candidate-only GHCR package versions after successful release",
         "4.5",
