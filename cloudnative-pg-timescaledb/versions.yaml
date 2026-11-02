@@ -20,7 +20,7 @@ entries:
     pg_version: "17.11"
     debian_variant: trixie
     cnpg_tag: "17.11-standard-trixie"
-    cnpg_digest: "sha256:ed6923f9ba2399cf9070379a353c710c29ced8a294be73986a2c3dae7e599ce3"
+    cnpg_digest: "sha256:4d0aac315c4d8c3202252bd06fea83b16951cc57234a7b610eeaa382ff4482d0"
     timescaledb_version: "2.31.0"
     timescaledb_package_name: "timescaledb-2-postgresql-17"
     timescaledb_package_version: "2.31.0~debian13-1711"
@@ -36,7 +36,7 @@ entries:
     experimental: false
     latest_eligible: false
     skip_reason: ""
-    tags: ["17", "17-pg17.11-ts2.31.0-20261026"]
+    tags: ["17", "17-pg17.11-ts2.31.0-20261102"]
   - pg_major: "18"
     pg_version: "18.6"
     debian_variant: trixie
@@ -57,7 +57,7 @@ entries:
     experimental: false
     latest_eligible: true
     skip_reason: ""
-    tags: ["18", "18-pg18.6-ts2.31.0-20261026", "latest"]
+    tags: ["18", "18-pg18.6-ts2.31.0-20261102", "latest"]
   - pg_major: "19beta1"
     pg_version: "19beta1"
     debian_variant: trixie
@@ -82,7 +82,7 @@ entries:
     pg_version: "17.11"
     debian_variant: bookworm
     cnpg_tag: "17.11-standard-bookworm"
-    cnpg_digest: "sha256:fef8075b97b11a1fc12b387b9576809dbcda26a8fc68cb9416581f16856920f3"
+    cnpg_digest: "sha256:e644949d3d14f66c4b4430db1cb7db939b78f727ae3d5590fb59c019dede0d75"
     timescaledb_version: "2.31.0"
     timescaledb_package_name: "timescaledb-2-postgresql-17"
     timescaledb_package_version: "2.31.0~debian12-1711"
@@ -98,7 +98,7 @@ entries:
     experimental: false
     latest_eligible: false
     skip_reason: ""
-    tags: ["17-bookworm", "17-pg17.11-ts2.31.0-20261026-bookworm"]
+    tags: ["17-bookworm", "17-pg17.11-ts2.31.0-20261102-bookworm"]
   - pg_major: "18"
     pg_version: "18.6"
     debian_variant: bookworm
@@ -119,7 +119,7 @@ entries:
     experimental: false
     latest_eligible: false
     skip_reason: ""
-    tags: ["18-bookworm", "18-pg18.6-ts2.31.0-20261026-bookworm"]
+    tags: ["18-bookworm", "18-pg18.6-ts2.31.0-20261102-bookworm"]
   - pg_major: "19beta1"
     pg_version: "19beta1"
     debian_variant: bookworm
