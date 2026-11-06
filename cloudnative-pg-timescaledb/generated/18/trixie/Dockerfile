@@ -28,11 +28,11 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
       "timescaledb-2-postgresql-18=2.31.0~debian13-1806" \
       "timescaledb-2-loader-postgresql-18=2.31.0~debian13-1806" \
-      "timescaledb-toolkit-postgresql-18=1:1.26.0~debian13"; \
+      "timescaledb-toolkit-postgresql-18=1:1.27.0~debian13"; \
     /usr/local/bin/verify-package-install \
       "timescaledb-2-postgresql-18" "2.31.0~debian13-1806" \
       "timescaledb-2-loader-postgresql-18" "2.31.0~debian13-1806" \
-      "timescaledb-toolkit-postgresql-18" "1:1.26.0~debian13"; \
+      "timescaledb-toolkit-postgresql-18" "1:1.27.0~debian13"; \
     if [ "base" = "package" ]; then \
       apt-get install -y --no-install-recommends "postgresql-18-pgvector="; \
       dpkg-query -W -f='${Version}' "postgresql-18-pgvector" | grep -Fx ""; \
@@ -58,6 +58,6 @@ LABEL org.opencontainers.image.source="https://github.com/pnetcloud/containers" 
       org.pnet.cnpg.tag="18.6-standard-trixie" \
       org.pnet.cnpg.digest="sha256:5bf4a23aa13fb560903fba932676773ba4ba2729c162e587b09bf539a2e3df56" \
       org.pnet.timescaledb.version="2.31.0" \
-      org.pnet.timescaledb_toolkit.version="1.26.0"
+      org.pnet.timescaledb_toolkit.version="1.27.0"
 
 USER 26
