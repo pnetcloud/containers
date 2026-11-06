@@ -70,12 +70,12 @@ def first_line(pattern):
 
 require("pull_request:" not in text, "candidate GHCR push workflow excludes pull_request trigger", "pull_request present", "Keep write-token candidate publishing on push/workflow_dispatch only; validate.yml covers PRs.")
 if path.name == "build.yml":
-    require(re.search(r"on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- main\s*\n\s+tags:\s*\n\s+- \"\*\"\s*\n\s+workflow_dispatch:", text), "release build workflow push trigger is restricted to main and tags", text.split("permissions:", 1)[0], "Do not publish GHCR candidates from arbitrary feature branches.")
+    require(re.search(r"on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- main\s*\n\s+workflow_dispatch:", text), "release build workflow push trigger is restricted to main", text.split("permissions:", 1)[0], "Do not publish GHCR candidates from arbitrary feature branches or Git tags.")
     require(
         re.search(r"\nconcurrency:\s*\n\s+group:\s+cloudnative-pg-timescaledb-build-\$\{\{\s*github\.ref\s*\}\}\s*\n\s+cancel-in-progress:\s+false", text),
         "release build workflow serializes runs per ref without canceling active releases",
         text.split("jobs:", 1)[0],
-        "Queue overlapping main/tag/manual release builds instead of letting final tag promotion and cleanup race.",
+        "Queue overlapping main/manual release builds instead of letting final tag promotion and cleanup race.",
     )
 require("docker/build-push-action" not in text and "defaultContext" not in text, "Buildx/Bake uses checkout path context, not default Git context", "default Git context marker found", "Use checkout plus docker buildx bake CLI from the repository workspace.")
 require("actions/checkout@" in text, "workflow checks out repository before generated-file builds", "checkout missing", "Generated Dockerfiles and Bake files must come from checkout path context.")
@@ -117,8 +117,9 @@ require("packages: write" in text, "candidate job has explicit GHCR push permiss
 publish_match = re.search(r"\n  publish:\n(?P<body>[\s\S]+?)(?:\n  [A-Za-z0-9_-]+:|\Z)", text)
 require(publish_match, "build workflow has publish job", "publish job missing", "Final tag promotion must be explicit and guarded.")
 publish_body = publish_match.group("body")
-for marker in ["github.event_name == 'workflow_dispatch'", "github.ref == 'refs/heads/main'", "startsWith(github.ref, 'refs/tags/')"]:
-    require(marker in publish_body, f"publish job is guarded by {marker}", publish_body[:500], "Restrict final tag promotion to manual, main, or tag release contexts.")
+require("github.ref == 'refs/heads/main'" in publish_body, "publish job is guarded by main ref", publish_body[:500], "Restrict final tag promotion to main, including manual dispatches.")
+if path.name == "build.yml":
+    require("startsWith(github.ref, 'refs/tags/')" not in publish_body, "tag refs cannot promote final images", publish_body[:500], "Keep GitHub Release tags from retriggering promotion.")
 require("needs.matrix.outputs.has_include == 'true'" in publish_body, "publish job still requires non-empty generated matrix", publish_body[:500], "Publish only generated publishable rows.")
 if path.name == "build.yml":
     cleanup_match = re.search(r"\n  ghcr_cleanup:\n(?P<body>[\s\S]+?)(?:\n  [A-Za-z0-9_-]+:|\Z)", text)

@@ -101,7 +101,7 @@ export COSIGN_REPOSITORY="ghcr.io/pnetcloud/cloudnative-pg-timescaledb-signature
 cosign verify "$IMAGE_REF" --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity "$EXPECTED_CERTIFICATE_IDENTITY"
 ```
 
-For release refs, derive `EXPECTED_CERTIFICATE_IDENTITY=https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/tags/<tag>`. Do not use broad certificate identity regex matching. Public verification does not need private registry credentials.
+For release refs, derive `EXPECTED_CERTIFICATE_IDENTITY` from `cosign_certificate_identity` in the matching release metadata. The current publish path uses `https://github.com/pnetcloud/containers/.github/workflows/build.yml@refs/heads/main`; the GitHub Release tag identifies the source commit, while the signed build identity remains the workflow ref. Do not use broad certificate identity regex matching. Public verification does not need private registry credentials.
 
 Cosign signatures are stored in `ghcr.io/pnetcloud/cloudnative-pg-timescaledb-signatures` so the main image package only carries release tags. Release evidence covers `index_digest`, `platform_digests`, and `per_digest_evidence` with `sbom_ref`, `provenance_ref`, `signature_ref`, `verification_ref`, and `verified` for the final multi-platform index digest and every platform digest. Missing SBOM, provenance, signature, verification evidence, or threshold-passing scan status is a release blocker.
 
