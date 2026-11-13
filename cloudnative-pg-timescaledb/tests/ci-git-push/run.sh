@@ -112,4 +112,21 @@ if actual != expected:
     )
 PY
 
+: > "${capture}"
+rm -f "${tmp}/state/push-count"
+if PATH="${tmp}/bin:${PATH}" \
+CI_GIT_PUSH_CAPTURE="${capture}" \
+CI_GIT_PUSH_STATE="${tmp}/state" \
+CI_GIT_PUSH_FAIL_COUNT=3 \
+CI_RETRY_ATTEMPTS=2 \
+CI_RETRY_DELAY_SECONDS=0 \
+  "${SCRIPT}" origin HEAD:main >/tmp/ci-git-push-failed.out 2>&1; then
+  diag "ci-git-push" "${SCRIPT}" "failed pushes exit nonzero" "exit 0" "Do not dispatch a build when the metadata commit was not pushed."
+  exit 1
+fi
+if [[ "$(grep -c '^git push origin HEAD:main$' "${capture}")" != "2" ]]; then
+  diag "ci-git-push" "${capture}" "two attempts before failure" "$(cat "${capture}")" "Keep failure bounded by CI_RETRY_ATTEMPTS."
+  exit 1
+fi
+
 printf 'PASS ci git push helper\n'

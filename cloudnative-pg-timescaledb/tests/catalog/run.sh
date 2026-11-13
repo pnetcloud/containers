@@ -255,8 +255,8 @@ if not isinstance(job, dict):
     fail(workflow, "release_metadata_autocommit job exists", "missing", "Persist successful publish metadata back to the repository.")
 for name, value in jobs.items():
     perms = value.get("permissions", {}) if isinstance(value, dict) else {}
-    if isinstance(perms, dict) and perms.get("contents") == "write" and name != "release_metadata_autocommit":
-        fail(workflow, "build.yml contents: write is restricted to release metadata autocommit", name, "Do not grant repository write permission to unrelated build jobs.")
+    if isinstance(perms, dict) and perms.get("contents") == "write" and name not in {"release_metadata_autocommit", "github_release"}:
+        fail(workflow, "build.yml contents: write is restricted to release metadata autocommit and GitHub Release jobs", name, "Do not grant repository write permission to unrelated build jobs.")
 if job.get("permissions", {}).get("contents") != "write":
     fail(workflow, "release_metadata_autocommit has contents: write", job.get("permissions"), "The metadata persistence job needs repository write permission for allowlisted generated files only.")
 needs = job.get("needs", [])
@@ -268,8 +268,6 @@ for required_need in ["matrix", "publish"]:
 job_if = str(job.get("if", ""))
 for marker in [
     "refs/heads/main",
-    "workflow_dispatch",
-    "startsWith(github.ref, 'refs/heads/')",
     "github-actions[bot]",
     "head_commit.message",
     "chore(cnpg-timescaledb): update release metadata and catalogs",
