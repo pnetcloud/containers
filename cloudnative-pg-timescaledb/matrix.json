@@ -2,7 +2,7 @@
   "include": [
     {
       "bake_target": "pg17-trixie",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.11-ts2.32.0-20261113",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.12-ts2.32.1-20261120",
       "debian_variant": "trixie",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/17/trixie/Dockerfile",
@@ -10,26 +10,26 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "17",
-        "17-pg17.11-ts2.32.0-20261113"
+        "17-pg17.12-ts2.32.1-20261120"
       ],
       "latest_eligible": false,
       "pg_major": "17",
-      "pg_version": "17.11",
+      "pg_version": "17.12",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
       ],
       "provenance_ref": "",
       "publish": true,
-      "release_date": "20261113",
+      "release_date": "20261120",
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
-      "timescaledb_version": "2.32.0"
+      "timescaledb_version": "2.32.1"
     },
     {
       "bake_target": "pg18-trixie",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.6-ts2.32.0-20261113",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.7-ts2.32.1-20261120",
       "debian_variant": "trixie",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/18/trixie/Dockerfile",
@@ -37,27 +37,27 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "18",
-        "18-pg18.6-ts2.32.0-20261113",
+        "18-pg18.7-ts2.32.1-20261120",
         "latest"
       ],
       "latest_eligible": true,
       "pg_major": "18",
-      "pg_version": "18.6",
+      "pg_version": "18.7",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
       ],
       "provenance_ref": "",
       "publish": true,
-      "release_date": "20261113",
+      "release_date": "20261120",
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
-      "timescaledb_version": "2.32.0"
+      "timescaledb_version": "2.32.1"
     },
     {
       "bake_target": "pg17-bookworm",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.11-ts2.32.0-20261113-bookworm",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:17-pg17.12-ts2.32.1-20261120-bookworm",
       "debian_variant": "bookworm",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/17/bookworm/Dockerfile",
@@ -65,26 +65,26 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "17-bookworm",
-        "17-pg17.11-ts2.32.0-20261113-bookworm"
+        "17-pg17.12-ts2.32.1-20261120-bookworm"
       ],
       "latest_eligible": false,
       "pg_major": "17",
-      "pg_version": "17.11",
+      "pg_version": "17.12",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
       ],
       "provenance_ref": "",
       "publish": true,
-      "release_date": "20261113",
+      "release_date": "20261120",
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
-      "timescaledb_version": "2.32.0"
+      "timescaledb_version": "2.32.1"
     },
     {
       "bake_target": "pg18-bookworm",
-      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.6-ts2.32.0-20261113-bookworm",
+      "candidate_ref": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb:18-pg18.7-ts2.32.1-20261120-bookworm",
       "debian_variant": "bookworm",
       "digest": "",
       "dockerfile": "cloudnative-pg-timescaledb/generated/18/bookworm/Dockerfile",
@@ -92,22 +92,22 @@
       "image": "ghcr.io/pnetcloud/cloudnative-pg-timescaledb",
       "intended_tags": [
         "18-bookworm",
-        "18-pg18.6-ts2.32.0-20261113-bookworm"
+        "18-pg18.7-ts2.32.1-20261120-bookworm"
       ],
       "latest_eligible": false,
       "pg_major": "18",
-      "pg_version": "18.6",
+      "pg_version": "18.7",
       "platforms": [
         "linux/amd64",
         "linux/arm64"
       ],
       "provenance_ref": "",
       "publish": true,
-      "release_date": "20261113",
+      "release_date": "20261120",
       "sbom_ref": "",
       "scan_result": "pending",
       "signature_ref": "",
-      "timescaledb_version": "2.32.0"
+      "timescaledb_version": "2.32.1"
     }
   ],
   "skipped": [
