@@ -42,7 +42,7 @@ Before committing generated diffs, run `make generate` and `make validate`. When
 
 ## Scheduled Updates And Autocommit
 
-The scheduled update workflow runs `make update`, validates with `make validate`, stages only paths from `cloudnative-pg-timescaledb/config/autocommit-allowlist.txt`, and commits only when the staged diff is non-empty. When a resolver metadata commit is pushed, the workflow dispatches `build.yml` so the changed metadata is built, smoke-tested, scanned, signed, published, and cleaned up automatically. A scheduled update no-op must create no commit, dispatch no release build, and leave the resolver-owned generated paths unchanged.
+The scheduled update workflow runs `make update`, validates with `make validate`, stages only paths from `cloudnative-pg-timescaledb/config/autocommit-allowlist.txt`, and commits only when the staged diff is non-empty. When a resolver metadata commit is pushed, the workflow dispatches `build.yml` on `main` so the changed metadata is built, smoke-tested, scanned, signed, published, and cleaned up automatically. A scheduled update no-op must create no commit, dispatch no release build, and leave the resolver-owned generated paths unchanged.
 
 Release catalog autocommit is separate. It first checks whether release metadata exists. If no release metadata is available, catalog autocommit is a no-op and must not generate empty catalogs. When release metadata is available, it runs `make catalog`, stages only paths from `cloudnative-pg-timescaledb/config/catalog-autocommit-allowlist.txt`, validates the staged paths, and commits only changed catalog manifests.
 
@@ -60,6 +60,10 @@ Never commit `.env` files, credentials, tokens, signing secrets, registry passwo
 
 ## Release Process
 
+`build.yml` is the single release path for scheduled updates, ordinary pushes to `main`, and manual `workflow_dispatch` runs on `main`. Builds from other refs may validate candidates but cannot promote GHCR tags or create a GitHub Release. Git-tag pushes do not start builds. Each successful full-matrix publish verifies the public tag digests, commits current release metadata and catalogs, then creates a GitHub Release named `cnpg-timescaledb-r<RUN_ID>`. Its tag points to the source commit used by that build. The release body lists changes in `versions.yaml`, source commits since the preceding GitHub Release, every published PostgreSQL/Debian version tag and digest, and the build evidence URL. The same generator is used for automated and manually dispatched builds. Re-running a release job updates the notes for that run after checking the tag still points to the same source commit. If the publish or metadata commit fails, no GitHub Release is created.
+
+For a manual release, dispatch **Build Release Candidates** against `main` in GitHub Actions. After it succeeds, inspect the [GitHub Releases](https://github.com/pnetcloud/containers/releases) entry and compare its four digests with `cloudnative-pg-timescaledb/release-metadata/` and GHCR. Do not create a release directly from a local build or a candidate tag; use the same workflow and gates.
+
 1. Edit only `cloudnative-pg-timescaledb/versions.yaml` for image metadata and policy changes.
 2. Run `make update` to refresh resolver-owned CloudNativePG base image, TimescaleDB, TimescaleDB Toolkit, CloudNativePG Barman Cloud Plugin references, and regenerated outputs. Do not describe `make update` as updating GitHub Actions or static helper dependencies; those are Renovate-managed through the Renovate boundary.
 3. Run `make generate` to regenerate Dockerfiles, Bake definitions, matrix JSON, catalogs, docs tables, and generated docs from metadata.
@@ -69,4 +73,5 @@ Never commit `.env` files, credentials, tokens, signing secrets, registry passwo
 7. Run `make catalog` after publish metadata is available and review generated catalog diffs.
 8. Review scheduled update no-op and autocommit runs: no-op runs must create no commits; changed runs must commit only allowlisted generated paths and must not recurse on bot/generated commits.
 9. Use `GITHUB_TOKEN` as the default automation credential. PAT fallback is documented only as a branch-protection exception with the risk that a broader token increases blast radius.
-10. Keep Artifact Hub metadata out of v1 and never commit `.env`, credentials, tokens, signing secrets, registry passwords, private keys, or secret-like values.
+10. Check the GitHub Release and changelog after the published digest verification job succeeds.
+11. Keep Artifact Hub metadata out of v1 and never commit `.env`, credentials, tokens, signing secrets, registry passwords, private keys, or secret-like values.

@@ -80,6 +80,9 @@ if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/ci-git-push/run.sh" ]]; t
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/ci-git-push/run.sh"
 fi
 "${ROOT_DIR}/cloudnative-pg-timescaledb/scripts/validate-workflows.sh"
+if [[ -f "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/release-notes/test_release_notes.py" ]]; then
+  python3 "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/release-notes/test_release_notes.py"
+fi
 if [[ -x "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh" ]]; then
   "${ROOT_DIR}/cloudnative-pg-timescaledb/tests/workflows/permissions/run.sh"
 fi
